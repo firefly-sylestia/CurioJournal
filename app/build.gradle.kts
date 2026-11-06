@@ -243,7 +243,7 @@ android {
         // Curio Journal as its own edition, and `changelogs/20260958.txt` is its
         // notes file (20260957.txt stays exactly as it was — it is the record of
         // the build that code shipped as).
-        versionCode = 20260959
+        versionCode = 20260960
         // v406 — the local/PR default matches the version now being tagged, so
         // a build from main reports the release it belongs to (a v* tag still
         // overrides it through RELEASE_VERSION).
@@ -260,7 +260,7 @@ android {
         // v498 — the passport has a page of its own (agenda §5.4),
         // and the grid of stamps it used to be inside a Quests card moved
         // there whole, with the press and every lane's spin on it.
-        versionName = envReleaseVersion ?: "1.5.16"
+        versionName = envReleaseVersion ?: "1.5.17"
 
         // v354 — optional Google Books API key baked into BuildConfig so the
         // keyless fetchers can upgrade to keyed (higher-quota) calls when the
@@ -720,8 +720,10 @@ configurations.configureEach {
 
 // ── Topic data validation (CURIO_DATA_PLAN.md §5.2 step 3) ─────────────────
 //
-// Validates every JSON file under app/src/main/assets/topics/*.json against
-// the §2 schema. The root is a BARE JSON ARRAY of topic objects (see
+// Validates every JSON file under data/topics/*.json against the §2 schema.
+// The catalogs are no longer bundled from `src/main` (the journal edition has
+// no catalog at all), so validation reads the source data CI copies into the
+// discovery editions' own asset directories. The root is a BARE JSON ARRAY of topic objects (see
 // SCHEMA.md in this directory — there is no wrapper). Asserts:
 //   - root IS a JSON array (wrapper format is a hard error)
 //   - every topic has id (unique cross-file) + categoryId (matches filename)
@@ -741,17 +743,19 @@ configurations.configureEach {
 // preBuild so a malformed entry fails the assemble. When the directory is
 // empty (placeholder UI ships), the task is a no-op and preBuild is not
 // affected.
-val hasTopicFiles: Boolean = file("src/main/assets/topics").let { d ->
+val topicSourceDir: File = file("../data/topics")
+
+val hasTopicFiles: Boolean = topicSourceDir.let { d ->
     d.exists() && d.listFiles { f -> f.extension == "json" }?.isNotEmpty() == true
 }
 
 tasks.register("validateTopics") {
     group = "verification"
-    description = "Validates assets/topics/*.json against the CurioTopic schema (CURIO_DATA_PLAN.md §2)."
+    description = "Validates data/topics/*.json against the CurioTopic schema (CURIO_DATA_PLAN.md §2)."
     // Resolve the directory as a task-local value (not a script property) so
     // the doLast action captures a plain File and serializes cleanly into
     // the configuration cache.
-    val topicsDir = file("src/main/assets/topics")
+    val topicsDir = topicSourceDir
     inputs.dir(topicsDir)
     // v406 — DECLARE AN OUTPUT, SO THE TASK CAN BE SKIPPED.
     //

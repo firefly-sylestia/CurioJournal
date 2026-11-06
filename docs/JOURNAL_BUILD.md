@@ -42,7 +42,7 @@ The other editions are unaffected:
 |---|---|
 | `app/src/journal/AndroidManifest.xml` | One launcher activity (`.journal.JournalActivity`); the discovery app's `MainActivity` is removed from this edition's merged manifest. |
 | `app/src/journal/java/.../JournalActivity.kt` | Boots only the writing store + theme, and hosts four routes. |
-| `app/src/journal/java/.../JournalHomeScreen.kt` | **New home** — the day, not a feed: the date as the page's subject, the week as seven doors, today's page as a ruled sheet, the goal/streak line, and the days before it. |
+| `app/src/journal/java/.../JournalHomeScreen.kt` | **New home** — the day, not a feed: the date as the page's subject, the last four weeks as a scrollable strip with the month's own count, today's page as a ruled sheet, the goal/streak line, and the days before it. |
 | `app/src/journal/java/.../JournalSettingsScreen.kt` | **Redesigned settings** — three cards (the page, the habit, the pages), each row wired to a real preference. |
 | `app/src/journal/res/values/strings.xml` | The launcher name, *Curio Journal*. |
 | `app/src/core/java/...` | Included by this edition for the no-op `OfflineTranscriber`, `NeuralVoices`/`NeuralSpeaker` and `IsbnScannerScreen` twins — no Vosk, sherpa-onnx or ML Kit in a journal APK. |

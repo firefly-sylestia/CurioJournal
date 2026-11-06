@@ -1,0 +1,12 @@
+ADD:
+- Curio Journal: **the home is a month you can turn back** — the strip under the date is four weeks instead of one, opens at today's end, and scrolls back through the days you have written, with the month's own count above it ("12 of 30 days").
+- Curio Journal: **the goal and the streak are doors** — either card opens settings, so the word goal is changed where the habit is read instead of being hunted for behind the gear.
+- Curio Journal: today's page says **Keep writing** with its pen, instead of a chevron that said nothing.
+- Curio Journal: **the page stays a page on a wide screen** — one centred column capped at 680dp, instead of a diary stretched across a tablet.
+
+FIX:
+- Curio Journal: **lint passes** — every date formatter reads the locale through LocalConfiguration, so lint's NonObservableLocale no longer fails the journal's lint job.
+
+REMOVE:
+- Curio Journal: **the duplicate All pages card is gone** once there are days to look back on — the section head's own "All pages" is the one door; the card stays only for a journal with no days yet.
+- Curio Journal: **no topic catalog is built into the journal** — the bundle step copies the catalogs into the discovery editions' own source sets (`src/core`, `src/full`) instead of `src/main`, so a journal APK carries no topic JSON at all, and `validateTopics` reads `data/topics` directly.

@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -15,9 +16,11 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.IconButton
@@ -35,6 +38,7 @@ import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -85,6 +89,7 @@ fun JournalHomeScreen(
     onOpenSettings: () -> Unit
 ) {
     val context = LocalContext.current
+    val locale = LocalConfiguration.current.locales[0]
     val accent = personalAccent()
     val accentInk = personalAccentInk()
     val ink = MaterialTheme.colorScheme.onBackground
@@ -131,6 +136,16 @@ fun JournalHomeScreen(
             .reversed()
             .take(6)
     }
+    // The month so far: how many of its days already have a page. It sits in the
+    // month line above the strip, so the habit is visible without another card.
+    val monthDays = remember(journals, today) {
+        val day = today.toLocalDate()
+        journals.count { page ->
+            val wrote = page.dateMillis.toLocalDate()
+            wrote.year == day.year && wrote.monthValue == day.monthValue
+        }
+    }
+    val daysInMonth = remember(today) { today.toLocalDate().lengthOfMonth() }
 
     // The floating pen: the member's own choice of where a journal door lands
     // ("today's page" is the default, "the last one you opened" the other half).
@@ -148,8 +163,12 @@ fun JournalHomeScreen(
             .background(MaterialTheme.colorScheme.background)
     ) {
         LazyColumn(
+            // The page stays a page on a tablet or a landscape phone: one column,
+            // centred, instead of a diary stretched across the whole window.
             modifier = Modifier
-                .fillMaxSize()
+                .align(Alignment.TopCenter)
+                .fillMaxHeight()
+                .widthIn(max = 680.dp)
                 .statusBarsPadding(),
             contentPadding = PaddingValues(bottom = 132.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
@@ -164,22 +183,33 @@ fun JournalHomeScreen(
             }
 
             item("week") {
-                WeekStrip(
-                    today = today,
-                    writtenDays = writtenDays,
-                    accent = accent,
-                    accentInk = accentInk,
-                    onOpen = { millis ->
-                        onOpenDay(millis, journals.firstOrNull { it.dateMillis == millis }?.id)
-                    }
-                )
+                Column(verticalArrangement = Arrangement.spacedBy(9.dp)) {
+                    MonthRow(
+                        today = today,
+                        monthDays = monthDays,
+                        daysInMonth = daysInMonth,
+                        accentInk = accentInk
+                    )
+                    WeekStrip(
+                        today = today,
+                        writtenDays = writtenDays,
+                        accent = accent,
+                        accentInk = accentInk,
+                        onOpen = { millis ->
+                            onOpenDay(
+                                millis,
+                                journals.firstOrNull { it.dateMillis == millis }?.id
+                            )
+                        }
+                    )
+                }
             }
 
             item("today-page") {
                 val page = todayPage
                 if (page == null) {
                     EmptyPageSheet(
-                        dateLabel = today.fullLabel(),
+                        dateLabel = today.fullLabel(locale),
                         accent = accent,
                         accentInk = accentInk,
                         paper = paper,
@@ -204,12 +234,18 @@ fun JournalHomeScreen(
                         goal = goal,
                         streak = streak,
                         accent = accent,
-                        accentInk = accentInk
+                        accentInk = accentInk,
+                        onClick = onOpenSettings
                     )
                 }
             } else {
                 item("streak") {
-                    StreakRow(streak = streak, accent = accent, accentInk = accentInk)
+                    StreakRow(
+                        streak = streak,
+                        accent = accent,
+                        accentInk = accentInk,
+                        onClick = onOpenSettings
+                    )
                 }
             }
 
@@ -236,13 +272,19 @@ fun JournalHomeScreen(
                 }
             }
 
-            item("collection-door") {
-                CollectionDoor(
-                    count = journals.size,
-                    accent = accent,
-                    accentInk = accentInk,
-                    onClick = onOpenCollection
-                )
+            // One door to the collection, not two: "All pages" in the section
+            // head is the way in once there are days to look back on, and the
+            // card is kept for a journal that has none yet (where no head is
+            // drawn to carry the link).
+            if (recent.isEmpty()) {
+                item("collection-door") {
+                    CollectionDoor(
+                        count = journals.size,
+                        accent = accent,
+                        accentInk = accentInk,
+                        onClick = onOpenCollection
+                    )
+                }
             }
         }
 
@@ -292,6 +334,10 @@ private fun JournalHead(
     onOpenSettings: () -> Unit
 ) {
     val date = today.toLocalDate()
+    // The locale is read through LocalConfiguration: a bare Locale.getDefault()
+    // is not observable in composition (lint's NonObservableLocale), so a
+    // language change would leave the date in the old one.
+    val locale = LocalConfiguration.current.locales[0]
     Column(modifier = Modifier.fillMaxWidth()) {
         Row(
             modifier = Modifier
@@ -343,14 +389,14 @@ private fun JournalHead(
                     verticalArrangement = Arrangement.spacedBy(1.dp)
                 ) {
                     Text(
-                        date.format(DateTimeFormatter.ofPattern("EEEE", Locale.getDefault())),
+                        date.format(DateTimeFormatter.ofPattern("EEEE", locale)),
                         style = MaterialTheme.typography.titleSmall.copy(
                             fontWeight = FontWeight.SemiBold
                         ),
                         color = accentInk
                     )
                     Text(
-                        date.format(DateTimeFormatter.ofPattern("MMMM yyyy", Locale.getDefault())),
+                        date.format(DateTimeFormatter.ofPattern("MMMM yyyy", locale)),
                         style = MaterialTheme.typography.labelMedium,
                         color = ink.copy(alpha = 0.5f)
                     )
@@ -375,9 +421,45 @@ private fun greeting(): String {
 // ── THE WEEK ────────────────────────────────────────────────────────────────
 
 /**
- * Seven days, today at the right edge. A day with a page carries a filled dot
+ * The month above the strip, and how much of it has a page — the habit said in
+ * one quiet line, with no card of its own to carry.
+ */
+@Composable
+private fun MonthRow(
+    today: Long,
+    monthDays: Int,
+    daysInMonth: Int,
+    accentInk: Color
+) {
+    val locale = LocalConfiguration.current.locales[0]
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(start = 22.dp, end = 18.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            today.toLocalDate().format(DateTimeFormatter.ofPattern("MMMM", locale)),
+            style = MaterialTheme.typography.labelMedium.copy(
+                fontWeight = FontWeight.Medium,
+                letterSpacing = 1.6.sp
+            ),
+            color = accentInk.copy(alpha = 0.85f)
+        )
+        Spacer(Modifier.weight(1f))
+        Text(
+            "$monthDays of $daysInMonth days",
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.42f)
+        )
+    }
+}
+
+/**
+ * Four weeks, today at the right edge. A day with a page carries a filled dot
  * in its own colour; the day itself wears the accent. It is a LazyRow with
- * fixed-width cells so the strip never reflows as the week changes.
+ * fixed-width cells so the strip never reflows as the month changes, and it
+ * opens at the newest end so a day you missed in the month is a scroll away.
  */
 @Composable
 private fun WeekStrip(
@@ -387,8 +469,11 @@ private fun WeekStrip(
     accentInk: Color,
     onOpen: (Long) -> Unit
 ) {
-    val days = remember(today) { (6 downTo 0).map { shiftDay(today, -it.toLong()) } }
+    val days = remember(today) { (27 downTo 0).map { shiftDay(today, -it.toLong()) } }
+    val locale = LocalConfiguration.current.locales[0]
+    val strip = rememberLazyListState(initialFirstVisibleItemIndex = days.size - 7)
     LazyRow(
+        state = strip,
         contentPadding = PaddingValues(horizontal = 22.dp),
         horizontalArrangement = Arrangement.spacedBy(8.dp)
     ) {
@@ -413,7 +498,7 @@ private fun WeekStrip(
                 ) {
                     Text(
                         millis.toLocalDate()
-                            .format(DateTimeFormatter.ofPattern("EEEEE", Locale.getDefault())),
+                            .format(DateTimeFormatter.ofPattern("EEEEE", locale)),
                         style = MaterialTheme.typography.labelSmall.copy(
                             fontWeight = FontWeight.SemiBold
                         ),
@@ -467,6 +552,7 @@ private fun TodaySheet(
     onClick: () -> Unit
 ) {
     val ink = journalInk()
+    val locale = LocalConfiguration.current.locales[0]
     val own = if (page.hasOwnAccent) Color(page.accentArgb) else null
     val spine = own ?: accentInk
     val mood = page.moodEnum
@@ -533,7 +619,7 @@ private fun TodaySheet(
                 }
                 Spacer(Modifier.weight(1f))
                 Text(
-                    page.dateMillis.prettyTime(),
+                    page.dateMillis.prettyTime(locale),
                     style = MaterialTheme.typography.labelSmall,
                     color = ink.copy(alpha = 0.4f)
                 )
@@ -564,12 +650,24 @@ private fun TodaySheet(
                     color = ink.copy(alpha = 0.42f)
                 )
                 Spacer(Modifier.weight(1f))
-                CurioIcon(
-                    CurioIcons.ChevronRight,
-                    null,
-                    tint = accentInk.copy(alpha = 0.55f),
-                    size = 17.dp
-                )
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(5.dp)
+                ) {
+                    Text(
+                        "Keep writing",
+                        style = MaterialTheme.typography.labelSmall.copy(
+                            fontWeight = FontWeight.SemiBold
+                        ),
+                        color = accentInk
+                    )
+                    CurioIcon(
+                        CurioIcons.Note,
+                        null,
+                        tint = accentInk,
+                        size = 14.dp
+                    )
+                }
             }
         }
     }
@@ -674,11 +772,13 @@ private fun GoalRow(
     goal: Int,
     streak: Int,
     accent: Color,
-    accentInk: Color
+    accentInk: Color,
+    onClick: () -> Unit
 ) {
     val ink = MaterialTheme.colorScheme.onBackground
     val progress = (words.toFloat() / goal.toFloat()).coerceIn(0f, 1f)
     Surface(
+        onClick = onClick,
         shape = RoundedCornerShape(20.dp),
         color = journalPaperRaised(),
         modifier = Modifier
@@ -727,9 +827,15 @@ private fun GoalRow(
 
 /** No goal set: the streak alone, said once. */
 @Composable
-private fun StreakRow(streak: Int, accent: Color, accentInk: Color) {
+private fun StreakRow(
+    streak: Int,
+    accent: Color,
+    accentInk: Color,
+    onClick: () -> Unit
+) {
     val ink = MaterialTheme.colorScheme.onBackground
     Surface(
+        onClick = onClick,
         shape = RoundedCornerShape(20.dp),
         color = lerp(journalPaperRaised(), accent, 0.06f),
         modifier = Modifier
@@ -815,6 +921,7 @@ private fun RecentDayRow(
     val ink = journalInk()
     val own = if (page.hasOwnAccent) Color(page.accentArgb) else null
     val mood = page.moodEnum
+    val locale = LocalConfiguration.current.locales[0]
     Surface(
         onClick = onClick,
         shape = RoundedCornerShape(18.dp),
@@ -852,7 +959,7 @@ private fun RecentDayRow(
                 )
                 Text(
                     page.dateMillis.toLocalDate()
-                        .format(DateTimeFormatter.ofPattern("MMM", Locale.getDefault())),
+                        .format(DateTimeFormatter.ofPattern("MMM", locale)),
                     style = MaterialTheme.typography.labelSmall,
                     color = ink.copy(alpha = 0.42f)
                 )
@@ -987,9 +1094,9 @@ private fun words(page: PersonalNoteEntity): String {
 }
 
 /** A day, spelled out for a sentence: "Wednesday, 5 November". */
-private fun Long.fullLabel(): String =
-    toLocalDate().format(DateTimeFormatter.ofPattern("EEEE, d MMMM", Locale.getDefault()))
+private fun Long.fullLabel(locale: Locale): String =
+    toLocalDate().format(DateTimeFormatter.ofPattern("EEEE, d MMMM", locale))
 
 /** The time a page was last written, as the page's own header says it. */
-private fun Long.prettyTime(): String =
-    java.text.SimpleDateFormat("h:mm a", Locale.getDefault()).format(java.util.Date(this))
+private fun Long.prettyTime(locale: Locale): String =
+    java.text.SimpleDateFormat("h:mm a", locale).format(java.util.Date(this))

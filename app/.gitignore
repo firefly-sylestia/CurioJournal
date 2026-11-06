@@ -1,1 +1,7 @@
 /build
+
+# Topic catalogs are copied into the discovery editions' own source sets by CI
+# (and by the local bundle step) — generated, never source. The journal edition
+# has no catalog at all, which is why they are not copied into `src/main`.
+/src/core/assets/topics/*.json
+/src/full/assets/topics/*.json

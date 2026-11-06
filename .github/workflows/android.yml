@@ -167,27 +167,42 @@ jobs:
           echo "Release keystore decoded (${size} bytes)."
           echo "decoded=true" >> "$GITHUB_OUTPUT"
 
-      # Bundle the source catalogs as Android assets. The app imports these JSON
-      # files into its user database on first launch (and retries for existing
-      # installs whose previous import produced zero rows). The per-file record
-      # goes into the summary — an empty or truncated catalog is the one failure
-      # this step exists to catch, and it is invisible in a log line count.
+      # Bundle the source catalogs as Android assets. The DISCOVERY editions
+      # import these JSON files into their user database on first launch (and
+      # retry for existing installs whose previous import produced zero rows).
+      #
+      # They are copied into the discovery editions' OWN source sets — `src/core`
+      # and `src/full`, never `src/main` — so an edition that has no catalog
+      # (Curio Journal) has nothing to merge: its APK carries no topic JSON at
+      # all, from CI or from a local build. The per-file record goes into the
+      # summary — an empty or truncated catalog is the one failure this step
+      # exists to catch, and it is invisible in a log line count.
       - name: Bundle the topic catalogs
         id: topics
         run: |
           set -euo pipefail
-          rm -rf app/src/main/assets/topics
-          mkdir -p app/src/main/assets/topics
-          cp data/topics/*.json app/src/main/assets/topics/
-          catalogs=$(find app/src/main/assets/topics -maxdepth 1 -name '*.json' | wc -l)
-          if [ "$catalogs" -eq 0 ]; then
-            echo "::error::No topic JSON assets were bundled."
+          if [ "${{ matrix.edition }}" = "journal" ]; then
+            rm -f app/src/main/assets/topics/*.json
+            echo "catalogs=0" >> "$GITHUB_OUTPUT"
+            echo "topics=0" >> "$GITHUB_OUTPUT"
+            echo "Curio Journal carries no topic catalog — nothing bundled."
+            exit 0
+          fi
+          for edition in core full; do
+            rm -rf "app/src/$edition/assets/topics"
+            mkdir -p "app/src/$edition/assets/topics"
+            cp data/topics/*.json "app/src/$edition/assets/topics/"
+          done
+          catalogs=$(find app/src/core/assets/topics -maxdepth 1 -name '*.json' | wc -l)
+          full_catalogs=$(find app/src/full/assets/topics -maxdepth 1 -name '*.json' | wc -l)
+          if [ "$catalogs" -eq 0 ] || [ "$full_catalogs" -ne "$catalogs" ]; then
+            echo "::error::The topic catalogs did not reach every discovery edition (core=${catalogs}, full=${full_catalogs})."
             exit 1
           fi
           topics=$(python3 - <<'PY'
           import glob, json
           total = 0
-          for path in glob.glob("app/src/main/assets/topics/*.json"):
+          for path in glob.glob("app/src/core/assets/topics/*.json"):
               with open(path, encoding="utf-8") as handle:
                   data = json.load(handle)
               total += len(data if isinstance(data, list) else data.get("topics", []))
