@@ -14,6 +14,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.IconButton
@@ -39,9 +41,9 @@ import com.curio.app.data.PersonalNoteEntity
 import com.curio.app.data.PersonalRepositoryHolder
 import com.curio.app.features.personal.PersonalShelfSnapshot
 import com.curio.app.features.personal.journalPaper
+import com.curio.app.features.personal.journalPaperRaised
 import com.curio.app.features.personal.personalAccent
 import com.curio.app.features.personal.personalAccentInk
-import com.curio.app.features.personal.personalOnAccent
 import com.curio.app.features.personal.shiftDay
 import com.curio.app.features.personal.startOfToday
 import com.curio.app.features.personal.toLocalDate
@@ -89,6 +91,11 @@ fun JournalCalendarScreen(
     val today = remember { startOfToday() }
     val todayDate = remember(today) { today.toLocalDate() }
     var month by remember { mutableStateOf(YearMonth.from(todayDate)) }
+    var selected by remember { mutableStateOf(today) }
+    // v513 — THE DAY THE MONTH IS SHOWING. A tap on a date SELECTS it; the page
+    // that day carries is drawn under the grid (the member: "when i tap a date it
+    // should not open the journal but show the writtens journal below the
+    // calender and empty state if none").
 
     val lead = remember(month) { month.atDay(1).dayOfWeek.value - 1 } // Monday first
     val length = remember(month) { month.lengthOfMonth() }
@@ -132,6 +139,16 @@ fun JournalCalendarScreen(
                     style = MaterialTheme.typography.labelSmall.copy(letterSpacing = 1.2.sp),
                     color = accentInk.copy(alpha = 0.7f)
                 )
+            }
+            if (month != YearMonth.from(todayDate)) {
+                IconButton(onClick = { month = YearMonth.from(todayDate) }) {
+                    CurioIcon(
+                        CurioIcons.CalendarToday,
+                        "Back to today",
+                        tint = accentInk.copy(alpha = 0.8f),
+                        size = 19.dp
+                    )
+                }
             }
             MonthArrow(
                 description = "Previous month",
@@ -191,12 +208,7 @@ fun JournalCalendarScreen(
                                     accentInk = accentInk,
                                     ink = ink,
                                     modifier = Modifier.weight(1f),
-                                    onClick = {
-                                        onOpenDay(
-                                            millis,
-                                            byDay[millis]?.firstOrNull()?.id
-                                        )
-                                    }
+                                    onClick = { selected = millis }
                                 )
                             }
                         }
@@ -204,40 +216,80 @@ fun JournalCalendarScreen(
                 }
             }
 
-            Spacer(Modifier.weight(1f))
+            // ── THE CHOSEN DAY, UNDER THE MONTH ────────────────────────
+            //
+            // The grid says WHICH days have writing; this says WHAT it was, so a
+            // tap is a look rather than a jump into the editor. The card itself is
+            // still a door — looking at the page and opening it are two different
+            // presses, and only the second one leaves the calendar.
+            Spacer(Modifier.height(14.dp))
+            val selectedPages = byDay[selected].orEmpty()
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 4.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    selected.toLocalDate().format(
+                        DateTimeFormatter.ofPattern("d MMMM", locale)
+                    ),
+                    style = MaterialTheme.typography.titleMedium.copy(
+                        fontFamily = FrauncesFontFamily,
+                        fontWeight = FontWeight.SemiBold
+                    ),
+                    color = ink
+                )
+                Spacer(Modifier.weight(1f))
+                Text(
+                    when (selectedPages.size) {
+                        0 -> "Nothing yet"
+                        1 -> "1 page"
+                        else -> "${selectedPages.size} pages"
+                    },
+                    style = MaterialTheme.typography.labelSmall,
+                    color = ink.copy(alpha = 0.42f)
+                )
+            }
+            Spacer(Modifier.height(8.dp))
 
-            if (month != YearMonth.from(todayDate)) {
+            if (selectedPages.isEmpty()) {
                 Surface(
-                    onClick = { month = YearMonth.from(todayDate) },
-                    shape = CircleShape,
-                    color = accent,
-                    contentColor = personalOnAccent(),
-                    modifier = Modifier
-                        .align(Alignment.CenterHorizontally)
-                        .padding(bottom = 24.dp)
+                    shape = RoundedCornerShape(20.dp),
+                    color = journalPaperRaised(),
+                    modifier = Modifier.fillMaxWidth()
                 ) {
-                    Row(
-                        modifier = Modifier.padding(horizontal = 18.dp, vertical = 10.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(7.dp)
+                    Column(
+                        modifier = Modifier.padding(horizontal = 18.dp, vertical = 18.dp),
+                        verticalArrangement = Arrangement.spacedBy(3.dp)
                     ) {
-                        CurioIcon(
-                            CurioIcons.CalendarToday,
-                            null,
-                            tint = personalOnAccent(),
-                            size = 15.dp
+                        Text(
+                            "Nothing written on this day.",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = ink.copy(alpha = 0.5f)
                         )
                         Text(
-                            "Back to today",
-                            style = MaterialTheme.typography.labelMedium.copy(
-                                fontWeight = FontWeight.SemiBold
-                            ),
-                            color = personalOnAccent()
+                            "Pick another day, or write today from Home.",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = ink.copy(alpha = 0.32f)
                         )
                     }
                 }
+                Spacer(Modifier.weight(1f))
             } else {
-                Spacer(Modifier.height(24.dp))
+                LazyColumn(
+                    modifier = Modifier.weight(1f),
+                    contentPadding = androidx.compose.foundation.layout.PaddingValues(bottom = 8.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    items(items = selectedPages, key = { it.id }) { page ->
+                        JournalPageCard(
+                            page = page,
+                            modifier = Modifier.fillMaxWidth(),
+                            onClick = { onOpenDay(page.dateMillis, page.id) }
+                        )
+                    }
+                }
             }
         }
     }

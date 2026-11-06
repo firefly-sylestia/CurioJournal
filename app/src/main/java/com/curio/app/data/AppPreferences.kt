@@ -201,6 +201,7 @@ object AppPreferences {
     private const val KEY_JOURNAL_GOAL_REMINDER = "journal_goal_reminder"
     private const val KEY_JOURNAL_OPEN_TODAY = "journal_open_today"
     private const val KEY_JOURNAL_PHOTO_SNAP = "journal_photo_snap"
+    private const val KEY_JOURNAL_NAME = "journal_name"
     private const val KEY_LAST_JOURNAL_ID = "journal_last_id"
     private const val JOURNAL_GOAL_HOUR = 20
     private const val JOURNAL_GOAL_MINUTE = 30
@@ -3817,6 +3818,20 @@ object AppPreferences {
     fun setJournalPhotoSnapEnabled(context: Context, enabled: Boolean) {
         prefs(context).edit().putBoolean(KEY_JOURNAL_PHOTO_SNAP, enabled).apply()
         journalPhotoSnapState = enabled
+    }
+
+    // ── v513 — WHAT THE JOURNAL CALLS ITS WRITER ─────────────────────
+    //
+    // The member's own first-run question (*"when user opens app ask for his or her
+    // name"*). It is kept here rather than on a page or in an account because the
+    // journal has neither: it is the one fact Home needs to greet somebody, and a
+    // blank answer is a valid one (the greeting falls back to "Hello"). Trimmed to
+    // 40 characters so a pasted paragraph cannot break the head's layout.
+    fun getJournalName(context: Context): String =
+        prefs(context).getString(KEY_JOURNAL_NAME, "").orEmpty().trim()
+
+    fun setJournalName(context: Context, name: String) {
+        prefs(context).edit().putString(KEY_JOURNAL_NAME, name.trim().take(40)).apply()
     }
 
     /**

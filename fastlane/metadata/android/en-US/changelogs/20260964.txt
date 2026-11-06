@@ -1,0 +1,11 @@
+ADD:
+- Journal: **the first open asks your name**, and Home greets it in large type with **Anything exciting today?** beneath and the year on the right.
+- Journal: **Home, rebuilt around the day** — the day large, the month under it a step bigger than the week's dates, the word goal and the streak as small pills, and no month count line.
+- Journal: what you wrote today is shown under the day — one page as a card, several as a horizontal shelf — with the time it was written.
+- Journal: **pictures can leave a stack** — the picture in your hand steps a cell over inside its row, a hard sideways pull takes it out, and the size menu gains **On its own line**.
+- Journal: **Settings ▸ Snap photos into stacks** — the automatic snapping and size adjustment can be turned off.
+
+FIX:
+- Journal: **the calendar opens the day under itself** — tapping a date shows its pages (or an empty state) instead of jumping into the editor.
+- Journal: the "all pages" row on Home is gone, replaced by two floating doors (pages and calendar) beside the pen.
+- Journal: a dragged picture lands on the row your finger is over, and the landing cell preview matches it.

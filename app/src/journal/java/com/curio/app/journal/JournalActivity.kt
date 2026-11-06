@@ -28,6 +28,9 @@ import com.curio.app.ui.theme.CurioThemeTransitionHost
 /** The journal build's own front door — today, and the day's page. */
 const val JOURNAL_HOME = "journal-home"
 
+/** The first open, where the member's name is asked for (see [JournalIntroScreen]). */
+const val JOURNAL_INTRO = "journal-intro"
+
 /** The journal build's own settings page (see [JournalSettingsScreen]). */
 const val JOURNAL_SETTINGS = "journal-settings"
 
@@ -86,11 +89,31 @@ class JournalActivity : ComponentActivity() {
     }
 }
 
-/** The journal's own graph. Deliberately four destinations, no tabs. */
+/** The journal's own graph. Deliberately five destinations, no tabs. */
 @Composable
 private fun JournalApp() {
+    val context = androidx.compose.ui.platform.LocalContext.current
     val navController = rememberNavController()
-    NavHost(navController = navController, startDestination = JOURNAL_HOME) {
+    // v513 — the first open asks for a name, once. A member who skipped keeps the
+    // plain "Hello", and the intro is never shown again because its answer (even
+    // a blank one) is stored as soon as the door is pressed.
+    val start = if (AppPreferences.getJournalName(context).isBlank()) {
+        JOURNAL_INTRO
+    } else {
+        JOURNAL_HOME
+    }
+    NavHost(navController = navController, startDestination = start) {
+
+        composable(JOURNAL_INTRO) {
+            JournalIntroScreen(
+                onDone = {
+                    navController.navigate(JOURNAL_HOME) {
+                        popUpTo(JOURNAL_INTRO) { inclusive = true }
+                        launchSingleTop = true
+                    }
+                }
+            )
+        }
 
         composable(JOURNAL_HOME) {
             JournalHomeScreen(

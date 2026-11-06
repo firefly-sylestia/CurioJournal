@@ -3,25 +3,6 @@
 A running list, so nothing said in passing is lost. Newest requests at the top
 of each section; a line is removed only when the build carrying it is pushed.
 
-## The home, and the name (next pass — asked 2026-11-06)
-
-A first-run name, and Home rebuilt around the day rather than a list of pages:
-
-- **Ask for a name on first open**, then greet it in large type at the top of
-  Home with *anything exciting today?* beneath, and the year in large type on the
-  right.
-- **The date block**: the day large, one date only, the month slightly larger
-  than the dates under it, no "1 of 30 days", then blank space that says what it
-  is for.
-- **What was written** sits under today as a regular vertical block, or a
-  horizontal rectangle when there is more than one, with the time — never the
-  ruled row style.
-- **The word goal** as a small pill under the date, with the streak beside it.
-- **The all-pages row goes**, replaced by two floating buttons: pages, and the
-  calendar.
-- **The calendar opens a day under itself** (its writing, or an empty state)
-  instead of opening the journal.
-
 ## The editor
 
 - **Several pages in one day**, created from inside the writing page rather than

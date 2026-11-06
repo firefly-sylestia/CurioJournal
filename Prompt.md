@@ -6,6 +6,40 @@ from the state rather than from memory.
 
 ---
 
+## §106 — THE STACK COMES APART, AND HOME IS THE DAY (v513 / `1.5.21` / `20260964`; pushed)
+
+> "do the remaining task of the bug i reported" — then: "home screen redesign, and intro, so when user
+> opens app ask for his or her name … also only work on journal app"
+
+**Two questions were asked before any gesture code** (the report was ambiguous on how a stack comes apart and
+what "flipped through" means). Answers: **Both** routes out of a stack (a sideways pull AND a size-menu row),
+and the held picture **moves one cell over inside the row, staying in the hand**.
+
+**THE PHOTO PASS (`PersonalBlock.photoSeparated`, `PersonalEditorState.dropBlock`, `PersonalRowDragState`).**
+A print now carries a stored "own line" mark that all three row passes (editor, read view, PDF export) break at,
+so two pictures that landed together can be pulled apart; a drop against one retires the mark. The held print
+steps a cell per 52px sideways (two max), a 132px pull takes it out of the row, and both are applied on release
+in `dropBlock` — never during the gesture, because a document change under a live finger re-parents the row's
+arrangement and cancels the pointer input. Landing is now measured: every drawn row reports its top and band,
+the gesture snapshots them at the press, and `indexAtContent` picks the band under the carried centre (the old
+slot arithmetic is only the fallback). `snapPhotos` (Settings ▸ **Snap photos into stacks**, default ON) turns
+off the snap, the arrival resize and the joining together. **Checked:** the python brace/paren balance checker on
+every edited file (all 0) — no Gradle here, CI is the validation.
+
+**HOME + THE NAME (journal edition only).** `JournalActivity` starts on `JOURNAL_INTRO` while
+`AppPreferences.journal_name` is blank; the intro writes the answer on the button (a skip stores a blank one so
+the question never repeats). Home is rebuilt: "Hello, name" + *Anything exciting today?* + the year large on the
+right; the day at 76sp with the month a step larger than a Monday-first week of dates; the goal and streak as
+small pills (no "N of M days" line); today's pages as `JournalPageCard`s — one vertical, several as a horizontal
+shelf — with the time, no ruled sheet; the "All pages" row deleted for two floating discs (pages, calendar)
+under the pen. The calendar's tap now SELECTS a day and draws its pages, or an empty state, under the grid.
+**Checked:** the balance checker on all five journal files (all 0); no compile was run.
+
+**STILL OWED (not this request):** the editor items (several pages in one day, video attachments, the contents
+pill), and a store-notes file per build already shipped (`20260963.txt` stays as it was).
+
+---
+
 ## §105 — THE WINDOWS + iOS APP: A NEW FLUTTER CLIENT, AND THE OLD Compose DESKTOP MODULE REMOVED (2026-11-03; COMMITTED, NOT PUSHED)
 
 > "then we will work on desktop app with totally new code, i meant desktop and ios together in a totally new language code.
