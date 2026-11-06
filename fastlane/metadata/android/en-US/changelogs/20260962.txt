@@ -1,0 +1,6 @@
+ADD:
+- Journal: **settings, rebuilt as a page** — four groups (the page, the habit, the pages, about), a glyph on every row, and the value where there is one instead of a wall of cards. Theme and the opening page are capsules; the word goal has its own − / + control with the number in the display face and a quiet bar showing where it sits on the scale; the evening reminder sits under it, and the calendar now has a door here too.
+- Journal: the calendar's week now starts on Monday and steps through the whole week reliably.
+
+FIX:
+- Journal: the calendar build error from the first pass (an enum range the compiler cannot iterate) — the month grid compiles.

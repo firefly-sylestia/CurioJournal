@@ -158,6 +158,9 @@ private fun JournalApp() {
                 onBack = { navController.popBackStack() },
                 onOpenCollection = {
                     navController.navigate(CurioRoutes.JOURNALS) { launchSingleTop = true }
+                },
+                onOpenCalendar = {
+                    navController.navigate(JOURNAL_CALENDAR) { launchSingleTop = true }
                 }
             )
         }

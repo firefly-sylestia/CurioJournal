@@ -243,7 +243,7 @@ android {
         // Curio Journal as its own edition, and `changelogs/20260958.txt` is its
         // notes file (20260957.txt stays exactly as it was — it is the record of
         // the build that code shipped as).
-        versionCode = 20260961
+        versionCode = 20260962
         // v406 — the local/PR default matches the version now being tagged, so
         // a build from main reports the release it belongs to (a v* tag still
         // overrides it through RELEASE_VERSION).
@@ -260,7 +260,7 @@ android {
         // v498 — the passport has a page of its own (agenda §5.4),
         // and the grid of stamps it used to be inside a Quests card moved
         // there whole, with the press and every lane's spin on it.
-        versionName = envReleaseVersion ?: "1.5.18"
+        versionName = envReleaseVersion ?: "1.5.19"
 
         // v354 — optional Google Books API key baked into BuildConfig so the
         // keyless fetchers can upgrade to keyed (higher-quota) calls when the

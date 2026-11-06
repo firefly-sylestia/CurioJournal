@@ -54,25 +54,23 @@ import com.curio.app.ui.theme.FrauncesFontFamily
 /**
  * THE JOURNAL'S SETTINGS — only the things a journal has.
  *
- * The discovery app's settings hub is nine sections deep (lanes, quests, the
- * online layer, experiments, the pet designer, reader voices…) because that app
- * has nine families. This build has ONE, so its settings are three short cards:
- * how the page looks, how the writing habit is kept, and where the pages live.
+ * Four groups, and every row is wired to the preference the journal already
+ * uses; nothing here is a decorative switch and nothing new is stored:
  *
- * Every row here is wired to the preference the journal already uses — nothing
- * is a decorative switch, and nothing new is stored:
- *
- *  · theme          → `AppPreferences.setThemeMode` (the same light/dark/system
- *                     the whole app reads, so the editor is painted the instant
- *                     it changes)
+ *  · theme          → `AppPreferences.setThemeMode`
  *  · journal door   → `setJournalOpenToday` ("today's page" vs "last opened")
  *  · word goal      → `setJournalGoal` (0 = no goal)
  *  · goal reminder  → `setJournalGoalReminderEnabled` (arms the evening nudge)
+ *
+ * The page is a list, not a dashboard: a glyph on every row, the value on the
+ * right where there is one, and one quiet line at the foot saying where the
+ * writing is kept.
  */
 @Composable
 fun JournalSettingsScreen(
     onBack: () -> Unit,
-    onOpenCollection: () -> Unit
+    onOpenCollection: () -> Unit,
+    onOpenCalendar: () -> Unit
 ) {
     val context = LocalContext.current
     val accent = personalAccent()
@@ -132,19 +130,20 @@ fun JournalSettingsScreen(
                 .verticalScroll(rememberScrollState())
                 .navigationBarsPadding()
                 .padding(horizontal = 20.dp)
-                .padding(top = 14.dp, bottom = 40.dp),
-            verticalArrangement = Arrangement.spacedBy(20.dp)
+                .padding(top = 12.dp, bottom = 36.dp),
+            verticalArrangement = Arrangement.spacedBy(22.dp)
         ) {
 
             // ── THE PAGE ────────────────────────────────────────────────
             SettingsGroup(title = "The page") {
-                SettingsSegment(
+                SegmentRow(
+                    glyph = CurioIcons.LightMode,
                     label = "Theme",
                     detail = "Light, dark, or the phone's own choice.",
                     options = listOf(
-                        Triple("Light", AppPreferences.THEME_LIGHT, CurioIcons.LightMode),
-                        Triple("Dark", AppPreferences.THEME_DARK, CurioIcons.DarkMode),
-                        Triple("System", AppPreferences.THEME_SYSTEM, CurioIcons.Settings)
+                        SegmentOption("Light", AppPreferences.THEME_LIGHT, CurioIcons.LightMode),
+                        SegmentOption("Dark", AppPreferences.THEME_DARK, CurioIcons.DarkMode),
+                        SegmentOption("System", AppPreferences.THEME_SYSTEM, CurioIcons.Settings)
                     ),
                     selected = themeMode,
                     accent = accent,
@@ -154,12 +153,13 @@ fun JournalSettingsScreen(
                     }
                 )
                 Divider()
-                SettingsSegment(
+                SegmentRow(
+                    glyph = CurioIcons.Note,
                     label = "Opening the journal",
                     detail = "Where the pen lands when you come back.",
                     options = listOf(
-                        Triple("Today", true, CurioIcons.CalendarToday),
-                        Triple("Last page", false, CurioIcons.Note)
+                        SegmentOption("Today", true, CurioIcons.CalendarToday),
+                        SegmentOption("Last page", false, CurioIcons.Note)
                     ),
                     selected = openToday,
                     accent = accent,
@@ -172,70 +172,70 @@ fun JournalSettingsScreen(
 
             // ── THE HABIT ───────────────────────────────────────────────
             SettingsGroup(title = "The habit") {
-                Column(
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
-                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(start = 16.dp, end = 12.dp, top = 14.dp, bottom = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Column(Modifier.weight(1f)) {
-                            Text(
-                                "Daily word goal",
-                                style = MaterialTheme.typography.titleSmall.copy(
-                                    fontWeight = FontWeight.SemiBold
-                                ),
-                                color = journalInk()
-                            )
-                            Text(
-                                if (goal == 0) {
-                                    "No goal — the page is whatever you write."
-                                } else {
-                                    "$goal words a day."
-                                },
-                                style = MaterialTheme.typography.bodySmall,
-                                color = journalInk().copy(alpha = 0.55f)
-                            )
-                        }
-                        Stepper(
-                            value = if (goal == 0) "Off" else goal.toString(),
-                            accent = accent,
-                            canDecrease = goal > 0,
-                            canIncrease = goal < 5_000,
-                            onDecrease = {
-                                val next = (goal - 250).coerceAtLeast(0)
-                                goal = next
-                                AppPreferences.setJournalGoal(context, next)
-                                if (next == 0) {
-                                    reminder = false
-                                    AppPreferences.setJournalGoalReminderEnabled(context, false)
-                                }
+                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                        Text(
+                            "Daily word goal",
+                            style = MaterialTheme.typography.titleSmall.copy(
+                                fontWeight = FontWeight.SemiBold
+                            ),
+                            color = journalInk()
+                        )
+                        Text(
+                            when (goal) {
+                                0 -> "No goal — the page is whatever you write."
+                                else -> "A target, not a fence. Steps of 250."
                             },
-                            onIncrease = {
-                                val next = (goal + 250).coerceAtMost(5_000)
-                                goal = next
-                                AppPreferences.setJournalGoal(context, next)
-                            }
+                            style = MaterialTheme.typography.bodySmall,
+                            color = journalInk().copy(alpha = 0.55f)
                         )
                     }
-                    // The bar says where a goal of this size sits relative to a
-                    // page — a goal is a target, and a number alone is abstract.
+                    GoalStepper(
+                        goal = goal,
+                        accent = accent,
+                        onDecrease = {
+                            val next = (goal - 250).coerceAtLeast(0)
+                            goal = next
+                            AppPreferences.setJournalGoal(context, next)
+                            if (next == 0) {
+                                reminder = false
+                                AppPreferences.setJournalGoalReminderEnabled(context, false)
+                            }
+                        },
+                        onIncrease = {
+                            val next = (goal + 250).coerceAtMost(5_000)
+                            goal = next
+                            AppPreferences.setJournalGoal(context, next)
+                        }
+                    )
+                }
+                // A quiet bar that says where this goal sits on the scale a page
+                // can reach — a number alone is abstract.
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp)
+                        .padding(bottom = 14.dp)
+                        .height(4.dp)
+                        .clip(RoundedCornerShape(50))
+                        .background(journalInk().copy(alpha = 0.07f))
+                ) {
                     Box(
                         modifier = Modifier
-                            .fillMaxWidth()
+                            .fillMaxWidth((goal.toFloat() / 5_000f).coerceIn(0f, 1f))
                             .height(4.dp)
                             .clip(RoundedCornerShape(50))
-                            .background(journalInk().copy(alpha = 0.07f))
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth((goal.toFloat() / 5_000f).coerceIn(0f, 1f))
-                                .height(4.dp)
-                                .clip(RoundedCornerShape(50))
-                                .background(accent)
-                        )
-                    }
+                            .background(accent)
+                    )
                 }
                 Divider()
-                SettingsSwitch(
+                SwitchRow(
+                    glyph = CurioIcons.CalendarToday,
                     label = "Evening reminder",
                     detail = if (goal == 0) {
                         "Set a goal to turn the nudge on."
@@ -254,7 +254,7 @@ fun JournalSettingsScreen(
 
             // ── THE PAGES ───────────────────────────────────────────────
             SettingsGroup(title = "The pages") {
-                SettingsDoor(
+                DoorRow(
                     glyph = CurioIcons.MenuBook,
                     label = "All pages",
                     detail = "Search, filter by mood, sort by day.",
@@ -262,53 +262,71 @@ fun JournalSettingsScreen(
                     onClick = onOpenCollection
                 )
                 Divider()
-                Column(
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
-                    verticalArrangement = Arrangement.spacedBy(3.dp)
+                DoorRow(
+                    glyph = CurioIcons.CalendarToday,
+                    label = "Calendar",
+                    detail = "The month as a grid, a dot on every day written.",
+                    accent = accent,
+                    onClick = onOpenCalendar
+                )
+                Divider()
+                NoteRow(
+                    label = "Kept on this device",
+                    detail = "Pages, photos and voice notes are stored on the phone. " +
+                        "Nothing is uploaded, and there is no account."
+                )
+            }
+
+            // ── ABOUT ───────────────────────────────────────────────────
+            SettingsGroup(title = "About") {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 15.dp),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text(
-                        "Kept on this device",
-                        style = MaterialTheme.typography.titleSmall.copy(
-                            fontWeight = FontWeight.SemiBold
-                        ),
-                        color = journalInk()
-                    )
-                    Text(
-                        "Pages, photos and voice notes are stored on the phone. " +
-                            "Nothing is uploaded, and there is no account.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = journalInk().copy(alpha = 0.55f)
-                    )
+                    Surface(shape = CircleShape, color = accent, modifier = Modifier.size(34.dp)) {
+                        Box(Modifier.size(34.dp), contentAlignment = Alignment.Center) {
+                            CurioIcon(
+                                CurioIcons.Note,
+                                null,
+                                tint = personalOnAccent(),
+                                size = 17.dp
+                            )
+                        }
+                    }
+                    Spacer(Modifier.width(12.dp))
+                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                        Text(
+                            "Curio Journal",
+                            style = MaterialTheme.typography.titleSmall.copy(
+                                fontWeight = FontWeight.SemiBold
+                            ),
+                            color = journalInk()
+                        )
+                        Text(
+                            "Version ${BuildConfig.VERSION_NAME}",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = journalInk().copy(alpha = 0.5f)
+                        )
+                    }
                 }
             }
 
             // ── FOOT ────────────────────────────────────────────────────
-            Column(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(2.dp)
-            ) {
-                Text(
-                    "Curio Journal",
-                    style = MaterialTheme.typography.labelMedium.copy(
-                        fontWeight = FontWeight.SemiBold,
-                        letterSpacing = 0.8.sp
-                    ),
-                    color = ink.copy(alpha = 0.45f)
-                )
-                Text(
-                    "Version ${BuildConfig.VERSION_NAME}",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = ink.copy(alpha = 0.35f)
-                )
-            }
+            Text(
+                "The journal from Curio — one page a day, and the days before it.",
+                style = MaterialTheme.typography.labelSmall,
+                color = ink.copy(alpha = 0.35f),
+                modifier = Modifier.padding(start = 4.dp)
+            )
         }
     }
 }
 
 // ── BUILDING BLOCKS ─────────────────────────────────────────────────────────
 
-/** One card of settings, with its own heading above it. */
+/** One group of settings, with its own quiet heading above the card. */
 @Composable
 private fun SettingsGroup(
     title: String,
@@ -320,10 +338,10 @@ private fun SettingsGroup(
             title,
             style = MaterialTheme.typography.labelMedium.copy(
                 fontWeight = FontWeight.SemiBold,
-                letterSpacing = 0.4.sp
+                letterSpacing = 1.2.sp
             ),
-            color = ink.copy(alpha = 0.45f),
-            modifier = Modifier.padding(start = 4.dp)
+            color = ink.copy(alpha = 0.42f),
+            modifier = Modifier.padding(start = 6.dp)
         )
         Surface(
             shape = RoundedCornerShape(22.dp),
@@ -336,7 +354,7 @@ private fun SettingsGroup(
     }
 }
 
-/** The hairline inside a card — never a full-width divider to the edge. */
+/** The hairline inside a card — never a full-bleed divider. */
 @Composable
 private fun Divider() {
     Box(
@@ -344,20 +362,40 @@ private fun Divider() {
             .fillMaxWidth()
             .padding(horizontal = 16.dp)
             .height(1.dp)
-            .background(MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+            .background(MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f))
     )
 }
 
+/** The glyph every row leads with, on its own quiet disc. */
+@Composable
+private fun RowGlyph(glyph: String, accent: Color) {
+    Surface(
+        shape = CircleShape,
+        color = lerp(journalPaper(), accent, 0.18f),
+        modifier = Modifier.size(34.dp)
+    ) {
+        Box(Modifier.size(34.dp), contentAlignment = Alignment.Center) {
+            CurioIcon(glyph, null, tint = personalAccentInk(), size = 17.dp)
+        }
+    }
+}
+
+private data class SegmentOption<T>(
+    val label: String,
+    val value: T,
+    val glyph: String
+)
+
 /**
- * A labelled choice, as capsules: the selected one is the accent FILL with the
- * ink that reads on it, the others are the page's raised paper. The glyph is
- * part of the label, so a row of three reads at a glance.
+ * A labelled choice, as capsules: the selected one is the accent fill with the
+ * ink that reads on it, the others are the page's raised paper.
  */
 @Composable
-private fun <T> SettingsSegment(
+private fun <T> SegmentRow(
+    glyph: String,
     label: String,
     detail: String,
-    options: List<Triple<String, T, String>>,
+    options: List<SegmentOption<T>>,
     selected: T,
     accent: Color,
     onSelect: (T) -> Unit
@@ -365,27 +403,33 @@ private fun <T> SettingsSegment(
     val ink = journalInk()
     Column(
         modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
-        verticalArrangement = Arrangement.spacedBy(10.dp)
+        verticalArrangement = Arrangement.spacedBy(11.dp)
     ) {
-        Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-            Text(
-                label,
-                style = MaterialTheme.typography.titleSmall.copy(
-                    fontWeight = FontWeight.SemiBold
-                ),
-                color = ink
-            )
-            Text(
-                detail,
-                style = MaterialTheme.typography.bodySmall,
-                color = ink.copy(alpha = 0.55f)
-            )
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            RowGlyph(glyph, accent)
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Text(
+                    label,
+                    style = MaterialTheme.typography.titleSmall.copy(
+                        fontWeight = FontWeight.SemiBold
+                    ),
+                    color = ink
+                )
+                Text(
+                    detail,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = ink.copy(alpha = 0.55f)
+                )
+            }
         }
         Row(horizontalArrangement = Arrangement.spacedBy(7.dp)) {
-            options.forEach { (name, value, glyph) ->
-                val isOn = value == selected
+            options.forEach { option ->
+                val isOn = option.value == selected
                 Surface(
-                    onClick = { onSelect(value) },
+                    onClick = { onSelect(option.value) },
                     shape = RoundedCornerShape(50),
                     color = if (isOn) accent else journalPaperRaised(),
                     modifier = Modifier.weight(1f)
@@ -396,14 +440,14 @@ private fun <T> SettingsSegment(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         CurioIcon(
-                            glyph,
+                            option.glyph,
                             null,
                             tint = if (isOn) personalOnAccent() else ink.copy(alpha = 0.55f),
                             size = 14.dp
                         )
                         Spacer(Modifier.width(5.dp))
                         Text(
-                            name,
+                            option.label,
                             style = MaterialTheme.typography.labelMedium.copy(
                                 fontWeight = FontWeight.SemiBold
                             ),
@@ -418,7 +462,8 @@ private fun <T> SettingsSegment(
 
 /** A switch row that says what it does in one line. */
 @Composable
-private fun SettingsSwitch(
+private fun SwitchRow(
+    glyph: String,
     label: String,
     detail: String,
     checked: Boolean,
@@ -430,9 +475,11 @@ private fun SettingsSwitch(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 10.dp),
-        verticalAlignment = Alignment.CenterVertically
+            .padding(start = 16.dp, end = 12.dp, top = 12.dp, bottom = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp)
     ) {
+        RowGlyph(glyph, accent)
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
             Text(
                 label,
@@ -447,7 +494,7 @@ private fun SettingsSwitch(
                 color = ink.copy(alpha = if (enabled) 0.55f else 0.35f)
             )
         }
-        Spacer(Modifier.width(10.dp))
+        Spacer(Modifier.width(6.dp))
         Switch(
             checked = checked,
             onCheckedChange = onChange,
@@ -463,9 +510,9 @@ private fun SettingsSwitch(
     }
 }
 
-/** A door: glyph on an accent plate, a label, a line, a chevron. */
+/** A door: glyph, label, line, chevron. */
 @Composable
-private fun SettingsDoor(
+private fun DoorRow(
     glyph: String,
     label: String,
     detail: String,
@@ -477,19 +524,11 @@ private fun SettingsDoor(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 14.dp),
+                .padding(start = 16.dp, end = 14.dp, top = 13.dp, bottom = 13.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            Surface(
-                shape = CircleShape,
-                color = lerp(journalPaper(), accent, 0.22f),
-                modifier = Modifier.size(36.dp)
-            ) {
-                Box(Modifier.size(36.dp), contentAlignment = Alignment.Center) {
-                    CurioIcon(glyph, null, tint = personalAccentInk(), size = 18.dp)
-                }
-            }
+            RowGlyph(glyph, accent)
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                 Text(
                     label,
@@ -507,76 +546,97 @@ private fun SettingsDoor(
             CurioIcon(
                 CurioIcons.ChevronRight,
                 null,
-                tint = ink.copy(alpha = 0.35f),
+                tint = ink.copy(alpha = 0.32f),
                 size = 18.dp
             )
         }
     }
 }
 
-/** The word goal's own − / + control, in the page's accent. */
+/** A row that is only a fact: no door, no switch. */
 @Composable
-private fun Stepper(
-    value: String,
+private fun NoteRow(label: String, detail: String) {
+    val ink = journalInk()
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 14.dp),
+        verticalArrangement = Arrangement.spacedBy(3.dp)
+    ) {
+        Text(
+            label,
+            style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold),
+            color = ink
+        )
+        Text(
+            detail,
+            style = MaterialTheme.typography.bodySmall,
+            color = ink.copy(alpha = 0.55f)
+        )
+    }
+}
+
+/** The word goal's own − / + control, with the value between them. */
+@Composable
+private fun GoalStepper(
+    goal: Int,
     accent: Color,
-    canDecrease: Boolean,
-    canIncrease: Boolean,
     onDecrease: () -> Unit,
     onIncrease: () -> Unit
 ) {
     val ink = journalInk()
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(2.dp)
-    ) {
-        StepButton(
-            glyph = CurioIcons.Close,
-            description = "Lower the goal",
-            enabled = canDecrease,
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        StepperButton(
+            glyph = "−",
+            enabled = goal > 0,
             accent = accent,
+            ink = ink,
             onClick = onDecrease
         )
         Text(
-            value,
-            style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold),
-            color = ink,
+            if (goal == 0) "Off" else goal.toString(),
+            style = MaterialTheme.typography.titleMedium.copy(
+                fontFamily = FrauncesFontFamily,
+                fontWeight = FontWeight.SemiBold
+            ),
+            color = if (goal == 0) ink.copy(alpha = 0.45f) else ink,
             modifier = Modifier
-                .width(46.dp)
-                .padding(horizontal = 2.dp),
+                .width(58.dp)
+                .padding(horizontal = 4.dp),
             textAlign = androidx.compose.ui.text.style.TextAlign.Center
         )
-        StepButton(
-            glyph = CurioIcons.Add,
-            description = "Raise the goal",
-            enabled = canIncrease,
+        StepperButton(
+            glyph = "+",
+            enabled = goal < 5_000,
             accent = accent,
+            ink = ink,
             onClick = onIncrease
         )
     }
 }
 
 @Composable
-private fun StepButton(
+private fun StepperButton(
     glyph: String,
-    description: String,
     enabled: Boolean,
     accent: Color,
+    ink: Color,
     onClick: () -> Unit
 ) {
-    val ink = journalInk()
     Surface(
         onClick = onClick,
         enabled = enabled,
         shape = CircleShape,
-        color = if (enabled) lerp(journalPaper(), accent, 0.18f) else journalPaperRaised(),
+        color = if (enabled) accent else ink.copy(alpha = 0.06f),
         modifier = Modifier.size(32.dp)
     ) {
         Box(Modifier.size(32.dp), contentAlignment = Alignment.Center) {
-            CurioIcon(
+            Text(
                 glyph,
-                description,
-                tint = if (enabled) personalAccentInk() else ink.copy(alpha = 0.25f),
-                size = 15.dp
+                style = MaterialTheme.typography.titleMedium.copy(
+                    fontWeight = FontWeight.SemiBold
+                ),
+                color = if (enabled) personalOnAccent() else ink.copy(alpha = 0.3f)
             )
         }
     }

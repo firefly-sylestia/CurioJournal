@@ -157,7 +157,7 @@ fun JournalCalendarScreen(
                     .fillMaxWidth()
                     .padding(top = 12.dp, bottom = 6.dp)
             ) {
-                for (day in DayOfWeek.MONDAY..DayOfWeek.SUNDAY) {
+                for (day in DayOfWeek.entries) {
                     Text(
                         day.getDisplayName(java.time.format.TextStyle.NARROW, locale),
                         style = MaterialTheme.typography.labelSmall.copy(
