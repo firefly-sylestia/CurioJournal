@@ -31,6 +31,9 @@ const val JOURNAL_HOME = "journal-home"
 /** The journal build's own settings page (see [JournalSettingsScreen]). */
 const val JOURNAL_SETTINGS = "journal-settings"
 
+/** The month, as a page of doors (see [JournalCalendarScreen]). */
+const val JOURNAL_CALENDAR = "journal-calendar"
+
 /**
  * The journal edition's single Activity.
  *
@@ -108,8 +111,29 @@ private fun JournalApp() {
                 onOpenCollection = {
                     navController.navigate(CurioRoutes.JOURNALS) { launchSingleTop = true }
                 },
+                onOpenCalendar = {
+                    navController.navigate(JOURNAL_CALENDAR) { launchSingleTop = true }
+                },
                 onOpenSettings = {
                     navController.navigate(JOURNAL_SETTINGS) { launchSingleTop = true }
+                }
+            )
+        }
+
+        composable(JOURNAL_CALENDAR) {
+            JournalCalendarScreen(
+                onBack = { navController.popBackStack() },
+                onOpenDay = { millis, entryId ->
+                    if (entryId != null) {
+                        navController.navigate(CurioRoutes.journalEditor(entryId)) {
+                            launchSingleTop = true
+                        }
+                    } else {
+                        com.curio.app.navigation.PendingJournalDay.request(millis)
+                        navController.navigate(
+                            CurioRoutes.journalEditor(CurioRoutes.PERSONAL_NEW)
+                        ) { launchSingleTop = true }
+                    }
                 }
             )
         }

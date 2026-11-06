@@ -1,0 +1,8 @@
+ADD:
+- Journal: **today's page is a page** — the time, the mood as a named chip, the title in the display serif, the opening of the writing, its length, and one solid **Keep writing** door instead of a chevron that said nothing.
+- Journal: **a calendar** — the whole month as a grid of days, a dot on every day with a page, the count where a day has more than one, today's ring, and a way back to this month from any other. It opens from the month line and from the head's calendar door.
+- Journal: **the greeting is the journal's own** — set in the display face, in the accent's ink, so "Good evening" is a line of the page rather than a caption above it.
+
+REMOVE:
+- Journal: the "A page a day, whenever you like" line and the "Every page you write is kept here / Your words never leave this device" note are gone — the date, the sheet and the calendar say it without saying it.
+- Journal: the duplicate All pages card stays only for a journal with no days yet, where no section head is drawn to carry that door.

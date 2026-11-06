@@ -47,8 +47,8 @@ import androidx.compose.ui.unit.sp
 import com.curio.app.data.AppPreferences
 import com.curio.app.data.PersonalNoteEntity
 import com.curio.app.data.PersonalRepositoryHolder
+import com.curio.app.data.PersonalMood
 import com.curio.app.data.wordCount
-import com.curio.app.features.personal.JournalCapsule
 import com.curio.app.features.personal.PersonalShelfSnapshot
 import com.curio.app.features.personal.journalInk
 import com.curio.app.features.personal.journalPaper
@@ -71,21 +71,22 @@ import java.util.Locale
  * THE JOURNAL'S HOME — A DAY, NOT A FEED.
  *
  * The discovery app's Home answers "what shall I explore"; this one answers
- * "what day is it, and what did I write on it". The whole page is built around
- * today: the date is the largest thing on screen, the week sits under it as
- * seven doors, and today's page is a sheet of paper laid on the desk. Everything
- * else — the goal, the streak, the days before today — is a way back into
- * writing, never a way into another feature.
+ * "what day is it, and what did I write on it". The page is built around today:
+ * the date is the largest thing on screen, the last four weeks sit under it as
+ * doors, and today's page is a sheet of paper laid on the desk. Everything else
+ * — the goal, the days before today, the calendar — is a way back into writing,
+ * never a way into another feature.
  *
  * The writing itself is NOT reimplemented here: a tap opens the existing
- * `JournalEditorScreen`/`JournalListScreen`, untouched, with the existing store
- * behind them.
+ * `JournalEditorScreen`/`JournalListScreen`, untouched, with the store behind
+ * them.
  */
 @Composable
 fun JournalHomeScreen(
     /** Opens a day: a saved page's id, or null for a day with no page yet. */
     onOpenDay: (millis: Long, entryId: String?) -> Unit,
     onOpenCollection: () -> Unit,
+    onOpenCalendar: () -> Unit,
     onOpenSettings: () -> Unit
 ) {
     val context = LocalContext.current
@@ -114,7 +115,6 @@ fun JournalHomeScreen(
     val writtenDays = remember(journals) { journals.map { it.dateMillis }.toHashSet() }
     // Read on every composition, not remembered: the goal and the door are set
     // on the Settings page, and coming back from it has to show the new answer.
-    // Both are in-memory SharedPreferences reads, so this is free.
     val goal = AppPreferences.getJournalGoal(context)
     val wordsToday = remember(todayPage) { todayPage?.doc?.wordCount() ?: 0 }
     val streak = remember(journals, writtenDays, today) {
@@ -136,8 +136,7 @@ fun JournalHomeScreen(
             .reversed()
             .take(6)
     }
-    // The month so far: how many of its days already have a page. It sits in the
-    // month line above the strip, so the habit is visible without another card.
+    // The month so far, in the line above the strip.
     val monthDays = remember(journals, today) {
         val day = today.toLocalDate()
         journals.count { page ->
@@ -176,8 +175,11 @@ fun JournalHomeScreen(
             item("head") {
                 JournalHead(
                     today = today,
+                    greeting = greeting(),
+                    locale = locale,
                     accentInk = accentInk,
                     ink = ink,
+                    onOpenCalendar = onOpenCalendar,
                     onOpenSettings = onOpenSettings
                 )
             }
@@ -188,7 +190,9 @@ fun JournalHomeScreen(
                         today = today,
                         monthDays = monthDays,
                         daysInMonth = daysInMonth,
-                        accentInk = accentInk
+                        locale = locale,
+                        accentInk = accentInk,
+                        onClick = onOpenCalendar
                     )
                     WeekStrip(
                         today = today,
@@ -219,6 +223,7 @@ fun JournalHomeScreen(
                 } else {
                     TodaySheet(
                         page = page,
+                        accent = accent,
                         accentInk = accentInk,
                         paper = paper,
                         rule = rule,
@@ -232,15 +237,6 @@ fun JournalHomeScreen(
                     GoalRow(
                         words = wordsToday,
                         goal = goal,
-                        streak = streak,
-                        accent = accent,
-                        accentInk = accentInk,
-                        onClick = onOpenSettings
-                    )
-                }
-            } else {
-                item("streak") {
-                    StreakRow(
                         streak = streak,
                         accent = accent,
                         accentInk = accentInk,
@@ -262,20 +258,16 @@ fun JournalHomeScreen(
                 items(items = recent, key = { "recent-${it.id}" }) { page ->
                     RecentDayRow(
                         page = page,
+                        locale = locale,
                         accentInk = accentInk,
                         onClick = { onOpenDay(page.dateMillis, page.id) }
                     )
                 }
-            } else {
-                item("first-page") {
-                    FirstPageNote(ink = ink, accentInk = accentInk)
-                }
             }
 
             // One door to the collection, not two: "All pages" in the section
-            // head is the way in once there are days to look back on, and the
-            // card is kept for a journal that has none yet (where no head is
-            // drawn to carry the link).
+            // head is the way in once there are days to look back on, and this
+            // card is kept for a journal that has none yet.
             if (recent.isEmpty()) {
                 item("collection-door") {
                     CollectionDoor(
@@ -322,27 +314,27 @@ fun JournalHomeScreen(
 // ── THE HEAD ────────────────────────────────────────────────────────────────
 
 /**
- * The wordmark and the day. The date is the page's subject here, so it is set
- * in the display serif at a size nothing else on Home uses, with the weekday
- * and the month beside it in the accent's ink.
+ * The wordmark, the greeting and the day. The date is the page's subject here,
+ * so it is set in the display serif at a size nothing else on Home uses; the
+ * greeting is the display face too, in the accent's ink, so "Good evening" is a
+ * line of the page rather than a caption above it.
  */
 @Composable
 private fun JournalHead(
     today: Long,
+    greeting: String,
+    locale: Locale,
     accentInk: Color,
     ink: Color,
+    onOpenCalendar: () -> Unit,
     onOpenSettings: () -> Unit
 ) {
     val date = today.toLocalDate()
-    // The locale is read through LocalConfiguration: a bare Locale.getDefault()
-    // is not observable in composition (lint's NonObservableLocale), so a
-    // language change would leave the date in the old one.
-    val locale = LocalConfiguration.current.locales[0]
     Column(modifier = Modifier.fillMaxWidth()) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(start = 22.dp, end = 10.dp, top = 6.dp),
+                .padding(start = 22.dp, end = 8.dp, top = 6.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
@@ -354,6 +346,14 @@ private fun JournalHead(
                 color = accentInk
             )
             Spacer(Modifier.weight(1f))
+            IconButton(onClick = onOpenCalendar) {
+                CurioIcon(
+                    CurioIcons.CalendarToday,
+                    "Calendar",
+                    tint = ink.copy(alpha = 0.62f),
+                    size = 21.dp
+                )
+            }
             IconButton(onClick = onOpenSettings) {
                 CurioIcon(
                     CurioIcons.Settings,
@@ -365,12 +365,17 @@ private fun JournalHead(
         }
         Column(
             modifier = Modifier.padding(start = 22.dp, end = 22.dp, top = 2.dp),
-            verticalArrangement = Arrangement.spacedBy(2.dp)
+            verticalArrangement = Arrangement.spacedBy(4.dp)
         ) {
             Text(
-                greeting(),
-                style = MaterialTheme.typography.titleMedium,
-                color = ink.copy(alpha = 0.55f)
+                greeting,
+                style = MaterialTheme.typography.titleMedium.copy(
+                    fontFamily = FrauncesFontFamily,
+                    fontWeight = FontWeight.Medium,
+                    fontSize = 19.sp,
+                    lineHeight = 24.sp
+                ),
+                color = accentInk.copy(alpha = 0.9f)
             )
             Row(verticalAlignment = Alignment.Bottom) {
                 Text(
@@ -418,48 +423,57 @@ private fun greeting(): String {
     }
 }
 
-// ── THE WEEK ────────────────────────────────────────────────────────────────
+// ── THE MONTH, THE WEEKS ────────────────────────────────────────────────────
 
 /**
  * The month above the strip, and how much of it has a page — the habit said in
- * one quiet line, with no card of its own to carry.
+ * one quiet line, and a door into the calendar.
  */
 @Composable
 private fun MonthRow(
     today: Long,
     monthDays: Int,
     daysInMonth: Int,
-    accentInk: Color
+    locale: Locale,
+    accentInk: Color,
+    onClick: () -> Unit
 ) {
-    val locale = LocalConfiguration.current.locales[0]
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(start = 22.dp, end = 18.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Text(
-            today.toLocalDate().format(DateTimeFormatter.ofPattern("MMMM", locale)),
-            style = MaterialTheme.typography.labelMedium.copy(
-                fontWeight = FontWeight.Medium,
-                letterSpacing = 1.6.sp
-            ),
-            color = accentInk.copy(alpha = 0.85f)
-        )
-        Spacer(Modifier.weight(1f))
-        Text(
-            "$monthDays of $daysInMonth days",
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.42f)
-        )
+    Surface(onClick = onClick, shape = RoundedCornerShape(50), color = Color.Transparent) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(start = 22.dp, end = 18.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                today.toLocalDate().format(DateTimeFormatter.ofPattern("MMMM", locale)),
+                style = MaterialTheme.typography.labelMedium.copy(
+                    fontWeight = FontWeight.Medium,
+                    letterSpacing = 1.6.sp
+                ),
+                color = accentInk.copy(alpha = 0.85f)
+            )
+            Spacer(Modifier.width(6.dp))
+            CurioIcon(
+                CurioIcons.CalendarToday,
+                null,
+                tint = accentInk.copy(alpha = 0.5f),
+                size = 13.dp
+            )
+            Spacer(Modifier.weight(1f))
+            Text(
+                "$monthDays of $daysInMonth days",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.42f)
+            )
+        }
     }
 }
 
 /**
  * Four weeks, today at the right edge. A day with a page carries a filled dot
- * in its own colour; the day itself wears the accent. It is a LazyRow with
- * fixed-width cells so the strip never reflows as the month changes, and it
- * opens at the newest end so a day you missed in the month is a scroll away.
+ * in its own colour; the day itself wears the accent. It opens at the newest
+ * end, so a day missed in the month is a scroll away.
  */
 @Composable
 private fun WeekStrip(
@@ -497,8 +511,7 @@ private fun WeekStrip(
                     verticalArrangement = Arrangement.Center
                 ) {
                     Text(
-                        millis.toLocalDate()
-                            .format(DateTimeFormatter.ofPattern("EEEEE", locale)),
+                        millis.toLocalDate().format(DateTimeFormatter.ofPattern("EEEEE", locale)),
                         style = MaterialTheme.typography.labelSmall.copy(
                             fontWeight = FontWeight.SemiBold
                         ),
@@ -540,12 +553,13 @@ private fun WeekStrip(
 
 /**
  * A day that exists, as the sheet of paper it is: the mood it was written
- * under, its title in the display serif, the opening of the writing, and how
- * much of it there is. Ruled, because a journal page is ruled.
+ * under, its title in the display serif, the opening of the writing, its
+ * length, and one solid door back into it.
  */
 @Composable
 private fun TodaySheet(
     page: PersonalNoteEntity,
+    accent: Color,
     accentInk: Color,
     paper: Color,
     rule: Color,
@@ -553,14 +567,14 @@ private fun TodaySheet(
 ) {
     val ink = journalInk()
     val locale = LocalConfiguration.current.locales[0]
-    val own = if (page.hasOwnAccent) Color(page.accentArgb) else null
-    val spine = own ?: accentInk
     val mood = page.moodEnum
+    val spine = if (page.hasOwnAccent) Color(page.accentArgb) else accent
+    val moodInk = accentInk
     Surface(
         onClick = onClick,
-        shape = RoundedCornerShape(22.dp),
+        shape = RoundedCornerShape(26.dp),
         color = paper,
-        shadowElevation = 2.dp,
+        shadowElevation = 3.dp,
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 22.dp)
@@ -569,60 +583,37 @@ private fun TodaySheet(
             modifier = Modifier
                 .fillMaxWidth()
                 .drawBehind {
-                    val barWidth = 3.5.dp.toPx()
+                    val barWidth = 4.dp.toPx()
                     drawRoundRect(
                         color = spine,
                         size = androidx.compose.ui.geometry.Size(barWidth, size.height),
                         cornerRadius = androidx.compose.ui.geometry.CornerRadius(barWidth / 2f)
                     )
-                    // The rules: one hairline every 30dp, never over the title.
                     val step = 30.dp.toPx()
                     var y = 96.dp.toPx()
-                    while (y < size.height - 8.dp.toPx()) {
+                    while (y < size.height - 10.dp.toPx()) {
                         drawLine(
-                            color = rule.copy(alpha = 0.55f),
-                            start = Offset(18.dp.toPx(), y),
-                            end = Offset(size.width - 14.dp.toPx(), y),
+                            color = rule.copy(alpha = 0.42f),
+                            start = Offset(20.dp.toPx(), y),
+                            end = Offset(size.width - 16.dp.toPx(), y),
                             strokeWidth = 1.dp.toPx()
                         )
                         y += step
                     }
                 }
-                .padding(start = 20.dp, end = 16.dp, top = 16.dp, bottom = 15.dp),
-            verticalArrangement = Arrangement.spacedBy(9.dp)
+                .padding(start = 22.dp, end = 18.dp, top = 18.dp, bottom = 16.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                if (mood != null) {
-                    Surface(
-                        shape = JournalCapsule.Shape,
-                        color = journalPaperRaised(),
-                        modifier = Modifier.height(28.dp)
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(horizontal = 11.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(5.dp)
-                        ) {
-                            CurioIcon(
-                                personalMoodGlyph(mood),
-                                null,
-                                tint = accentInk,
-                                size = 14.dp
-                            )
-                            Text(
-                                mood.label,
-                                style = MaterialTheme.typography.labelSmall,
-                                color = ink.copy(alpha = 0.75f)
-                            )
-                        }
-                    }
-                }
-                Spacer(Modifier.weight(1f))
                 Text(
                     page.dateMillis.prettyTime(locale),
                     style = MaterialTheme.typography.labelSmall,
-                    color = ink.copy(alpha = 0.4f)
+                    color = ink.copy(alpha = 0.45f)
                 )
+                Spacer(Modifier.weight(1f))
+                if (mood != null) {
+                    MoodChip(mood = mood, ink = moodInk)
+                }
             }
             if (page.title.isNotBlank()) {
                 Text(
@@ -637,9 +628,9 @@ private fun TodaySheet(
                 )
             }
             Text(
-                page.preview.ifBlank { "This page is still blank." },
+                page.preview.ifBlank { "Your page is waiting for its first line." },
                 style = MaterialTheme.typography.bodyMedium,
-                color = ink.copy(alpha = 0.68f),
+                color = ink.copy(alpha = 0.7f),
                 maxLines = 3,
                 overflow = TextOverflow.Ellipsis
             )
@@ -650,24 +641,12 @@ private fun TodaySheet(
                     color = ink.copy(alpha = 0.42f)
                 )
                 Spacer(Modifier.weight(1f))
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(5.dp)
-                ) {
-                    Text(
-                        "Keep writing",
-                        style = MaterialTheme.typography.labelSmall.copy(
-                            fontWeight = FontWeight.SemiBold
-                        ),
-                        color = accentInk
-                    )
-                    CurioIcon(
-                        CurioIcons.Note,
-                        null,
-                        tint = accentInk,
-                        size = 14.dp
-                    )
-                }
+                WritePill(
+                    label = "Keep writing",
+                    accent = accent,
+                    onAccent = personalOnAccent(),
+                    onClick = onClick
+                )
             }
         }
     }
@@ -690,9 +669,9 @@ private fun EmptyPageSheet(
     val ink = journalInk()
     Surface(
         onClick = onClick,
-        shape = RoundedCornerShape(22.dp),
+        shape = RoundedCornerShape(26.dp),
         color = paper,
-        shadowElevation = 2.dp,
+        shadowElevation = 3.dp,
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 22.dp)
@@ -701,26 +680,26 @@ private fun EmptyPageSheet(
             modifier = Modifier
                 .fillMaxWidth()
                 .drawBehind {
-                    val barWidth = 3.5.dp.toPx()
+                    val barWidth = 4.dp.toPx()
                     drawRoundRect(
                         color = accent,
                         size = androidx.compose.ui.geometry.Size(barWidth, size.height),
                         cornerRadius = androidx.compose.ui.geometry.CornerRadius(barWidth / 2f)
                     )
                     val step = 30.dp.toPx()
-                    var y = 78.dp.toPx()
-                    while (y < size.height - 8.dp.toPx()) {
+                    var y = 74.dp.toPx()
+                    while (y < size.height - 10.dp.toPx()) {
                         drawLine(
-                            color = rule.copy(alpha = 0.55f),
-                            start = Offset(18.dp.toPx(), y),
-                            end = Offset(size.width - 14.dp.toPx(), y),
+                            color = rule.copy(alpha = 0.42f),
+                            start = Offset(20.dp.toPx(), y),
+                            end = Offset(size.width - 16.dp.toPx(), y),
                             strokeWidth = 1.dp.toPx()
                         )
                         y += step
                     }
                 }
-                .padding(start = 20.dp, end = 16.dp, top = 18.dp, bottom = 20.dp),
-            verticalArrangement = Arrangement.spacedBy(7.dp)
+                .padding(start = 22.dp, end = 18.dp, top = 20.dp, bottom = 18.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             Text(
                 "Today's page",
@@ -731,36 +710,77 @@ private fun EmptyPageSheet(
                 color = ink
             )
             Text(
-                "Nothing written for $dateLabel yet.",
-                style = MaterialTheme.typography.bodyMedium,
-                color = ink.copy(alpha = 0.55f)
+                dateLabel,
+                style = MaterialTheme.typography.labelMedium,
+                color = accentInk.copy(alpha = 0.7f)
             )
-            Spacer(Modifier.height(6.dp))
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Surface(shape = CircleShape, color = accent, modifier = Modifier.size(30.dp)) {
-                    Box(Modifier.size(30.dp), contentAlignment = Alignment.Center) {
-                        CurioIcon(
-                            CurioIcons.Note,
-                            null,
-                            tint = personalOnAccent(),
-                            size = 16.dp
-                        )
-                    }
-                }
-                Spacer(Modifier.width(9.dp))
-                Text(
-                    "Start writing",
-                    style = MaterialTheme.typography.labelLarge.copy(
-                        fontWeight = FontWeight.SemiBold
-                    ),
-                    color = accentInk
-                )
-            }
+            Spacer(Modifier.height(4.dp))
+            WritePill(
+                label = "Start writing",
+                accent = accent,
+                onAccent = personalOnAccent(),
+                onClick = onClick
+            )
         }
     }
 }
 
-// ── GOAL, STREAK, RECENT ────────────────────────────────────────────────────
+/** The mood, named and glyphed, in the page's own quiet capsule. */
+@Composable
+private fun MoodChip(mood: PersonalMood, ink: Color) {
+    Surface(shape = RoundedCornerShape(50), color = journalPaperRaised()) {
+        Row(
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(5.dp)
+        ) {
+            CurioIcon(
+                personalMoodGlyph(mood),
+                null,
+                tint = ink.copy(alpha = 0.8f),
+                size = 13.dp
+            )
+            Text(
+                mood.label,
+                style = MaterialTheme.typography.labelSmall,
+                color = ink.copy(alpha = 0.8f)
+            )
+        }
+    }
+}
+
+/** One solid door into the writing, carrying its own word and glyph. */
+@Composable
+private fun WritePill(
+    label: String,
+    accent: Color,
+    onAccent: Color,
+    onClick: () -> Unit
+) {
+    Surface(
+        onClick = onClick,
+        shape = CircleShape,
+        color = accent,
+        contentColor = onAccent
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            CurioIcon(CurioIcons.Note, null, tint = onAccent, size = 14.dp)
+            Text(
+                label,
+                style = MaterialTheme.typography.labelMedium.copy(
+                    fontWeight = FontWeight.SemiBold
+                ),
+                color = onAccent
+            )
+        }
+    }
+}
+
+// ── GOAL, RECENT ────────────────────────────────────────────────────────────
 
 /**
  * The daily goal, with the streak beside it — two facts about the habit, one
@@ -825,47 +845,6 @@ private fun GoalRow(
     }
 }
 
-/** No goal set: the streak alone, said once. */
-@Composable
-private fun StreakRow(
-    streak: Int,
-    accent: Color,
-    accentInk: Color,
-    onClick: () -> Unit
-) {
-    val ink = MaterialTheme.colorScheme.onBackground
-    Surface(
-        onClick = onClick,
-        shape = RoundedCornerShape(20.dp),
-        color = lerp(journalPaperRaised(), accent, 0.06f),
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 22.dp)
-    ) {
-        Row(
-            modifier = Modifier.padding(horizontal = 16.dp, vertical = 13.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(10.dp)
-        ) {
-            CurioIcon(
-                CurioIcons.CalendarToday,
-                null,
-                tint = accentInk.copy(alpha = 0.8f),
-                size = 17.dp
-            )
-            Text(
-                when (streak) {
-                    0 -> "A page a day, whenever you like"
-                    1 -> "One day in. Keep it going"
-                    else -> "$streak days in a row"
-                },
-                style = MaterialTheme.typography.labelLarge,
-                color = ink.copy(alpha = 0.75f)
-            )
-        }
-    }
-}
-
 @Composable
 private fun SectionHead(
     title: String,
@@ -915,13 +894,13 @@ private fun SectionHead(
 @Composable
 private fun RecentDayRow(
     page: PersonalNoteEntity,
+    locale: Locale,
     accentInk: Color,
     onClick: () -> Unit
 ) {
     val ink = journalInk()
     val own = if (page.hasOwnAccent) Color(page.accentArgb) else null
     val mood = page.moodEnum
-    val locale = LocalConfiguration.current.locales[0]
     Surface(
         onClick = onClick,
         shape = RoundedCornerShape(18.dp),
@@ -996,28 +975,6 @@ private fun RecentDayRow(
                 )
             }
         }
-    }
-}
-
-/** A library of one: the only page is today's, so say what comes next. */
-@Composable
-private fun FirstPageNote(ink: Color, accentInk: Color) {
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 22.dp),
-        verticalArrangement = Arrangement.spacedBy(3.dp)
-    ) {
-        Text(
-            "Every page you write is kept here, newest day first.",
-            style = MaterialTheme.typography.bodyMedium,
-            color = ink.copy(alpha = 0.55f)
-        )
-        Text(
-            "Your words never leave this device.",
-            style = MaterialTheme.typography.labelSmall,
-            color = accentInk.copy(alpha = 0.65f)
-        )
     }
 }
 
