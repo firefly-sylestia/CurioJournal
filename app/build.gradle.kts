@@ -399,7 +399,14 @@ android {
     // builds the CORE twins rather than re-declaring them, which is what keeps a
     // journal APK free of Vosk, sherpa-onnx and ML Kit without a second copy of
     // four files that must never drift.
-    sourceSets.getByName("journal").java.srcDir("src/core/java")
+    //
+    // AGP 9's built-in Kotlin is the one that reads this directory, so it goes in
+    // the source set's KOTLIN dirs. `java.srcDir("src/core/java")` compiles
+    // nothing: those files are Kotlin, and only the `kotlin` set reaches
+    // `compileJournalReleaseKotlin` — with the twins in `java` the build failed
+    // with "Unresolved reference 'VoskModels'" and its neighbours, because no
+    // edition other than `core` gets `src/core/java` by convention.
+    sourceSets.getByName("journal").kotlin.srcDir("src/core/java")
 
     signingConfigs {
         // Only create the release signing config when ALL four env vars are
