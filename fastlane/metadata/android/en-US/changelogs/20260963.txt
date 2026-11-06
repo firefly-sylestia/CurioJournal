@@ -1,0 +1,9 @@
+ADD:
+- Journal: **settings, rebuilt as a page** — four groups (the page, the habit, the pages, about), a glyph on every row, and the value where there is one instead of a wall of cards.
+- Journal: the calendar's week now starts on Monday and steps through the whole week reliably.
+- Journal: **pictures can leave a stack** — the picture in your hand steps one cell over inside its row with a sideways drag, a hard sideways pull takes it clean out of the stack, and the size menu gains **On its own line** for the same thing without the gesture.
+- Journal: **Settings ▸ Snap photos into stacks** — the automatic snapping and size adjustment can be turned off, and with it off a picture stays on its own line exactly where you drop it.
+
+FIX:
+- Journal: the calendar build error from the first pass (an enum range the compiler cannot iterate) — the month grid compiles.
+- Journal: a dragged picture now lands on the row your finger is actually over (measured rows, not counted slots), and the landing cell preview matches it.

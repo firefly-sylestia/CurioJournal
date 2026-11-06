@@ -184,7 +184,24 @@ data class PersonalBlock(
     val captionDateMillis: Long = 0L,
     val captionFace: String = "",
     val captionSize: String = "",
-    val captionOrder: String = ""
+    val captionOrder: String = "",
+    /**
+     * v513 — THIS PRINT STANDS ON ITS OWN LINE, whatever it is next to.
+     *
+     * A run of consecutive prints is ONE row (see the page's row builder), so
+     * two pictures that ended up together could never be pulled apart — the row
+     * simply reformed around them the moment they were adjacent, which is the
+     * member's *"a stack cannot be separated"*. The flag is the page's answer:
+     * a print carrying it is a row of ONE, and the row pass stops at it on the
+     * way in and on the way out.
+     *
+     * It is stored WITH THE BLOCK (not remembered in the editor) because it is a
+     * property of the page: the read view, the PDF export and the next app open
+     * all have to draw the same break, and a field in the saved document is the
+     * only place all four can read it from. `false` is the default and is what
+     * every page written before this version means, so the codec omits it.
+     */
+    val photoSeparated: Boolean = false
 ) {
     val isPhoto: Boolean get() = photo != null
 
@@ -346,6 +363,11 @@ object PersonalDocCodec {
             if (block.captionFace.isNotEmpty()) b.addProperty("cfc", block.captionFace)
             if (block.captionSize.isNotEmpty()) b.addProperty("csz", block.captionSize)
             if (block.captionOrder.isNotEmpty()) b.addProperty("cor", block.captionOrder)
+            // v513 — a print the member set on its own line. Omitted at its
+            // default, so every page written before this version encodes
+            // byte-for-byte as it did and an older build reads it as a print in
+            // whatever row it stands in.
+            if (block.photoSeparated) b.addProperty("sep", true)
             b.addProperty("align", block.align.name)
             // v389 — a ticked checklist line and a line's bullet marker. Both
             // are omitted at their defaults, so every page written before this
@@ -447,6 +469,9 @@ object PersonalDocCodec {
                 captionFace = b.str("cfc"),
                 captionSize = b.str("csz"),
                 captionOrder = b.str("cor"),
+                // v513 — absent on an older note, which means "a print in its
+                // row": exactly how that note already drew.
+                photoSeparated = b.flag("sep"),
                 align = runCatching {
                     PersonalAlign.valueOf(b.str("align").ifBlank { PersonalAlign.START.name })
                 }.getOrDefault(PersonalAlign.START),

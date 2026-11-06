@@ -200,6 +200,7 @@ object AppPreferences {
     private const val KEY_JOURNAL_GOAL = "journal_goal_words"
     private const val KEY_JOURNAL_GOAL_REMINDER = "journal_goal_reminder"
     private const val KEY_JOURNAL_OPEN_TODAY = "journal_open_today"
+    private const val KEY_JOURNAL_PHOTO_SNAP = "journal_photo_snap"
     private const val KEY_LAST_JOURNAL_ID = "journal_last_id"
     private const val JOURNAL_GOAL_HOUR = 20
     private const val JOURNAL_GOAL_MINUTE = 30
@@ -1790,6 +1791,19 @@ object AppPreferences {
         private set
 
     /**
+     * v513 — REACTIVE PRINT SNAPPING for the journal's writing page.
+     *
+     * Seeded from the store in [initThemeMode] and written by
+     * [setJournalPhotoSnapEnabled], so the switch in Journal Settings reaches the
+     * page that reads it (PersonalWritingPage hands it to the editor) without a
+     * restart. Default ON: a dropped picture snapping into the row it was put
+     * against is what the page has always done, so nobody's page changes under
+     * them until they turn it off.
+     */
+    var journalPhotoSnapState by mutableStateOf(true)
+        private set
+
+    /**
      * Reactive share-card SMART AUTO-FIT state — updated by
      * [setShareAutoFitEnabled] so the editor's toggle applies instantly:
      * long quick-fact text auto-shrinks, grows the fact box and nudges it
@@ -2192,6 +2206,7 @@ object AppPreferences {
         glassReflectionScaleState = getGlassReflectionScale(context)
         glassIndicatorShadowScaleState = getGlassIndicatorShadowScale(context)
         tintWashEnabledState = isTintWashEnabled(context)
+        journalPhotoSnapState = isJournalPhotoSnapEnabled(context)
         shareAutoFitState = isShareAutoFitEnabled(context)
         entryMetaEnabledState = isEntryMetaEnabled(context)
         smartSpinLayoutState = isSmartSpinLayoutEnabled(context)
@@ -3783,6 +3798,25 @@ object AppPreferences {
 
     fun setJournalOpenToday(context: Context, today: Boolean) {
         prefs(context).edit().putBoolean(KEY_JOURNAL_OPEN_TODAY, today).apply()
+    }
+
+    // ── v513 — DOES A PICTURE SNAP INTO THE ROW IT WAS DROPPED AGAINST? ──
+    //
+    // The member's own switch: *"the automatic snapping/adjustment that pulls a
+    // picture into a row should be a setting the member can turn off, and with it
+    // off that picture stays separate and where it was dropped"*. It is a fact
+    // about how the WRITER moves pictures, not about one page, so it lives here
+    // rather than in a document — every page they open answers the same way, and
+    // nothing already written changes.
+    //
+    // Default ON, because snapping is what the page has always done and a default
+    // must never overwrite a habit.
+    fun isJournalPhotoSnapEnabled(context: Context): Boolean =
+        prefs(context).getBoolean(KEY_JOURNAL_PHOTO_SNAP, true)
+
+    fun setJournalPhotoSnapEnabled(context: Context, enabled: Boolean) {
+        prefs(context).edit().putBoolean(KEY_JOURNAL_PHOTO_SNAP, enabled).apply()
+        journalPhotoSnapState = enabled
     }
 
     /**

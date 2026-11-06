@@ -80,6 +80,9 @@ fun JournalSettingsScreen(
     var themeMode by remember { mutableStateOf(AppPreferences.themeModeState) }
     var goal by remember { mutableIntStateOf(AppPreferences.getJournalGoal(context)) }
     var openToday by remember { mutableStateOf(AppPreferences.isJournalOpenToday(context)) }
+    // v513 — the picture snap, as the page itself reads it (see
+    // AppPreferences.journalPhotoSnapState, which the writing page watches).
+    var snapPhotos by remember { mutableStateOf(AppPreferences.journalPhotoSnapState) }
     var reminder by remember {
         mutableStateOf(AppPreferences.isJournalGoalReminderEnabled(context))
     }
@@ -166,6 +169,20 @@ fun JournalSettingsScreen(
                     onSelect = { today ->
                         openToday = today
                         AppPreferences.setJournalOpenToday(context, today)
+                    }
+                )
+                Divider()
+                SwitchRow(
+                    glyph = CurioIcons.Image,
+                    label = "Snap photos into stacks",
+                    detail = "A picture dropped against another joins its row. " +
+                        "Off keeps every picture on its own line, where you drop it.",
+                    checked = snapPhotos,
+                    enabled = true,
+                    accent = accent,
+                    onChange = { on ->
+                        snapPhotos = on
+                        AppPreferences.setJournalPhotoSnapEnabled(context, on)
                     }
                 )
             }

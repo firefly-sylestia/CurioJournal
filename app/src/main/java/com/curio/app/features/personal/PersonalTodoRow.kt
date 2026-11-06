@@ -145,6 +145,47 @@ internal class PersonalRowDragState {
             }
         }
 
+    // ── v513 — THE PICTURE IN HAND STEPS, OR LEAVES ─────────────────────
+    //
+    // Two more readings of the sideways travel, and they are a LADDER rather than
+    // two gestures to tell apart: a nudge of a few pixels still only answers
+    // "which end" ([takeLeftCell]), [FLIP_PX] steps the picture one cell over
+    // inside its row, twice that steps it two, and [PULL_OUT_PX] pulls it clean
+    // out of the stack. Nothing is written to the page until the finger lifts
+    // (see PersonalEditorState.dropBlock): a print that changed the document under
+    // a live finger would be re-parented by the row's arrangement and the gesture
+    // would be cancelled mid-flight.
+
+    /**
+     * HOW MANY CELLS THE PICTURE IN HAND HAS STEPPED SIDEWAYS (positive = right).
+     *
+     * Compose state, and deliberately an Int: it changes only when a cell line is
+     * crossed, so the print's own offset animates and the page recomposes a
+     * handful of times per gesture instead of every frame.
+     */
+    var flipSteps by mutableIntStateOf(0)
+        private set
+
+    /**
+     * HAS THE FINGER PULLED THE THING IN HAND CLEAR OF ITS ROW?
+     *
+     * Past [PULL_OUT_PX] the sideways travel stops meaning "which cell" and
+     * starts meaning "out": the drop lands exactly where the finger is and the
+     * print is marked as standing alone (see PersonalEditorState.dropBlock), and
+     * the page stops drawing the cell it would have taken.
+     */
+    val pulledOut: Boolean get() = abs(travelX.floatValue) >= PULL_OUT_PX
+
+    /**
+     * THE SIDEWAYS OFFSET A PULLED-OUT BLOCK WEARS.
+     *
+     * Read only inside `graphicsLayer` (see PersonalMovableBlock), so following
+     * the finger sideways never recomposes a row. Clamped, so a picture pulled
+     * past the page's edge still reads as held rather than lost.
+     */
+    val pullOffsetX: Float
+        get() = travelX.floatValue.coerceIn(-PULL_OUT_PX * 1.6f, PULL_OUT_PX * 1.6f)
+
     /** One slot's height in pixels — the row's own height plus the list's gap. */
     var stride: Float = 0f
         private set
@@ -185,6 +226,77 @@ internal class PersonalRowDragState {
      */
     private fun heightOf(id: String): Float = rowHeights[id] ?: 0f
 
+    /**
+     * v513 — WHERE EVERY DRAWN ROW SAT WHEN THE GESTURE BEGAN, by id.
+     *
+     * The landing used to be counted in SLOTS ([advanceBy]), which is arithmetic
+     * on the rows the finger is deemed to have passed — and a print row draws its
+     * members as ONE block, so the members after the first have no height and cost
+     * nothing. The carried picture therefore stepped late and landed a place away
+     * from the finger (the member: *"a drag does not land where the finger is"*).
+     * Every drawn row reports its own top while the page is at rest ([place]), the
+     * gesture snapshots them at the press, and the target is now the row the
+     * carried block's own CENTRE is over.
+     */
+    private val rowTops = mutableMapOf<String, Float>()
+    private val rowBands = mutableMapOf<String, Float>()
+    private val anchorTops = mutableMapOf<String, Float>()
+    private var startTops: Map<String, Float> = emptyMap()
+    private var startBands: Map<String, Float> = emptyMap()
+    private var anchorTop = -1f
+
+    /**
+     * Called by every drawn row, only while nothing is being carried.
+     *
+     * THE HEIGHT COMES WITH THE TOP, and both are the ROW's: a print's own
+     * [measure] is the CELL's (the row draws it), and a cell's height is not the
+     * band the finger is travelling through.
+     */
+    fun place(id: String, top: Float, height: Float) {
+        if (draggedId != null) return
+        rowTops[id] = top
+        if (height > 0f) rowBands[id] = height
+    }
+
+    /**
+     * WHERE THE BLOCK ITSELF SITS — reported by [PersonalMovableBlock].
+     *
+     * Needed as well as [place] because a print that is a CELL of a row is not
+     * the row's head: the page never draws it as a row of its own, so [place]
+     * never sees it, and without its own top the carried centre would start from
+     * the row's top instead of the cell's — the very "it does not land where the
+     * finger is" this pass is for.
+     */
+    fun anchor(id: String, top: Float) {
+        if (draggedId == null) anchorTops[id] = top
+    }
+
+    /**
+     * The row the carried block's centre is over, in the page's rest
+     * coordinates — or -1 when the page has not measured itself yet (the gesture
+     * then falls back to the slot count, exactly as it always did).
+     */
+    private fun indexAtContent(travel: Float, ids: List<String>): Int {
+        if (anchorTop < 0f || startTops.isEmpty()) return -1
+        val centre = anchorTop + carriedHeight.coerceAtLeast(1f) / 2f + travel
+        var best = -1
+        var bestDistance = Float.MAX_VALUE
+        ids.forEachIndexed { index, id ->
+            val top = startTops[id] ?: return@forEachIndexed
+            val height = startBands[id] ?: return@forEachIndexed
+            val distance = when {
+                centre < top -> top - centre
+                centre > top + height -> centre - (top + height)
+                else -> 0f
+            }
+            if (distance < bestDistance) {
+                bestDistance = distance
+                best = index
+            }
+        }
+        return best
+    }
+
     val isDragging: Boolean get() = draggedId != null
 
     /**
@@ -224,6 +336,10 @@ internal class PersonalRowDragState {
         fromIndex = -1
         steps = 0
         travelX.floatValue = 0f
+        flipSteps = 0
+        anchorTop = -1f
+        startTops = emptyMap()
+        startBands = emptyMap()
     }
 
     /**
@@ -272,6 +388,12 @@ internal class PersonalRowDragState {
         travelX.floatValue = 0f
         stride = slotStride.coerceAtLeast(1f)
         pointerRootY = fingerRootY
+        // v513 — the page as it stands this press: every row's own top, and the
+        // held block's own (see indexAtContent).
+        startTops = rowTops.toMap()
+        startBands = rowBands.toMap()
+        anchorTop = anchorTops[id] ?: rowTops[id] ?: -1f
+        flipSteps = 0
     }
 
     /**
@@ -286,8 +408,15 @@ internal class PersonalRowDragState {
      */
     fun dragBy(amountX: Float, amountY: Float, ids: List<String>, lastIndex: Int) {
         // The sideways part is INTENT only: it never steps a slot, it only
-        // answers "which end" (see [takeLeftCell]).
+        // answers "which end" (see [takeLeftCell]). v513 — and, past the ladder's
+        // own lines, how many cells the picture steps and whether it is leaving
+        // the row at all.
         travelX.floatValue += amountX
+        flipSteps = if (pulledOut) {
+            0
+        } else {
+            (travelX.floatValue / FLIP_PX).toInt().coerceIn(-MAX_FLIP_CELLS, MAX_FLIP_CELLS)
+        }
         pointerRootY += amountY
         advanceBy(amountY, ids, lastIndex)
     }
@@ -305,6 +434,14 @@ internal class PersonalRowDragState {
     fun advanceBy(scrolledBy: Float, ids: List<String>, lastIndex: Int) {
         travel.floatValue += scrolledBy
         val travel = travel.floatValue
+        // v513 — THE FINGER'S PLACE FIRST (see [indexAtContent]): the row whose
+        // own band holds the carried block's centre is the row it will land in,
+        // measured, not counted.
+        val atContent = indexAtContent(travel, ids)
+        if (atContent >= 0 && atContent <= lastIndex) {
+            steps = atContent - fromIndex
+            return
+        }
         val down = travel > 0f
         var index = fromIndex
         var spent = 0f
@@ -362,7 +499,11 @@ internal class PersonalRowDragState {
         steps = 0
         travel.floatValue = 0f
         travelX.floatValue = 0f
+        flipSteps = 0
         stride = 0f
+        anchorTop = -1f
+        startTops = emptyMap()
+        startBands = emptyMap()
     }
 }
 
@@ -374,6 +515,20 @@ internal class PersonalRowDragState {
  * answer still holds for every gesture that is not asking for a side.
  */
 private const val SIDE_INTENT_PX = 40f
+
+/**
+ * v513 — THE SIDEWAYS LADDER, in pixels.
+ *
+ * [FLIP_PX] is one cell step: a little over a thumb's width, so the picture in
+ * hand clearly moves one place, and twice that is the second (and last) cell the
+ * row can give it. [PULL_OUT_PX] is the line past which the finger is no longer
+ * asking for a cell at all but is pulling the picture OUT of the stack — a
+ * deliberate pull rather than a wobble, and it sits above the flip ladder so the
+ * two cannot be confused for one another.
+ */
+private const val FLIP_PX = 52f
+private const val MAX_FLIP_CELLS = 2
+private const val PULL_OUT_PX = 132f
 
 /** How far a row must travel sideways before it leaves the list. */
 private const val SWIPE_AWAY_FRACTION = 0.34f
@@ -439,12 +594,24 @@ internal fun PersonalMovableBlock(
     heldScale: Float = 1.02f,
     heldTilt: Float = 0f,
     heldLift: Dp = 6.dp,
+    /**
+     * v513 — DOES THIS BLOCK ANSWER THE SIDEWAYS FINGER?
+     *
+     * A photograph does: it steps one cell over inside its row, and a hard pull
+     * takes it out of the stack ([PersonalRowDragState.flipSteps], [pulledOut]).
+     * A voice note does not — a strip has no cells to trade — so the caller says,
+     * and a note carried sideways stays exactly where it was.
+     */
+    sideFollow: Boolean = false,
     modifier: Modifier = Modifier,
     content: @Composable () -> Unit
 ) {
     val gapPx = with(LocalDensity.current) { 6.dp.toPx() }
     val scope = rememberCoroutineScope()
     var blockHeight by remember(id) { mutableFloatStateOf(0f) }
+    // v513 — the cell's own width: a sideways step is one CELL, and the block is
+    // the cell (see the step offset below).
+    var blockWidth by remember(id) { mutableFloatStateOf(0f) }
     // v389e — where the block sits in the window, so the press that picks it up
     // can say where the FINGER is (see PersonalRowDragState.pointerRootY).
     var blockRootTop by remember(id) { mutableFloatStateOf(0f) }
@@ -473,6 +640,18 @@ internal fun PersonalMovableBlock(
     )
     val heldSize = 1f + (heldScale - 1f) * raise
     val heldAngle = heldTilt * raise
+
+    // v513 — THE STEP, DRAWN. A step is one CELL wide, so the picture visibly
+    // takes its neighbour's place while it is still in the hand — the preview of
+    // what is coming is the neighbour sitting exactly where the held print has
+    // just moved onto. It is read from [PersonalRowDragState.flipSteps] (an Int
+    // that changes at cell lines only), so the glide is one animation per step
+    // rather than one per frame.
+    val sideShift by animateFloatAsState(
+        targetValue = if (sideFollow && isDragged) drag.flipSteps * (blockWidth + gapPx) else 0f,
+        animationSpec = spring(dampingRatio = 0.78f, stiffness = 620f),
+        label = "movableBlockSideShift"
+    )
 
     // ── v400 — THE STACK UNDER THE ONE IN HAND ──────────────────────────
     //
@@ -524,15 +703,31 @@ internal fun PersonalMovableBlock(
                     blockHeight = it.height.toFloat()
                     drag.measure(id, it.height.toFloat())
                 }
+                if (it.width > 0) blockWidth = it.width.toFloat()
             }
             // At rest until it is picked up, so this is the block's true place;
             // read only as the press lands (see `onDragStart`).
             .onGloballyPositioned { coordinates ->
-                if (drag.draggedId != id) blockRootTop = coordinates.positionInRoot().y
+                if (drag.draggedId != id) {
+                    val top = coordinates.positionInRoot().y
+                    blockRootTop = top
+                    // v513 — and the gesture's own anchor, so a cell of a row is
+                    // measured from its own place (see anchor).
+                    drag.anchor(id, top)
+                }
             }
             .zIndex(if (isDragged) 1f else 0f)
             .graphicsLayer {
                 translationY = shift + (if (drag.draggedId == id) drag.travelY else 0f)
+                // v513 — a pulled-out picture follows the finger; a stepping one
+                // glides a cell at a time. Both are read HERE (the pull straight
+                // from the gesture's own state), so neither recomposes a row.
+                translationX = when {
+                    !sideFollow -> 0f
+                    !isDragged -> 0f
+                    drag.pulledOut -> drag.pullOffsetX
+                    else -> sideShift
+                }
                 scaleX = heldSize
                 scaleY = heldSize
                 rotationZ = heldAngle
@@ -555,14 +750,20 @@ internal fun PersonalMovableBlock(
                             drag.dragBy(amount.x, amount.y, state.blockIds, state.blockIds.lastIndex)
                         },
                         onDragEnd = {
-                            val from = drag.fromIndex
-                            val to = drag.targetIndex(state.blockIds.lastIndex)
-                            // v403 — a PRINT snaps to the row it was dropped
-                            // against, so bringing two prints together really
-                            // groups them (see PersonalEditorState.printDropIndex).
-                            val landing = state.printDropIndex(from, to, drag.takeLeftCell)
-                            if (from in 0..state.blockIds.lastIndex && from != landing) {
-                                state.moveBlock(from, landing)
+                            // v513 — ONE DROP, ONE EDIT.
+                            //
+                            // The block is named by id, not by the slot it started
+                            // in: a picture can trade cells inside its row on the
+                            // way down, and the finger's row is the landing (see
+                            // PersonalEditorState.dropBlock, which also applies
+                            // the sideways steps and the snap preference).
+                            drag.draggedId?.let { held ->
+                                state.dropBlock(
+                                    id = held,
+                                    to = drag.targetIndex(state.blockIds.lastIndex),
+                                    takeLeft = drag.takeLeftCell,
+                                    flip = drag.flipSteps
+                                )
                             }
                             // v397 — commit, then slide the last few pixels home
                             // (see PersonalRowDragState.settle).
@@ -691,14 +892,20 @@ internal fun PersonalTodoRow(
                             drag.dragBy(amount.x, amount.y, state.blockIds, state.blockIds.lastIndex)
                         },
                         onDragEnd = {
-                            val from = drag.fromIndex
-                            val to = drag.targetIndex(state.blockIds.lastIndex)
-                            // v403 — a PRINT snaps to the row it was dropped
-                            // against, so bringing two prints together really
-                            // groups them (see PersonalEditorState.printDropIndex).
-                            val landing = state.printDropIndex(from, to, drag.takeLeftCell)
-                            if (from in 0..state.blockIds.lastIndex && from != landing) {
-                                state.moveBlock(from, landing)
+                            // v513 — ONE DROP, ONE EDIT.
+                            //
+                            // The block is named by id, not by the slot it started
+                            // in: a picture can trade cells inside its row on the
+                            // way down, and the finger's row is the landing (see
+                            // PersonalEditorState.dropBlock, which also applies
+                            // the sideways steps and the snap preference).
+                            drag.draggedId?.let { held ->
+                                state.dropBlock(
+                                    id = held,
+                                    to = drag.targetIndex(state.blockIds.lastIndex),
+                                    takeLeft = drag.takeLeftCell,
+                                    flip = drag.flipSteps
+                                )
                             }
                             // v397 — commit, then slide the last few pixels home
                             // (see PersonalRowDragState.settle).
@@ -792,14 +999,20 @@ internal fun PersonalTodoRow(
                             drag.dragBy(amount.x, amount.y, state.blockIds, state.blockIds.lastIndex)
                         },
                         onDragEnd = {
-                            val from = drag.fromIndex
-                            val to = drag.targetIndex(state.blockIds.lastIndex)
-                            // v403 — a PRINT snaps to the row it was dropped
-                            // against, so bringing two prints together really
-                            // groups them (see PersonalEditorState.printDropIndex).
-                            val landing = state.printDropIndex(from, to, drag.takeLeftCell)
-                            if (from in 0..state.blockIds.lastIndex && from != landing) {
-                                state.moveBlock(from, landing)
+                            // v513 — ONE DROP, ONE EDIT.
+                            //
+                            // The block is named by id, not by the slot it started
+                            // in: a picture can trade cells inside its row on the
+                            // way down, and the finger's row is the landing (see
+                            // PersonalEditorState.dropBlock, which also applies
+                            // the sideways steps and the snap preference).
+                            drag.draggedId?.let { held ->
+                                state.dropBlock(
+                                    id = held,
+                                    to = drag.targetIndex(state.blockIds.lastIndex),
+                                    takeLeft = drag.takeLeftCell,
+                                    flip = drag.flipSteps
+                                )
                             }
                             // v397 — commit, then slide the last few pixels home
                             // (see PersonalRowDragState.settle).

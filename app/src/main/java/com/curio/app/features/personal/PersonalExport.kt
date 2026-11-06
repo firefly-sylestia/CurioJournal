@@ -1035,12 +1035,21 @@ private fun exportPrintPlan(doc: PersonalDoc): ExportPrintPlan {
     while (i < blocks.size) {
         val first = blocks[i]
         if (first.isPhoto) {
+            // v513 — a print marked as standing on its own line is a row of one,
+            // on paper exactly as on the page (see the editor's row builder and
+            // the read view's twin). The sheet is the third pass that must agree
+            // about which pictures are one row.
+            if (first.photoSeparated) {
+                i += 1
+                continue
+            }
             val run = ArrayList<String>()
             val gaps = ArrayList<String>()
             var j = i
             while (j < blocks.size && run.size < PRINT_ROW_LIMIT) {
                 val member = blocks[j]
                 if (member.isPhoto) {
+                    if (member.photoSeparated) break
                     run.add(member.id)
                     j += 1
                 } else if (!member.isAudio && member.text.isBlank()) {

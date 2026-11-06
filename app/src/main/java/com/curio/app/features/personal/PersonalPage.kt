@@ -314,6 +314,16 @@ internal fun PersonalWritingPage(
         PersonalEditorState(doc).also { it.keepsChecklistRows = checklistFirst }
     }
 
+    // v513 — THE PICTURE SNAP SETTING, handed to the editor.
+    //
+    // Read as Compose state (so the switch in Settings reaches the page) and
+    // written after composition, because the editor is a plain class that the
+    // drop gesture reads — never a composition-local, which a gesture callback
+    // could not ask for. A page whose editor does not want snapping keeps exactly
+    // what it has: [PersonalEditorState.snapPhotos] is ON by default.
+    val snapPhotos = AppPreferences.journalPhotoSnapState
+    SideEffect { editor.snapPhotos = snapPhotos }
+
     // ── Voice notes (v389) ─────────────────────────────────────────────
     // The mic is a FLOATING button of the page's own, and while a note is being
     // made the dock steps aside and the recording capsule takes its place: a

@@ -1329,6 +1329,23 @@ internal class PersonalEditorState(initial: PersonalDoc) {
         }
 
     /**
+     * v513 — DOES A DROPPED PRINT SNAP INTO THE ROW IT WAS PUT AGAINST?
+     *
+     * A plain field, read at the moment of a drop, not Compose state: the drop
+     * is a gesture, and the page hands the member's preference in once (see
+     * PersonalWritingPage) so the answer never depends on when a composition
+     * happened. ON is the page's behaviour as it always was — two pictures put
+     * together become a row, and an untouched arrival size turns into a cell's.
+     *
+     * OFF is the member's own rule (*"with it off that picture stays separate
+     * and where it was dropped"*): the print lands at the exact place the finger
+     * put it, no size is adjusted, and a print that arrives against another one
+     * is marked as standing on its own line ([PersonalBlock.photoSeparated]) so
+     * the row pass does not quietly pull it back in.
+     */
+    var snapPhotos: Boolean = true
+
+    /**
      * v398 — THE ROWS WHOSE LIST THE WRITER ENDED (see [onFieldChange]). A row
      * remembered here wears no box while it is blank, and the row after it is
      * prose: taking the words out of a to-do row is how the member said "this
@@ -1478,6 +1495,54 @@ internal class PersonalEditorState(initial: PersonalDoc) {
         if (block.isPhoto.not()) return
         blocks[id] = block.copy(photoSize = size.key)
         publish()
+    }
+
+    /** v513 — is this print a row of its own? (see [PersonalBlock.photoSeparated]) */
+    fun isPhotoSeparated(id: String): Boolean = blocks[id]?.photoSeparated == true
+
+    /** v513 — the member's own answer to "is this picture in a stack?" */
+    fun setPhotoSeparated(id: String, separated: Boolean) {
+        val block = blocks[id] ?: return
+        if (block.isPhoto.not() || block.photoSeparated == separated) return
+        blocks[id] = block.copy(photoSeparated = separated)
+        publish()
+    }
+
+    /**
+     * v513 — A PRINT THAT HAS JUST LANDED AGAINST ANOTHER ONE JOINS ITS ROW.
+     *
+     * The counterpart of [markStandingAlone]: dropping a picture onto a picture
+     * is the member SAYING the two go together, so any "own line" mark on the
+     * prints involved is retired — including the one on a print that was standing
+     * alone, which is how a separated picture is put back in a stack.
+     */
+    private fun clearStandingAlone(at: Int) {
+        val ids = order
+        listOf(at - 1, at, at + 1).forEach { index ->
+            val id = ids.getOrNull(index) ?: return@forEach
+            val block = blocks[id] ?: return@forEach
+            if (block.isPhoto && block.photoSeparated) {
+                blocks[id] = block.copy(photoSeparated = false)
+            }
+        }
+    }
+
+    /**
+     * v513 — AND A PRINT THAT MUST STAY ON ITS OWN LINE IS MARKED SO.
+     *
+     * Only when it actually touches another print: a picture alone on its line
+     * needs no mark (there is no row to be pulled into), and marking it anyway
+     * would leave a trap for the next picture added under it.
+     */
+    private fun markStandingAlone(at: Int) {
+        val ids = order
+        val id = ids.getOrNull(at) ?: return
+        val block = blocks[id] ?: return
+        if (!block.isPhoto || block.photoSeparated) return
+        val touches = listOf(at - 1, at + 1).any { index ->
+            ids.getOrNull(index)?.let { blocks[it]?.isPhoto == true } == true
+        }
+        if (touches) blocks[id] = block.copy(photoSeparated = true)
     }
 
     /** The line's bullet marker (the default dot when it never picked one). */
@@ -2844,7 +2909,17 @@ internal class PersonalEditorState(initial: PersonalDoc) {
         // v403 — and a picture that lands against a picture wears a cell's size
         // (see normaliseRowSizesAt), so the row it just took part in is a row the
         // member can see in the same frame.
-        normaliseRowSizesAt(arrivedAt)
+        //
+        // v513 — UNLESS SNAPPING IS OFF: then an arriving picture is not pulled
+        // into the row it landed against at all. It keeps its own size and is
+        // marked as standing on its own line, the rule a drop already follows
+        // (see [snapPhotos]) — turning the snap off must not leave two pictures
+        // bonded just because they were added one after another.
+        if (snapPhotos) {
+            normaliseRowSizesAt(arrivedAt)
+        } else {
+            markStandingAlone(arrivedAt)
+        }
         val tailAt = arrivedAt + 1
         if (tailText.isNotEmpty()) {
             order.add(tailAt, tail.id)
@@ -2957,18 +3032,90 @@ internal class PersonalEditorState(initial: PersonalDoc) {
     // ── The to-do page's own gestures (v389) ───────────────────────────
 
     /**
-     * v389 — REORDER: the row at [from] and the row at [to] trade places.
+     * v389 — REORDER, and v513 — THE DROP: one edit, one save, one undo step.
      *
-     * A to-do list is read top-to-bottom, so its ORDER is part of its meaning —
-     * and because [order] IS the stored document's order, a dragged list is
-     * saved the way it reads, with no separate rank column to fall out of sync.
-     * The move is a real list edit (not a draft), so the drag can move a row
-     * more than one step and every step already happened where the finger put
-     * it.
+     * A page (and a to-do list especially) is read top-to-bottom, so its ORDER is
+     * part of its meaning — and because [order] IS the stored document's order, a
+     * dragged list is saved the way it reads, with no separate rank column to
+     * fall out of sync. The move is a real list edit (not a draft), so the drag
+     * can move a row more than one step and every step already happened where the
+     * finger put it.
+     *
+     * [id] names the block in hand rather than an index: a print can trade cells
+     * inside its row on the way down (see [stepPrintInRow]), and an index counted
+     * before that trade would point at the wrong picture. [to] is the row the
+     * finger is over (see PersonalRowDragState.targetIndex), [takeLeft] which end
+     * of that row the finger asked for, and [flip] how many cells the picture in
+     * hand stepped sideways (positive = right).
+     *
+     * The order of the three moves is the whole of it:
+     *
+     *  1. THE STEP — a print in a row trades cells with its neighbour first, so
+     *     the cell the member chose is the cell it lands from.
+     *  2. THE LANDING — [printDropIndex]: the row's snap, or the exact slot when
+     *     the member has turned snapping off.
+     *  3. THE MARK — with snapping ON, a print that landed against a print joins
+     *     its row (any "own line" mark is retired); with snapping OFF, a print
+     *     that landed against one is marked as standing alone, which is what
+     *     keeps it exactly where it was dropped.
      */
-    fun moveBlock(from: Int, to: Int) {
-        if (from == to) return
-        if (from !in order.indices || to !in order.indices) return
+    fun dropBlock(id: String, to: Int, takeLeft: Boolean, flip: Int = 0) {
+        var at = order.indexOf(id)
+        if (at < 0) return
+        val held = blocks[id] ?: return
+        if (held.isPhoto && flip != 0) at = stepPrintInRow(id, flip) ?: at
+        val landing = printDropIndex(at, to, takeLeft)
+        val dest = if (at != landing) reorder(at, landing) else at
+        val moved = blocks[id] ?: return
+        if (moved.isPhoto) {
+            if (snapPhotos) {
+                clearStandingAlone(dest)
+                // v403 — a print that has just joined a row wears a cell's size,
+                // so the row the member built is a row they can see at once.
+                normaliseRowSizesAt(dest)
+            } else {
+                markStandingAlone(dest)
+            }
+        }
+        publish()
+    }
+
+    /**
+     * v513 — ONE ROW'S CELLS, TRADED.
+     *
+     * The picture in the hand steps one cell sideways per notch (see
+     * PersonalRowDragState.flipSteps): it takes the neighbour's place and the
+     * neighbour takes the one it left, so the row reorders while the SAME picture
+     * stays in the air — the member's own reading of *"switch to the picture on
+     * its left or right"*. Only two prints of the same row trade (both prints,
+     * neither standing on its own line), so a step can never smuggle a picture
+     * out of a stack or into one.
+     *
+     * Returns the index the picture stands at afterwards, or null when it was not
+     * a print at all. No publish: the drop publishes once (see [dropBlock]).
+     */
+    private fun stepPrintInRow(id: String, flip: Int): Int? {
+        var at = order.indexOf(id)
+        if (at < 0) return null
+        if (blocks[id]?.isPhoto != true) return null
+        val direction = if (flip > 0) 1 else -1
+        repeat(if (flip < 0) -flip else flip) {
+            val next = at + direction
+            val held = blocks[id] ?: return at
+            val otherId = order.getOrNull(next) ?: return at
+            val other = blocks[otherId] ?: return at
+            if (!held.isPhoto || !other.isPhoto) return at
+            if (held.photoSeparated || other.photoSeparated) return at
+            order[at] = otherId
+            order[next] = id
+            at = next
+        }
+        return at
+    }
+
+    /** The plain list move a drop lands with — one publish, up in [dropBlock]. */
+    private fun reorder(from: Int, to: Int): Int {
+        if (from !in order.indices || to !in order.indices) return from
         val id = order.removeAt(from)
         // v389d — removeAt shifts every index past the hole, so the target
         // for a downward move has to be adjusted: [to] was counted against
@@ -2978,11 +3125,7 @@ internal class PersonalEditorState(initial: PersonalDoc) {
         // "other items shuffle wrongly").
         val adjustedTo = if (from < to) to - 1 else to
         order.add(adjustedTo, id)
-        // v403 — and if that landing put a PRINT beside another print, it takes a
-        // cell's size on the way in (see normaliseRowSizesAt), so the row the
-        // member just built is a row they can see in the same frame.
-        normaliseRowSizesAt(adjustedTo)
-        publish()
+        return adjustedTo
     }
 
     /**
@@ -3016,8 +3159,15 @@ internal class PersonalEditorState(initial: PersonalDoc) {
         val ids = order
         if (from !in ids.indices) return to
         if (blocks[ids[from]]?.isPhoto != true) return to
+        // v513 — THE SETTING. With snapping OFF the print lands at the exact slot
+        // the finger put it at: no run is adopted, no cell is chosen for it. That
+        // is the member's *"with it off that picture stays separate and where it
+        // was dropped"*, and [dropBlock]'s own mark keeps it there.
+        if (!snapPhotos) return to.coerceIn(0, ids.lastIndex)
         fun isPrint(index: Int): Boolean =
             index in ids.indices && blocks[ids[index]]?.isPhoto == true
+        fun standsAlone(index: Int): Boolean =
+            index in ids.indices && blocks[ids[index]]?.photoSeparated == true
         // The run the finger is pointing at: the print at the landing slot, or
         // the one just above it when the finger has already crossed it.
         val anchor = when {
@@ -3026,9 +3176,15 @@ internal class PersonalEditorState(initial: PersonalDoc) {
             else -> return to
         }
         var start = anchor
-        while (isPrint(start - 1)) start--
         var end = anchor
-        while (isPrint(end + 1)) end++
+        // v513 — A PRINT ON ITS OWN LINE IS A WALL the run does not climb over,
+        // in either direction. Dropping straight ON one still joins it (the drop
+        // clears its mark, see dropBlock), which is how a separated picture is
+        // put back into a stack.
+        if (!standsAlone(anchor)) {
+            while (isPrint(start - 1) && !standsAlone(start - 1)) start--
+            while (isPrint(end + 1) && !standsAlone(end + 1)) end++
+        }
         val below = end + 1
         // ── AND A PRINT THAT IS ALREADY IN THE ROW STAYS IN IT (v403) ────────
         //
@@ -3069,7 +3225,7 @@ internal class PersonalEditorState(initial: PersonalDoc) {
      * touched — only the untouched arrival size is. The menu stays honest either
      * way: what it says is what the picture wears.
      *
-     * It is called from [moveBlock], BEFORE the page is handed over, so a drop
+     * It is called from [dropBlock], BEFORE the page is handed over, so a drop
      * that groups two prints is ONE change to undo (and one save), not a move
      * followed by a resize the member never asked for.
      */
@@ -3885,7 +4041,17 @@ internal fun PersonalCanvas(
                 // into, and the sizes they each carry still decide each cell's
                 // own share of it. A print alone on its line is still a print
                 // alone: the run only forms when two or more stand together.
-                if (first?.isPhoto == true) {
+                if (first != null && first.isPhoto) {
+                    // v513 — A PRINT ON ITS OWN LINE IS A ROW OF ONE.
+                    //
+                    // The member pulled it out of a stack (or turned snapping
+                    // off — see [snapPhotos]); the pass must not quietly build
+                    // the stack again around it, so it is drawn alone and the
+                    // next run starts at whatever follows it.
+                    if (first.photoSeparated) {
+                        i += 1
+                        continue
+                    }
                     val run = ArrayList<String>()
                     // v427 — THE BLANK LINES THE RUN STEPS OVER.
                     //
@@ -3902,7 +4068,11 @@ internal fun PersonalCanvas(
                     var j = i
                     while (j < ids.size && run.size < PRINT_ROW_LIMIT) {
                         val member = state.block(ids[j])
-                        if (member?.isPhoto == true) {
+                        if (member != null && member.isPhoto) {
+                            // v513 — the run stops BEFORE a print that stands on
+                            // its own line, so it is never swallowed by the row
+                            // above it.
+                            if (member.photoSeparated) break
                             run.add(ids[j])
                             j += 1
                         } else if (member != null && printRowGapSteppable(state, ids[j])) {
@@ -4034,6 +4204,16 @@ internal fun PersonalCanvas(
                         .onSizeChanged { measured ->
                             rowDrag.measure(id, measured.height.toFloat())
                         }
+                        // v513 — AND WHERE THE ROW SITS. A drop lands on the row
+                        // the finger is actually over now, not on one counted in
+                        // slots — see PersonalRowDragState.indexAtContent.
+                        .onGloballyPositioned { coordinates ->
+                            rowDrag.place(
+                                id,
+                                coordinates.positionInRoot().y,
+                                coordinates.size.height.toFloat()
+                            )
+                        }
                         .graphicsLayer { translationY = blockShift }
                         .then(
                             if (showDropLine) Modifier.drawWithContent {
@@ -4116,7 +4296,14 @@ internal fun PersonalCanvas(
                                     val carriedRef = rowDrag.draggedId
                                     val carriedIsPrint =
                                         carriedRef?.let { state.block(it)?.isPhoto } == true
-                                    if (carriedIsPrint && carriedRef != id && block.isPhoto) {
+                                    // v513 — a print that was pulled OUT of the
+                                    // stack is not taking a cell in it any more,
+                                    // so the cell preview stands down and the
+                                    // ordinary room is drawn instead (see
+                                    // PersonalRowDragState.pulledOut).
+                                    if (carriedIsPrint && carriedRef != id && block.isPhoto &&
+                                        !rowDrag.pulledOut
+                                    ) {
                                         val cellWidth = (size.width * 0.5f).coerceAtLeast(1f)
                                         // v406 — the SAME value the drop uses
                                         // (see printDropIndex), so the dashed
@@ -4184,6 +4371,9 @@ internal fun PersonalCanvas(
                                     heldScale = 1.08f,
                                     heldTilt = -2.5f,
                                     heldLift = 16.dp,
+                                    // v513 — and it answers the sideways finger:
+                                    // a cell step inside the row, a pull out of it.
+                                    sideFollow = true,
                                     modifier = cellModifier
                                 ) {
                                     PersonalPhotoBlock(
@@ -4199,6 +4389,15 @@ internal fun PersonalCanvas(
                                         onCaption = { state.setCaption(memberId, it) },
                                         onSize = { state.setPhotoSize(memberId, it) },
                                         onRemove = { state.removeBlock(memberId) },
+                                        // v513 — and whether it is in this stack at
+                                        // all (see PersonalBlock.photoSeparated).
+                                        separated = state.isPhotoSeparated(memberId),
+                                        onSeparate = {
+                                            state.setPhotoSeparated(
+                                                memberId,
+                                                !state.isPhotoSeparated(memberId)
+                                            )
+                                        },
                                         // v401 — the label this print wears, and
                                         // the way the member changes it (the
                                         // caption's own dock, see PersonalToolDock).
@@ -4242,7 +4441,9 @@ internal fun PersonalCanvas(
                                     // v397 — see the row's cells.
                                     heldScale = 1.08f,
                                     heldTilt = -2.5f,
-                                    heldLift = 16.dp
+                                    heldLift = 16.dp,
+                                    // v513 — see the row's cells.
+                                    sideFollow = true
                                 ) {
                                     PersonalPhotoBlock(
                                         uri = block.photo.orEmpty(),
@@ -4265,6 +4466,11 @@ internal fun PersonalCanvas(
                                         onCaption = { state.setCaption(id, it) },
                                         onSize = { state.setPhotoSize(id, it) },
                                         onRemove = { state.removeBlock(id) },
+                                        // v513 — see the row's cells.
+                                        separated = state.isPhotoSeparated(id),
+                                        onSeparate = {
+                                            state.setPhotoSeparated(id, !state.isPhotoSeparated(id))
+                                        },
                                         // v401 — see the row's cells.
                                         captionDate = state.captionDate(id),
                                         captionFace = state.captionFace(id),
@@ -4319,7 +4525,9 @@ internal fun PersonalCanvas(
                             // v397 — see the row's cells.
                             heldScale = 1.08f,
                             heldTilt = -2.5f,
-                            heldLift = 16.dp
+                            heldLift = 16.dp,
+                            // v513 — see the row's cells.
+                            sideFollow = true
                         ) {
                             PersonalPhotoBlock(
                                 uri = block.photo.orEmpty(),
@@ -4330,6 +4538,11 @@ internal fun PersonalCanvas(
                                 onCaption = { state.setCaption(id, it) },
                                 onSize = { state.setPhotoSize(id, it) },
                                 onRemove = { state.removeBlock(id) },
+                                // v513 — see the row's cells.
+                                separated = state.isPhotoSeparated(id),
+                                onSeparate = {
+                                    state.setPhotoSeparated(id, !state.isPhotoSeparated(id))
+                                },
                                 // v401 — see the row's cells.
                                 captionDate = state.captionDate(id),
                                 captionFace = state.captionFace(id),
@@ -5177,6 +5390,18 @@ private fun PersonalPhotoBlock(
     onCaption: (String) -> Unit,
     onSize: (PersonalPhotoSize) -> Unit,
     onRemove: () -> Unit,
+    /**
+     * v513 — IS THIS PRINT ON ITS OWN LINE, and the door that says so.
+     *
+     * The member's two ways out of a stack are the sideways pull on the page and
+     * this row in the print's own menu: the drag is the gesture, the menu entry
+     * is the place where the state can also be read back (a check on the print
+     * that stands alone, and the way to put it back in a row). Null hides the
+     * row, so a caller that does not own a page — an export preview, a read
+     * view — draws exactly the menu it always did.
+     */
+    separated: Boolean = false,
+    onSeparate: (() -> Unit)? = null,
     onOpen: (Rect?) -> Unit,
 
     // ── v401 — THE LABEL'S OWN SETTINGS ────────────────────────────────
@@ -5416,6 +5641,40 @@ private fun PersonalPhotoBlock(
                                 }
                             )
                         }
+                        // v513 — AND THE WAY OUT OF A STACK.
+                        //
+                        // Four sizes say how big a picture is; none of them said
+                        // whether it is in a stack at all — which is the member's
+                        // *"a stack cannot be separated"*. The row reads as a
+                        // state and writes as a toggle, so a print can be lifted
+                        // out of its row here and put back in it the same way.
+                        if (onSeparate != null) {
+                            DropdownMenuItem(
+                                text = {
+                                    Text(
+                                        "On its own line",
+                                        style = MaterialTheme.typography.bodyMedium.copy(
+                                            fontFamily = WritingFontFamily
+                                        ),
+                                        color = MaterialTheme.colorScheme.onSurface
+                                    )
+                                },
+                                trailingIcon = {
+                                    if (separated) {
+                                        CurioIcon(
+                                            CurioIcons.Check,
+                                            null,
+                                            tint = personalAccentInk(),
+                                            size = 17.dp
+                                        )
+                                    }
+                                },
+                                onClick = {
+                                    onSeparate()
+                                    sizeMenu.close()
+                                }
+                            )
+                        }
                     }
                 }
             }
@@ -5543,6 +5802,14 @@ internal fun PersonalDocView(
             // included: the two passes must never disagree about which prints
             // are one row (see the editor's pass for why the rule changed).
             if (first.isPhoto) {
+                // v513 — the editor's "own line" rule, read here too (see there):
+                // a print the member separated is drawn alone, and the run below
+                // never climbs over one. The two passes must not disagree about
+                // which pictures are one row.
+                if (first.photoSeparated) {
+                    i += 1
+                    continue
+                }
                 val run = ArrayList<String>()
                 // v427 — the same AIR rule as the editor's pass (see there): a
                 // run steps over the blank lines between its prints, so the two
@@ -5552,6 +5819,7 @@ internal fun PersonalDocView(
                 while (j < blocks.size && run.size < PRINT_ROW_LIMIT) {
                     val member = blocks[j]
                     if (member.isPhoto) {
+                        if (member.photoSeparated) break
                         run.add(member.id)
                         j += 1
                     } else if (!member.isAudio && member.text.isBlank()) {

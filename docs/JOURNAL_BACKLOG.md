@@ -3,25 +3,24 @@
 A running list, so nothing said in passing is lost. Newest requests at the top
 of each section; a line is removed only when the build carrying it is pushed.
 
-## The page's photos (next pass — reported 2026-11-06)
+## The home, and the name (next pass — asked 2026-11-06)
 
-The photo blocks inside the journal page misbehave when held and moved:
+A first-run name, and Home rebuilt around the day rather than a list of pages:
 
-- **A stack cannot be separated.** Two pictures that landed together stay a
-  stack: there is no way to pull one out of it.
-- **A held picture cannot be flipped through.** While holding a stack, the
-  member cannot switch to the picture on its left or right, and the preview
-  that would show what is coming is not drawn.
-- **A drag does not land where the finger is.** A moved picture should land at
-  the exact place it was moved to.
-- **Auto-snap needs a switch.** The automatic snapping/adjustment that pulls a
-  picture into a row should be a setting the member can turn off, and with it
-  off that picture stays separate and where it was dropped.
-
-The blocks, the drag and the snap live in the shared writing page
-(`features/personal/PersonalPage.kt`, `PersonalPhotoOverlay.kt`), which the
-discovery editions also build — so this pass touches shared code and needs a CI
-run of all three editions.
+- **Ask for a name on first open**, then greet it in large type at the top of
+  Home with *anything exciting today?* beneath, and the year in large type on the
+  right.
+- **The date block**: the day large, one date only, the month slightly larger
+  than the dates under it, no "1 of 30 days", then blank space that says what it
+  is for.
+- **What was written** sits under today as a regular vertical block, or a
+  horizontal rectangle when there is more than one, with the time — never the
+  ruled row style.
+- **The word goal** as a small pill under the date, with the streak beside it.
+- **The all-pages row goes**, replaced by two floating buttons: pages, and the
+  calendar.
+- **The calendar opens a day under itself** (its writing, or an empty state)
+  instead of opening the journal.
 
 ## The editor
 
