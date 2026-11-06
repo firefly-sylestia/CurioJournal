@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    v113 — Curio's new cosmic mark, monochrome variant: the mint planet +
+    pink moon as a clean two-body silhouette (themed icons tint it a single
+    color, so the shape must read without the gradients). Same 1024 viewport
+    as the source SVG.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="1024"
+    android:viewportHeight="1024">
+
+    <!-- Planet. -->
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M380,198 a122,122 0 1,0 0,244 a122,122 0 1,0 0,-244 z" />
+
+    <!-- Moon. -->
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M650,445 a55,55 0 1,0 0,110 a55,55 0 1,0 0,-110 z" />
+
+    <!-- A spark of stardust for character. -->
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M200,130 l5,16 16,5 -16,5 -5,16 -5,-16 -16,-5 16,-5 z" />
+</vector>

@@ -1,0 +1,58 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- App identity -->
+    <string name="app_name">Curio</string>
+    <string name="app_tagline">Discover something new, explore it your way.</string>
+
+    <!-- Common UI strings (placeholder phase — fills in with real copy later) -->
+    <string name="action_back">Back</string>
+    <string name="action_close">Close</string>
+    <string name="action_next">Next</string>
+    <string name="action_skip">Skip</string>
+    <string name="action_save">Save entry</string>
+    <string name="action_spin">SPIN</string>
+    <string name="action_explore">Start exploring</string>
+
+    <!-- Bottom nav destinations -->
+    <string name="nav_home">Home</string>
+    <string name="nav_spin">The Spin</string>
+    <string name="nav_cabinet">Cabinet</string>
+
+    <!-- Home screen -->
+    <string name="home_greeting_morning">Good morning, %1$s</string>
+    <string name="home_greeting_afternoon">Good afternoon, %1$s</string>
+    <string name="home_greeting_evening">Good evening, %1$s</string>
+    <string name="home_greeting_default">Welcome back</string>
+    <string name="home_streak_pill">%1$d-day curiosity streak</string>
+    <string name="home_hero_title">SPIN THE WHEEL</string>
+    <string name="home_hero_subtitle">Tap to discover something new</string>
+    <string name="home_hero_subtitle_with_category">Spin for %1$s</string>
+    <string name="home_pick_category">Pick a category</string>
+    <string name="home_recently_explored">Recently explored</string>
+    <string name="home_empty_recent">Nothing here yet. Give the wheel a spin!</string>
+
+    <!-- Splash -->
+    <string name="splash_app_name">Curio</string>
+    <string name="splash_loading">Loading…</string>
+
+    <!-- Categories -->
+    <string name="cat_music">Music</string>
+    <string name="cat_movies">Movies</string>
+    <string name="cat_books">Books</string>
+    <string name="cat_visual_art">Visual Art</string>
+    <string name="cat_science">Science</string>
+    <string name="cat_wildcard">Wildcard</string>
+    <string name="cat_surprise_me">Surprise me</string>
+
+    <!-- Category Picker -->
+    <string name="picker_title">What are we exploring?</string>
+    <string name="picker_manage_categories">Manage categories</string>
+
+    <!-- Empty states (universal skeleton) -->
+    <string name="empty_no_results">Nothing matches</string>
+    <string name="empty_no_results_subtext">Try a different word, or clear the filter.</string>
+
+    <!-- v267 — glass home-screen widget -->
+    <string name="glass_widget_title">Curio</string>
+    <string name="glass_widget_desc">Frosted glass tile with your streak</string>
+</resources>

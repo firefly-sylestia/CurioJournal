@@ -1,0 +1,2 @@
+• Material theme upgrade: cards now wear a mixed gradient of your category colors blended with your device's dynamic Material palette (Settings → Appearance → Material card blends, on by default)
+• Fixed the detail-screen hero gradient in Curio light mode — rose, sky and teal cards now melt into their own on-hue wash instead of a muddy grey-green/orange blend

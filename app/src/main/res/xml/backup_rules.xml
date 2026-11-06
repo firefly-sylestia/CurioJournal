@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Curio Auto Backup rules — Android 11 and lower (fullBackupContent).
+
+    Mirrors data_extraction_rules.xml for devices running API <= 30:
+    back up only the Room database + shared prefs; keep audio (files/ domain)
+    out of the 25 MB cloud quota and crash logs out of user data.
+-->
+<full-backup-content>
+    <include domain="database" path="." />
+    <include domain="sharedpref" path="." />
+    <exclude domain="sharedpref" path="curio_crash_logs.xml" />
+    <!-- Mirrors data_extraction_rules.xml: the account session's tokens are
+         never cloud-backed-up — neither the old plaintext file nor the sealed
+         vault that replaced it (and whose key is device-bound anyway). -->
+    <exclude domain="sharedpref" path="curio_supabase_session.xml" />
+    <exclude domain="sharedpref" path="curio_secure_store.xml" />
+    <!-- Cached social content (conversations, names, cards) is a device cache:
+         it must never be uploaded, and it is deleted on sign-out. -->
+    <exclude domain="sharedpref" path="curio_social_cache.xml" />
+</full-backup-content>

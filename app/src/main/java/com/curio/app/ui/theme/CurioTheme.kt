@@ -1,0 +1,856 @@
+package com.curio.app.ui.theme
+
+import android.app.Activity
+import android.content.Context
+import android.content.res.Configuration
+import androidx.compose.foundation.LocalIndication
+import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.BottomSheetDefaults
+import androidx.compose.material3.ButtonColors
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.ColorScheme
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.darkColorScheme
+import androidx.compose.material3.lightColorScheme
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.ReadOnlyComposable
+import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.remember
+import android.graphics.Color as AndroidColor
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalView
+import androidx.core.view.WindowCompat
+import com.curio.app.data.AppPreferences
+import com.curio.app.ui.CurioLayout
+import com.curio.app.ui.components.CurioGlassPills
+import com.curio.app.ui.components.frostColor
+import com.curio.app.ui.components.liquidglass.windowBlurAvailable
+
+/**
+ * Curio's M3 theme wrapper.
+ *
+ * Pastel-warm palette: soft pink primary, warm butter secondary, mint tertiary.
+ * No blue tones — dark mode uses deep maroon family, light mode uses warm
+ * cream/sand surfaces.
+ */
+
+/**
+ * ── v409 — THE PAPER FLIP (light mode only) ─────────────────────────────
+ *
+ * WHICH SURFACE LEADS, the page or the cards.
+ *
+ * v408 put a white card on the member's cream page and the app read as white
+ * slabs floating on cream. The member's direction is the other way round:
+ * "home about a white app background as the main, but cream cards reverse of
+ * what we did". So the LIGHT page is WHITE and a CARD is CREAM — the same
+ * separation rule v408 established (a card separates from its page by
+ * LIGHTNESS, never by a tint of it), with the two surfaces swapped over.
+ *
+ * Two schemes, one switch ([AppPreferences.paperCreamCardsState]):
+ *
+ *  [CurioWhitePageLightScheme]  DEFAULT — white page, cream cards
+ *  [CurioCreamPageLightScheme]  the reverse — the v408 page/card pair
+ *
+ * Both keep the same three promises: the page is the brand's, the cards climb
+ * AWAY from it (never toward it), and the ink only ever moves away from the
+ * fill. Dark mode is untouched by the flip — its page is pitch black and its
+ * plates step UP from it, which is the same rule said in the dark's own
+ * language.
+ */
+private val CurioWhitePageLightScheme = lightColorScheme(
+    primary           = CurioColors.CoralBlush,
+    onPrimary         = CurioColors.CreamWhite,
+    primaryContainer  = CurioColors.CoralBlush.copy(alpha = 0.18f),
+    onPrimaryContainer = CurioColors.DeepPlum,
+
+    secondary           = CurioColors.ButterYellow,
+    onSecondary         = CurioColors.DeepPlum,
+    secondaryContainer  = CurioColors.ButterYellow.copy(alpha = 0.30f),
+    onSecondaryContainer = CurioColors.DeepPlum,
+
+    tertiary           = CurioColors.SkyMint,
+    onTertiary         = CurioColors.DeepPlum,
+    tertiaryContainer  = CurioColors.SkyMint.copy(alpha = 0.30f),
+    onTertiaryContainer = CurioColors.DeepPlum,
+
+    // ── v409 — THE CARD LADDER, INVERTED ────────────────────────────────
+    //
+    //   background                    WHITE    — the page
+    //   surfaceContainerLowest        WHITE    — a dialog (the scrim is what
+    //                                  separates it, not a fill step)
+    //   surfaceContainerLow           cream    — A CARD
+    //   surfaceContainer              deeper   — a block inside a card
+    //   surfaceContainerHigh          deeper   — a pill / chip inside one
+    //   surfaceContainerHighest       deepest  — the anchor step
+    //
+    // A card is therefore visibly CREAM on a white page, and a control nested
+    // inside that card steps deeper into the same family, so nesting is legible
+    // without an outline on every box. Contrast for the ink only improves:
+    // every fill moved away from it.
+    //
+    // v411 — THE SHADOW CARRIES THE EDGE. The member: "with white pages they
+    // look good, just the cream color is too much maybe subtle cream, and also
+    // soft shadow no border just shadow instead of borders". So no card draws a
+    // hairline any more — `curioCardEdgeColor` answers "no border" for EVERY
+    // theme now, and the soft shadow ([curioCardShadow]) is what lifts a card
+    // off the page.
+    //
+    // v414 — CLEARER STEPS. v411's cream went a shade too subtle to read as a
+    // card at all (member: "do somethng bout the background and the card color
+    // issues, and use elevation"), so the ladder is re-pitched a touch deeper
+    // (still a soft cream, never a tan plate) and the shadow step went to 5dp:
+    // the FILL gives the card its plane and the SHADOW gives it its lift. The
+    // steps still climb evenly, which is what keeps nesting legible.
+    background = Color(0xFFFFFFFF),
+    onBackground = CurioColors.DeepPlum,
+
+    surface                  = Color(0xFFFFFFFF),
+    onSurface                = CurioColors.DeepPlum,
+    surfaceVariant           = Color(0xFFF5ECDA),
+    onSurfaceVariant         = CurioColors.DeepPlum.copy(alpha = 0.75f),
+    surfaceContainerLowest   = Color(0xFFFFFFFF),
+    surfaceContainerLow      = Color(0xFFFAF2E0),
+    surfaceContainer         = Color(0xFFF4EAD4),
+    surfaceContainerHigh     = Color(0xFFEEE1C4),
+    surfaceContainerHighest  = Color(0xFFE8D8B3),
+
+    error             = CurioColors.WarmCoralRed,
+    onError           = CurioColors.CreamWhite,
+
+    // v409 — SOFT EDGES. The separators are the same readable stride v408
+    // settled on, pitched a touch softer because a cream card on a white page
+    // already carries its own height: the hairline is a quiet edge, not a
+    // drawn box (member: "add soft borders where you've added borders for
+    // cards in profile and settings").
+    outline           = CurioColors.DeepPlum.copy(alpha = 0.20f),
+    outlineVariant    = CurioColors.DeepPlum.copy(alpha = 0.10f)
+)
+
+/**
+ * v421 — THE SILVER PAGE: the light pair for the app's TWO DEFAULT themes.
+ *
+ * Curio rose and Azure no longer have a paper choice at all. The member's call
+ * ("remove that paper cream color and its option of paper from the default rose
+ * and azure and introduce, soft silverish gray") is that the cream is what made
+ * those two themes read heavy, and that the paper flip was one decision too many
+ * on the two themes a member lands on by default. So this scheme is FIXED: a
+ * white page and a SOFT SILVER-GRAY card ladder — the same separation rule the
+ * other ladders follow (a card steps AWAY from its page by lightness), said in a
+ * cool neutral instead of a warm cream.
+ *
+ * The hue roles (primary, the containers, the error family) are identical to
+ * [CurioWhitePageLightScheme]: only the surface ladder and the surface variant
+ * changed, so nothing that reads the brand colours moves.
+ *
+ * The Paper row in Appearance therefore no longer applies here — it belongs to
+ * Adaptive Hero alone now (see `AppearanceSection`).
+ */
+private val CurioSilverLightScheme = lightColorScheme(
+    primary           = CurioColors.CoralBlush,
+    onPrimary         = CurioColors.CreamWhite,
+    primaryContainer  = CurioColors.CoralBlush.copy(alpha = 0.18f),
+    onPrimaryContainer = CurioColors.DeepPlum,
+
+    secondary           = CurioColors.ButterYellow,
+    onSecondary         = CurioColors.DeepPlum,
+    secondaryContainer  = CurioColors.ButterYellow.copy(alpha = 0.30f),
+    onSecondaryContainer = CurioColors.DeepPlum,
+
+    tertiary           = CurioColors.SkyMint,
+    onTertiary         = CurioColors.DeepPlum,
+    tertiaryContainer  = CurioColors.SkyMint.copy(alpha = 0.30f),
+    onTertiaryContainer = CurioColors.DeepPlum,
+
+    //   background                    WHITE    — the page
+    //   surfaceContainerLowest        WHITE    — a dialog
+    //   surfaceContainerLow           silver   — A CARD
+    //   surfaceContainer              silver-  — a block inside a card
+    //   surfaceContainerHigh          silver-- — a pill / chip inside one
+    //   surfaceContainerHighest       silver--- — the anchor step
+    background = Color(0xFFFFFFFF),
+    onBackground = CurioColors.DeepPlum,
+
+    surface                  = Color(0xFFFFFFFF),
+    onSurface                = CurioColors.DeepPlum,
+    surfaceVariant           = Color(0xFFF0F1F4),
+    onSurfaceVariant         = CurioColors.DeepPlum.copy(alpha = 0.75f),
+    surfaceContainerLowest   = Color(0xFFFFFFFF),
+    surfaceContainerLow      = Color(0xFFF3F4F6),
+    surfaceContainer         = Color(0xFFEBECEF),
+    surfaceContainerHigh     = Color(0xFFE3E5E9),
+    surfaceContainerHighest  = Color(0xFFDBDEE3),
+
+    error             = CurioColors.WarmCoralRed,
+    onError           = CurioColors.CreamWhite,
+
+    outline           = CurioColors.DeepPlum.copy(alpha = 0.20f),
+    outlineVariant    = CurioColors.DeepPlum.copy(alpha = 0.10f)
+)
+
+/**
+ * v408 — THE OTHER PAPER: the member's cream page with white cards, kept
+ * exactly as it shipped for [AppPreferences.paperCreamCardsState] OFF.
+ * The two schemes are the same design read in two directions; nothing else in
+ * the app has to know which one is on. v421 — this pair now belongs to the
+ * ADAPTIVE HERO theme alone (see [CurioSilverLightScheme]).
+ */
+private val CurioCreamPageLightScheme = lightColorScheme(
+    primary           = CurioColors.CoralBlush,
+    onPrimary         = CurioColors.CreamWhite,
+    primaryContainer  = CurioColors.CoralBlush.copy(alpha = 0.18f),
+    onPrimaryContainer = CurioColors.DeepPlum,
+
+    secondary           = CurioColors.ButterYellow,
+    onSecondary         = CurioColors.DeepPlum,
+    secondaryContainer  = CurioColors.ButterYellow.copy(alpha = 0.30f),
+    onSecondaryContainer = CurioColors.DeepPlum,
+
+    tertiary           = CurioColors.SkyMint,
+    onTertiary         = CurioColors.DeepPlum,
+    tertiaryContainer  = CurioColors.SkyMint.copy(alpha = 0.30f),
+    onTertiaryContainer = CurioColors.DeepPlum,
+
+    // ── v408 — THE CARD LADDER (the "cards blend into the page" fix) ────
+    //
+    // THE PAGE IS CREAM, EVERYTHING THAT READS AS A CARD IS WHITE.
+    //
+    // Until v408 the ladder descended INTO the page: the light containers
+    // were a DARKER cream than `background` (Low #F0E8D6 on a #F7F0E4 page,
+    // High #E4D7BF), so a card sat one warmth-step below the page it was
+    // drawn on — and on a lane wash (Home/Profile/Cabinet wear the Spin
+    // lane's tint of that same cream) the two collapsed into one flat
+    // field. Member report: "the background and the cards and tabs some
+    // were blending too much … the journals in the home screen the preview
+    // of them get the background color and blends".
+    //
+    // The formula now: the PAGE keeps the member-preferred cream
+    // (`background` / `surfaceVariant` — untouched, it is the brand), and
+    // the CONTAINER ladder climbs ABOVE it into white instead of below it
+    // into tan:
+    //
+    //   surfaceContainerLowest / surfaceContainerLow   WHITE   — a card
+    //   surfaceContainer                           off-white — a nested
+    //                                       block inside a white card
+    //                                       (fields, wells, sub-rows)
+    //   surfaceContainerHigh                     warm white — the
+    //                                       floating pills / chips / dialogs
+    //                                       one step back toward the page
+    //   surfaceContainerHighest                 cream      — the anchor
+    //                                       step, where a control should
+    //                                       still read as "page family"
+    //
+    // So every card, sheet, tile and tab now separates from the page by
+    // LIGHTNESS (white on cream, one clean step) instead of by a hair of
+    // warmth nobody can see. Contrast for the onSurface ink only ever
+    // improves — the fill moved away from the ink, never toward it.
+    //
+    // Never "fix" a card by tinting it back toward the page: contrast
+    // against `background` is the whole separation.
+    background = CurioColors.SoftCream,
+    onBackground = CurioColors.DeepPlum,
+
+    surface                  = Color(0xFFFFFFFF),
+    onSurface                = CurioColors.DeepPlum,
+    surfaceVariant           = Color(0xFFEFE6D4),
+    onSurfaceVariant         = CurioColors.DeepPlum.copy(alpha = 0.75f),
+    surfaceContainerLowest   = Color(0xFFFFFFFF),
+    surfaceContainerLow      = Color(0xFFFFFFFF),
+    surfaceContainer         = Color(0xFFFBF5EA),
+    surfaceContainerHigh     = Color(0xFFF5EDDE),
+    surfaceContainerHighest  = Color(0xFFEFE6D4),
+
+    error             = CurioColors.WarmCoralRed,
+    onError           = CurioColors.CreamWhite,
+
+    // v408 — the separators are readable now. At 0.15/0.08 alpha the plum
+    // hairlines were invisible on both the cream page and a white card, so
+    // every divider/inset rule in the app disappeared and the only thing
+    // left to tell two tap targets apart was whitespace (member report:
+    // "add proper formula for hierarchy and proper separations per
+    // clickable element"). These are the values [Modifier.curioCardEdge]
+    // and every divisor multiply from — dividers still halve them.
+    outline           = CurioColors.DeepPlum.copy(alpha = 0.22f),
+    outlineVariant    = CurioColors.DeepPlum.copy(alpha = 0.11f)
+)
+
+/**
+ * v81 — the reimagined dark scheme. The PAGE is PITCH BLACK (OLED);
+ * surfaces step up through near-black greys so elevation reads via
+ * lightness (the dark-mode best practice — surfaces get lighter the
+ * higher they sit). Accent roles stay BRIGHT (the pale coral / butter /
+ * mint — Samsung-style bright accents on black) with dark ink on them.
+ */
+private val CurioDarkColorScheme = darkColorScheme(
+    primary           = CurioColors.CoralBlush,
+    onPrimary         = CurioColors.DeepPlum,
+    primaryContainer  = CurioColors.CoralBlush.copy(alpha = 0.16f),
+    onPrimaryContainer = CurioColors.CoralBlush,
+
+    secondary           = CurioColors.ButterYellow,
+    onSecondary         = Color(0xFF3A2E0A),
+    secondaryContainer  = CurioColors.ButterYellow.copy(alpha = 0.16f),
+    onSecondaryContainer = CurioColors.ButterYellow,
+
+    tertiary           = CurioColors.SkyMint,
+    onTertiary         = Color(0xFF0C2A2A),
+    tertiaryContainer  = CurioColors.SkyMint.copy(alpha = 0.16f),
+    onTertiaryContainer = CurioColors.SkyMint,
+
+    background = Color.Black,
+    onBackground = Color(0xFFEDE7DC),
+
+    // v408 — the dark twin of the light ladder shift (see the light scheme's
+    // "CARD LADDER" note). The page stays PITCH BLACK (the OLED promise is
+    // untouched); the container steps start one rung higher so a card is a
+    // visible plate on the black page instead of a #101010 slab that reads
+    // as a smudge — the dark half of "cards blend into the background".
+    // Separation is still by LIGHTNESS, just with a usable stride now:
+    // #161616 card → #1C1C1C nested → #242424 pill → #2C2C2C anchor.
+    surface                  = Color(0xFF0D0D0D),
+    onSurface                = Color(0xFFEDE7DC),
+    surfaceVariant           = Color(0xFF1C1C1E),
+    onSurfaceVariant         = Color(0xFFB8B2A8),
+    surfaceContainerLowest   = Color(0xFF121212),
+    surfaceContainerLow      = Color(0xFF161616),
+    surfaceContainer         = Color(0xFF1C1C1C),
+    surfaceContainerHigh     = Color(0xFF242424),
+    surfaceContainerHighest  = Color(0xFF2C2C2C),
+
+    error             = Color(0xFFE0706A),
+    onError           = Color(0xFF2A0A08),
+
+    // v408 — separators match the light side's stride (see the light
+    // scheme). Real shadows cannot exist on black, so these hairlines and
+    // the container steps ARE the separation in dark.
+    outline           = Color(0xFFEDE7DC).copy(alpha = 0.26f),
+    outlineVariant    = Color(0xFFEDE7DC).copy(alpha = 0.14f)
+)
+
+/**
+ * App-theme-aware dark check. Reads the theme mode reactively from
+ * [AppPreferences.themeModeState] so toggling Light/Dark/System in
+ * settings takes effect immediately without restarting the app. v81 —
+ * the reimagined dark mode: pitch-black pages, dark same-hue hero
+ * shades and the Samsung-style inner glow (no AMOLED/Material styles).
+ */
+@Composable
+fun isCurioDarkTheme(): Boolean = when (AppPreferences.themeModeState) {
+    AppPreferences.THEME_DARK -> true
+    AppPreferences.THEME_SYSTEM -> isSystemInDarkTheme()
+    else -> false
+}
+
+/**
+ * v20 — the brand coral as INK, theme-aware: bright CoralBlush on dark
+ * surfaces, a deep readable CoralInk on light cream (CoralBlush is a pale
+ * pastel that vanishes on the light background). Use for icons, text and
+ * progress accents that sit on cards/cream — the light-mode wash-out fix.
+ */
+@Composable
+fun curioRoseInk(): Color {
+    // v420 — a named theme's accent ink is one of its own tones, so every
+    // surface that asks for an accent ink (pills, plate tints, icon chips)
+    // comes back in the member's theme instead of coral.
+    activeNamedTheme()?.let { return it.accentFor(isCurioDarkTheme()) }
+    return if (isCurioDarkTheme()) CurioColors.CoralBlush else CurioColors.CoralInk
+}
+
+/**
+ * v426 — THE SCHEME'S ACCENT, AS INK.
+ *
+ * `MaterialTheme.colorScheme.primary` means two DIFFERENT things in this app,
+ * and only one of them is safe to write text or draw a glyph with:
+ *
+ *  · In the app's own schemes `primary` IS an accent INK — the bright dark-mode
+ *    coral (CoralBlush) and the rose by day — so a `tint = primary` icon reads
+ *    in both modes.
+ *  · **In a named theme `primary` is the HERO FILL** (`heroFor`, and at night a
+ *    deep jewel at L 0.30 — deliberately, see the v425 note in NamedThemes).
+ *    Drawn as ink on the theme's own dark page that lands at ~1.6:1: the glyph
+ *    or label is there, but it is nearly black on near-black — the member's
+ *    "in dark mode in many themes the text visibility is bad … the texts have
+ *    black or dark color".
+ *
+ * So: a FILL keeps `MaterialTheme.colorScheme.primary` (that is what a hero,
+ * a bar, a selected pill wants), and INK asks this. Every theme that is not a
+ * named one gets `primary` back untouched — the named themes answer with their
+ * own [CurioNamedTheme.accentFor], the same lifted tone the rest of their ink
+ * already uses.
+ */
+@Composable
+fun curioAccentInk(): Color {
+    activeNamedTheme()?.let { return it.accentFor(isCurioDarkTheme()) }
+    return MaterialTheme.colorScheme.primary
+}
+
+/**
+ * v426 — THE SCHEME'S THIRD ACCENT, AS INK (the mint twin of [curioAccentInk]).
+ *
+ * The app's own schemes pair `tertiary` with the SAME bright mint in every
+ * role, so `tertiary` works as a fill AND as ink there. A named theme does not:
+ * in the night schemes `tertiary` is a FILL (`tone(third, 0.34, 0.36)` — a
+ * dark tone) and the readable ink for that family is `onTertiaryContainer`
+ * (0.88). A mint label drawn with `tertiary` under a named dark theme landed at
+ * ~1.9:1 — the dark-on-dark text the member reported — so ink asks this and
+ * every other theme is handed `tertiary` back untouched.
+ */
+@Composable
+fun curioTertiaryInk(): Color {
+    activeNamedTheme()?.let { return MaterialTheme.colorScheme.onTertiaryContainer }
+    return MaterialTheme.colorScheme.tertiary
+}
+
+/**
+ * v20 — the brand butter as INK, theme-aware: bright ButterYellow on dark
+ * surfaces, deep GoldInk on light cream (ButterYellow vanishes on the
+ * light background). Gold twin of [curioRoseInk].
+ */
+@Composable
+fun curioGoldInk(): Color =
+    if (isCurioDarkTheme()) CurioColors.ButterYellow else CurioColors.GoldInk
+
+/**
+ * v20 — the soft sage as INK, theme-aware: soft Sage on dark surfaces, deep
+ * SageInk on light cream (Sage vanishes on the light background). For
+ * "done"/mastered icons, text and progress accents.
+ */
+@Composable
+fun curioSageInk(): Color =
+    if (isCurioDarkTheme()) CurioColors.Sage else CurioColors.SageInk
+
+/**
+ * Non-composable dark check for services/workers — mirrors
+ * [isCurioDarkTheme] but reads the system night flag from [Context]
+ * instead of the @Composable [isSystemInDarkTheme], so plain functions
+ * (e.g. notification tinting in [ExploreSessionService]) resolve the
+ * same dark/light state the UI uses.
+ */
+fun isCurioDarkThemeForContext(context: Context): Boolean = when (AppPreferences.themeModeState) {
+    AppPreferences.THEME_DARK -> true
+    AppPreferences.THEME_SYSTEM -> (context.resources.configuration.uiMode and
+        Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES
+    else -> false
+}
+
+/**
+ * The [ColorScheme] the app wears — v81: Curio Light or the reimagined
+ * Dark (pitch-black pages, dark surfaces, bright accent roles). Shared
+ * by [CurioTheme] and the floating explore bubble, which renders outside
+ * an Activity window and therefore can't use the [CurioTheme] window
+ * SideEffect.
+ * v185 — when the opt-in Material theme toggle is on, the whole scheme
+ * becomes the proper M3 system (dynamic device palette on Android 12+,
+ * seeded baseline fallback): neutral surfaces, one primary, muted
+ * category families (see [MaterialFamilies]).
+ */
+/**
+ * v420 — the ACTIVE named theme, or null when the color theme is one of the
+ * app's own (Curio rose, Azure, Material, Adaptive Hero). A named theme brings
+ * its own palette (light and dark), so it answers before the Curio schemes.
+ */
+@Composable
+fun activeNamedTheme(): CurioNamedTheme? =
+    AppPreferences.namedThemeId()?.let { CurioNamedTheme.fromId(it) }
+
+@Composable
+fun curioColorScheme(): ColorScheme {
+    if (materialThemeOn) return materialColorScheme()
+    // v420 — a named theme owns its own page, card ladder and dark twin, so it
+    // answers before the paper flip (which only ever describes Curio's own
+    // cream/white light pair).
+    activeNamedTheme()?.let { named -> return named.schemeFor(isCurioDarkTheme()) }
+    if (isCurioDarkTheme()) return CurioDarkColorScheme
+    // v421 — the two DEFAULT themes wear the fixed silver page: no paper choice
+    // is offered for them any more (member: "remove that paper cream color and
+    // its option of paper from the default rose and azure and introduce, soft
+    // silverish gray").
+    val theme = AppPreferences.colorThemeState
+    if (theme == AppPreferences.COLOR_THEME_CURIO || theme == AppPreferences.COLOR_THEME_AZURE) {
+        return CurioSilverLightScheme
+    }
+    // v409 — the paper flip: white page with cream cards (the shipped look),
+    // or the reverse. Read reactively, so the switch repaints immediately.
+    // v421 — Adaptive Hero (and the Material theme's own scheme) are what the
+    // row still describes.
+    return if (AppPreferences.paperCreamCardsState) CurioWhitePageLightScheme
+    else CurioCreamPageLightScheme
+}
+
+/**
+ * v411 — NO CARD BORDER, IN ANY THEME.
+ *
+ * The member's direction ("soft shadow no border just shadow instead of
+ * borders") is the whole card language: a card's edge is its OWN FILL — every
+ * border/`BorderStroke` site that asks this helper paints an edge of exactly the
+ * card's colour, which is no border to see — and what separates a card from the
+ * page is the fill step plus the soft shadow ([curioCardShadow]).
+ *
+ * The signature still takes [fill] and still returns a COLOUR on purpose:
+ * `Surface(border = …)` and `Modifier.border(…)` call sites keep their exact
+ * shape and ordering (a null would make every caller branch, and a border moved
+ * after a fill paints over it — see the modifier-order rule). `outlineVariant`
+ * is untouched and still draws DIVIDERS, which is what it is for now.
+ */
+@Composable
+fun curioCardEdgeColor(fill: Color): Color = fill
+
+/**
+ * v411 — THE SOFT CARD SHADOW.
+ *
+ * The member's call ("soft shadow no border just shadow instead of borders"),
+ * applied to the whole card language rather than to one screen: a card is a
+ * fill, a radius and a SOFT shadow, never a drawn hairline. It is a warm, wide
+ * shadow at a low alpha instead of Material's default black — on a cream page a
+ * hard one reads as a smudge and a black one as a dirt line — and it is applied
+ * BEFORE the fill in the chain (`shadow` → `clip` → `background`), which is what
+ * makes it sit under the card rather than blur over it.
+ *
+ * DARK MODE IS UNTOUCHED: its plates step up from a black page and already wear
+ * the theme's own glow ([curioDarkGlow]); a shadow there is invisible anyway.
+ * So this returns the modifier unchanged at night.
+ *
+ * v414 — THE SHADOW CARRIES THE ELEVATION. The default step is a touch deeper
+ * (3dp → 5dp) with a hair more alpha, so a card visibly LIFTS off the page
+ * instead of relying on a near-invisible cream step alone.
+ */
+@Composable
+fun Modifier.curioCardShadow(shape: Shape, elevation: Dp = 5.dp): Modifier =
+    if (isCurioDarkTheme()) this
+    else shadow(
+        elevation = elevation,
+        shape = shape,
+        clip = false,
+        ambientColor = CurioColors.DeepPlum.copy(alpha = 0.12f),
+        spotColor = CurioColors.DeepPlum.copy(alpha = 0.17f)
+    )
+
+/**
+ * v411 — A TINT, RESOLVED SOLIDLY ON [base].
+ *
+ * Callers ask for an accent tint through here so it composites over an opaque
+ * surface; the tint is MIXED INTO [base] with [lerp] (opaque, no bleed-through)
+ * rather than layered as an alpha. v414 — the Pantone branch that used to make
+ * this theme-dependent is gone; every theme now mixes solidly.
+ */
+@Composable
+fun curioTintOn(base: Color, tint: Color, alpha: Float): Color = lerp(base, tint, alpha)
+
+/**
+ * WCAG contrast ratio between two opaque colors (1f..21f).
+ *
+ * v414 — moved here from the retired `PantoneThemes.kt`, which is where it used
+ * to live: the category ink resolvers in `CategoryInk.kt` (see [curioFillInk])
+ * depend on it, so it had to survive that file's deletion.
+ */
+internal fun contrast(a: Color, b: Color): Float {
+    val la = a.luminance()
+    val lb = b.luminance()
+    val hi = maxOf(la, lb)
+    val lo = minOf(la, lb)
+    return (hi + 0.05f) / (lo + 0.05f)
+}
+
+@Composable
+fun CurioTheme(
+    content: @Composable () -> Unit
+) {
+    val colorScheme = curioColorScheme()
+    // The SideEffect block below is NOT a @Composable context, so resolve
+    // the theme-mode dark check here (isCurioDarkTheme is @Composable).
+    val isDark = isCurioDarkTheme()
+
+    val view = LocalView.current
+    if (!view.isInEditMode) {
+        SideEffect {
+            val window = (view.context as Activity).window
+            @Suppress("DEPRECATION")
+            window.statusBarColor = AndroidColor.TRANSPARENT
+            @Suppress("DEPRECATION")
+            window.navigationBarColor = AndroidColor.TRANSPARENT
+            WindowCompat.setDecorFitsSystemWindows(window, false)
+            WindowCompat.getInsetsController(window, view).isAppearanceLightStatusBars = !isDark
+            WindowCompat.getInsetsController(window, view).isAppearanceLightNavigationBars = !isDark
+        }
+    }
+
+    // v3xx47 — ONE touch feedback for the whole app: the pressed-look
+    // indication (see [CurioPressIndication]) replaces Material's expanding
+    // ripple everywhere, so cards, rows, chips, pills and every control inside
+    // the bottom sheets respond to a touch the same animated way. Tint keys off
+    // the scheme's onSurface, so the wash darkens light surfaces and lightens
+    // dark ones.
+    val pressIndication = remember(colorScheme.onSurface) {
+        CurioPressIndication(colorScheme.onSurface)
+    }
+
+    MaterialTheme(
+        colorScheme = colorScheme,
+        typography  = CurioTypography,
+        shapes      = CurioShapes,
+        content = {
+            // The provider must sit INSIDE MaterialTheme: MaterialTheme itself
+            // provides its ripple to LocalIndication, so an outer provider
+            // would simply be overridden by it.
+            CompositionLocalProvider(LocalIndication provides pressIndication) {
+                content()
+            }
+        }
+    )
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Shared dialog styling — one container, shape and action ink for every
+// AlertDialog in the app, so dialogs match the card language (24dp corners)
+// and the pastel-tinted page instead of floating a foreign cream panel.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * The card-matching corner radius every AlertDialog wears — the same 24dp
+ * medium token as the cards and the Topic Reveal explore dialog.
+ */
+val CurioDialogShape: RoundedCornerShape = RoundedCornerShape(24.dp)
+
+/**
+ * v482/v484 — THE GLASS PANEL. A bottom sheet or a dialog is its own Android
+ * window, so its surface cannot sample the page behind it the way a floating
+ * pill samples a capture — but it CAN have that page really blurred behind it
+ * ([CurioGlassWindowBlur] on the window), and it can be thin enough to let that
+ * blur read. That is what makes a sheet or a dialog glass:
+ *
+ *  - **frosted** (the default): a heavy, real blur behind the window with only a
+ *    THIN tint of [base] on the pane (a whisper of light lift in light, a
+ *    whisper of dark lift in dark), so the panel reads as a window onto a soft,
+ *    out-of-focus page rather than as a painted slab ([CurioGlassPills.Frost]);
+ *  - **Clear glass**: a genuinely clearer pane — less wash, more of the blurred
+ *    page showing through;
+ *  - **no blur behind it** (Android below 12, cross-window blur off, Lite mode):
+ *    the wash stays nearly opaque, because a translucent sheet over a sharp page
+ *    reads as a mistake rather than as glass;
+ *  - **glass off**: [base] untouched, exactly as it was before glass existed.
+ *
+ * Gated on glass being on at all, so switching Liquid glass off returns every
+ * panel to its old colour and no stray frost is left behind.
+ */
+@Composable
+fun curioFrostedPanel(base: Color): Color {
+    if (!AppPreferences.liquidGlassPillsState) return base
+    val dark = isCurioDarkTheme()
+    // The pane a blurred window sits behind is thin; the same pane without a
+    // blur must stay readable. One question decides which one we are drawing.
+    val blurred = windowBlurAvailable(LocalContext.current)
+    val frosted = AppPreferences.glassFrostedState
+    // Clear glass keeps the container's own colour as a hint and takes no white
+    // lift: the blurred page behind it is what the pane is made of. (Lerping
+    // toward Transparent instead would premultiply the colour toward black —
+    // the pane would go muddy, not clear.)
+    // v488 — TWO PANES, NOT ONE. With a real blur behind the window the pane is a
+    // thin tint OVER it; with none, the pane has to BE the frost, or the panel is
+    // the flat slab the member reported (see [CurioGlassPills.Frost.PanelOpaqueLightLift]).
+    val pane = if (frosted) {
+        if (blurred) {
+            frostColor(base, dark)
+        } else {
+            lerp(
+                base,
+                Color.White,
+                if (dark) CurioGlassPills.Frost.PanelOpaqueDarkLift
+                else CurioGlassPills.Frost.PanelOpaqueLightLift
+            )
+        }
+    } else if (dark) {
+        lerp(base, Color.White, 0.06f)
+    } else {
+        lerp(base, Color.White, 0.16f)
+    }
+    val alpha = when {
+        !blurred -> CurioGlassPills.Frost.OpaquePanel
+        // v487 — the panel's own thin pane (see [CurioGlassPills.Frost.PanelWash]):
+        // a sheet carries more text than a floating pill, so it keeps a little
+        // more of its colour than the pills' [CurioGlassPills.Frost.Wash] — but
+        // the window blur behind it is still what the panel is mostly made of.
+        frosted -> CurioGlassPills.Frost.PanelWash
+        else -> CurioGlassPills.Frost.ClearWash
+    }
+    return pane.copy(alpha = alpha)
+}
+
+/**
+ * v482/v484 — a BOTTOM SHEET's container under glass.
+ *
+ * The member: *"expand the smudge look to buttom sheets dialog box etc"*, then
+ * (v484) *"make the buttom sheet and dialog box etc liquid glass too with the
+ * clear glass too"*. A sheet cannot refract the page the way a pill does — it is
+ * another window — so its container is the glass [base] is made into through
+ * [curioFrostedPanel]: frosted or clear, thin when `CurioGlassWindowBlur()` has
+ * put a real blur behind the window, near-opaque when it has not. With glass off
+ * entirely, [base] is returned untouched, so every sheet keeps its old colour.
+ * Pass no [base] for a sheet that used Material's own default
+ * (surfaceContainerLow).
+ */
+@Composable
+fun curioSheetContainerColor(base: Color = Color.Unspecified): Color =
+    curioFrostedPanel(
+        if (base == Color.Unspecified) MaterialTheme.colorScheme.surfaceContainerLow else base
+    )
+
+/**
+ * v509 — A SHEET IS AS WIDE AS A SHORT WINDOW.
+ *
+ * Material caps every modal sheet at [BottomSheetDefaults.SheetMaxWidth] (640dp)
+ * and centres it, so on a phone in landscape the sheet sat in the middle of a
+ * wide window with the page showing in the gutters on both sides — the member:
+ * *"the buttom sheet which opens in landscape mode is really bad as it is not
+ * fully up to the sides"*. In a compact window ([CurioLayout.isCompact]) the
+ * sheet is handed `Dp.Unspecified`, which is M3's own "no maximum": the sheet is
+ * then as wide as the window and only its top corners stay rounded. Every other
+ * window keeps the 640dp cap exactly as before, so a tablet and a phone in
+ * portrait are untouched.
+ *
+ * Pass this as `sheetMaxWidth` at every `ModalBottomSheet` call — it is the one
+ * argument that decides the sheet's width, and there is no composition local for
+ * it.
+ */
+@Composable
+@ReadOnlyComposable
+fun curioSheetMaxWidth(): Dp =
+    if (CurioLayout.isCompact()) Dp.Unspecified else BottomSheetDefaults.SheetMaxWidth
+
+/**
+ * Theme-aware AlertDialog container. LIGHT (v170): the theme's own
+ * elevated container (surfaceContainerHigh — the warm tan the floating
+ * pills/chips wear) instead of the old 72% blend toward the cream
+ * background, which read as a cream-white panel (the user: dialogs
+ * should be theme-aware, not cream white). DARK (v81):
+ * toward the pitch-black background, so dialogs read as near-black glass
+ * on the black page (with the hero pill edge-glow on top). v116 — the dark
+ * fill is now the SETTINGS OPTION CARD construction (the same
+ * `lerp(surfaceContainerLow, tintLift, 0.30f)` as [CurioSettingsCard], with
+ * the hero-rose whisper as the tint lift) so dialogs match the option-card
+ * black glass exactly instead of reading as a separate grey slab.
+ */
+@Composable
+fun curioDialogContainerColor(): Color {
+    if (isCurioDarkTheme()) {
+        return curioFrostedPanel(
+            lerp(
+                MaterialTheme.colorScheme.surfaceContainerLow,
+                // The dark tint lift mirrors settingsCardTintLift: a whisper of
+                // the brand rose into black (the dialog floats over any page, so
+                // it uses the neutral rose rather than a lane accent).
+                lerp(Color.Black, curioRoseInk(), 0.20f),
+                0.30f
+            )
+        )
+    }
+    // v408 — light: a WHITE panel (the same card the page's surfaces are
+    // now built from), with the brand rose breathed in at the same 6% as
+    // [curioProfileDialogColor]. It used to sit on surfaceContainerHigh,
+    // which was a cream step BELOW the page — a dialog therefore looked
+    // like a slightly dirtier patch of the page behind it. A dialog is the
+    // most elevated card in the app; it now reads as one.
+    // v482 — the frosted (smudged) panel wins over the clear recipe.
+    return curioFrostedPanel(
+        lerp(
+            MaterialTheme.colorScheme.surfaceContainerLowest,
+            curioRoseInk(),
+            0.05f
+        )
+    )
+}
+
+/**
+ * The container for a dialog that edits the MEMBER's own profile.
+ *
+ * [curioDialogContainerColor] sits on `surfaceContainerHigh`, which is the
+ * warm tan the floating pills wear. On the profile's editor that tan read as a
+ * coffee-cream slab against the page it opens from, so this one is built from
+ * the page's own surface with the brand rose breathed into it: the same family
+ * as the page, one step brighter, and it still separates from the scrim. DARK
+ * mode keeps the settings-card construction (near-black glass with the rose
+ * whisper), which already matched its page.
+ */
+@Composable
+fun curioProfileDialogColor(): Color {
+    if (isCurioDarkTheme()) {
+        return curioFrostedPanel(
+            lerp(
+                MaterialTheme.colorScheme.surfaceContainerLow,
+                lerp(Color.Black, curioRoseInk(), 0.20f),
+                0.30f
+            )
+        )
+    }
+    return curioFrostedPanel(
+        lerp(
+            MaterialTheme.colorScheme.surfaceContainerLowest,
+            curioRoseInk(),
+            0.06f
+        )
+    )
+}
+
+/**
+ * The hero glass-pill lift — the color the ink-glass hero pills
+ * ([SettingsHeroActionPill], [CabinetHeroActionPill], the sort dropdown)
+ * are lerped toward for their frosted fill. LIGHT mode lifts toward the
+ * page background (the soft cream) so pills read as a small tint of the
+ * background shade instead of stark white-cream. v31.
+ */
+@Composable
+fun curioPillLift(): Color =
+    if (isCurioDarkTheme()) Color.White else MaterialTheme.colorScheme.background
+
+/**
+ * v42 — the COLOR-TINTED glass lift for settings/profile-family controls:
+ * the shared buttons/cards lift toward a whisper of the brand rose instead
+ * of plain cream, so they stop reading as flat cream blocks. LIGHT: the
+ * background rose-tinted ~8%. DARK (v81): a near-white rose-kissed glass
+ * (the frosted-glass lift on black), so pills and cards read as bright
+ * glass against the pitch-black page.
+ */
+@Composable
+fun curioPillTintLift(): Color =
+    if (isCurioDarkTheme()) lerp(Color.White, curioRoseInk(), 0.12f)
+    // v92 — light mode wears the SAME bright frosted glass as dark: the
+    // hero pills / plates lift toward a rose-kissed WHITE instead of the
+    // cream background, so Profile/Settings/hero pills read as the same
+    // frosted-glass family in light as they do in dark (the One UI light
+    // look — white glass popping off the tinted hero).
+    else lerp(Color.White, curioRoseInk(), 0.10f)
+
+/**
+ * Readable dialog ACTION ink. LIGHT: the scheme primary is the pale
+ * coral-pink brand color that washes out on a light dialog, so actions
+ * flip to a deep same-hue rose for real contrast. DARK (v81): the bright
+ * pale coral reads crisp on the near-black dialog, so actions use it
+ * directly.
+ */
+@Composable
+fun curioDialogActionColor(): Color {
+    if (isCurioDarkTheme()) return MaterialTheme.colorScheme.primary
+    val a = toHsl(MaterialTheme.colorScheme.primary)
+    return fromHsl(a.h, a.s.coerceIn(0.35f, 0.60f), 0.36f)
+}
+
+/**
+ * TextButton colors for dialog actions — dark readable ink in light mode.
+ * v27u — optional [containerColor] turns the transparent TextButton into a
+ * visible soft-tinted pill (the explore dialog's two action pills).
+ * `Color.Unspecified` (the default) means no container fill.
+ */
+@Composable
+fun curioDialogActionButtonColors(containerColor: Color = Color.Unspecified): ButtonColors =
+    ButtonDefaults.textButtonColors(
+        contentColor = curioDialogActionColor(),
+        containerColor = containerColor
+    )

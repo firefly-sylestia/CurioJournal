@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Curio uses HTTPS-only public endpoints (GitHub update checks and external
+    browser searches). Keep cleartext disabled globally so a future endpoint
+    or dependency cannot silently introduce HTTP traffic.
+-->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="false">
+        <trust-anchors>
+            <certificates src="system" />
+        </trust-anchors>
+    </base-config>
+</network-security-config>

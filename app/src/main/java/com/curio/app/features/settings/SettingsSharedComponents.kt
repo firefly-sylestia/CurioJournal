@@ -1,0 +1,682 @@
+package com.curio.app.features.settings
+
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.BottomSheetDefaults
+import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.RadioButton
+import androidx.compose.material3.RadioButtonDefaults
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.rememberModalBottomSheetState
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
+import com.curio.app.ui.theme.curioSheetMaxWidth
+import kotlinx.coroutines.launch
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import com.curio.app.data.AppPreferences
+import com.curio.app.data.AudioQuality
+import com.curio.app.data.MusicService
+import com.curio.app.data.SearchEngine
+import com.curio.app.data.VoskModelDownloads
+import com.curio.app.data.VoskModels
+import com.curio.app.ui.adaptive.CurioContentMaxWidth
+import com.curio.app.ui.components.curioDarkGlow
+import com.curio.app.ui.components.liquidglass.CurioGlassWindowBlur
+import com.curio.app.ui.theme.CurioDialogShape
+import com.curio.app.ui.theme.curioGoldInk
+import com.curio.app.ui.theme.curioRoseInk
+import com.curio.app.ui.theme.curioSageInk
+import com.curio.app.ui.theme.CurioIcon
+import com.curio.app.ui.theme.CurioIcons
+import com.curio.app.ui.theme.brandRes
+import com.curio.app.ui.theme.curioDialogActionButtonColors
+import com.curio.app.ui.theme.curioDialogActionColor
+import com.curio.app.ui.theme.curioDialogContainerColor
+
+/**
+ * v27q — content ink that reads on the SOLID [curioDialogActionColor]
+ * selected-row fill. v78 — light Curio only: white on the rose/primary
+ * rows (the AMOLED black flip is gone with dark mode).
+ */
+@Composable
+private fun dialogRowSelectedInk(): Color = Color.White
+
+/** v138 — models at/above this size confirm the download first (~Large tier). */
+private const val BIG_MODEL_BYTES = 100L * 1024 * 1024
+
+@Composable
+fun AudioQualityDialog(
+    currentQuality: AudioQuality,
+    onDismiss: () -> Unit,
+    onSelected: (AudioQuality) -> Unit
+) {
+    AlertDialog(
+        containerColor = curioDialogContainerColor(),
+        shape = CurioDialogShape,
+        onDismissRequest = onDismiss,
+        title = { Text("Recording quality", fontWeight = FontWeight.ExtraBold) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(
+                    "Higher quality sounds clearer but uses more storage.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                AudioQuality.entries.forEach { quality ->
+                    val selected = quality == currentQuality
+                    Surface(
+                        onClick = { onSelected(quality) },
+                        shape = RoundedCornerShape(16.dp),
+                        // v27q — selection reads as a SOLID action fill with
+                        // readable on-fill content; unselected rows wear an
+                        // opaque surface so the flat 2dp shadow renders
+                        // cleanly behind every row.
+                        color = if (selected) curioDialogActionColor()
+                                else MaterialTheme.colorScheme.surfaceContainerHigh,
+                        contentColor = if (selected) dialogRowSelectedInk()
+                                       else MaterialTheme.colorScheme.onSurface,
+                        shadowElevation = 2.dp,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            // v28 — dark mode elevation visibility.
+                            .curioDarkGlow(2.dp, RoundedCornerShape(16.dp))
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(12.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            RadioButton(
+                                selected = selected,
+                                onClick = null,
+                                colors = RadioButtonDefaults.colors(
+                                    selectedColor = if (selected) dialogRowSelectedInk()
+                                                   else curioDialogActionColor()
+                                )
+                            )
+                            Column {
+                                Text(quality.label, fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium)
+                                Text(
+                                    quality.description,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = if (selected) dialogRowSelectedInk().copy(alpha = 0.8f)
+                                           else MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            CurioGlassWindowBlur()
+            TextButton(onClick = onDismiss, colors = curioDialogActionButtonColors()) { Text("Close", fontWeight = FontWeight.Bold) }
+        }
+    )
+}
+
+/**
+ * v19/v3xx51 — single-choice picker for the explore search engine
+ * (Preferences → Search engine). v3xx51 — it is a BOTTOM SHEET now, matching
+ * the settings sheet language ([OfflineModelDialog]): rounded 28dp top, the
+ * settings dialog container, a drag handle, the title + explanation in the
+ * section's own type scale, and the same solid-fill selection rows. The
+ * sheet dismisses by swipe / back / a pick (never a close cross, per the
+ * app-wide bottom-sheet rule).
+ */
+@Composable
+fun SearchEngineDialog(
+    current: SearchEngine,
+    onDismiss: () -> Unit,
+    onSelected: (SearchEngine) -> Unit
+) {
+    SettingsChoiceSheet(
+        title = "Search engine",
+        subtitle = "Which engine the \"Explore in browser\" button searches with.",
+        onDismiss = onDismiss,
+        content = { pick ->
+            SearchEngine.entries.forEach { engine ->
+                val selected = engine == current
+                SettingsChoiceRow(
+                    selected = selected,
+                    title = engine.displayName,
+                    subtitle = engine.description,
+                    onClick = { pick { onSelected(engine) } }
+                )
+            }
+        }
+    )
+}
+
+/**
+ * v27s/v3xx51 — single-choice picker for the explore music service
+ * (Preferences → Music service), now the same bottom sheet as the search
+ * engine picker above.
+ */
+@Composable
+fun MusicServiceDialog(
+    current: MusicService,
+    onDismiss: () -> Unit,
+    onSelected: (MusicService) -> Unit
+) {
+    SettingsChoiceSheet(
+        title = "Music service",
+        // v109 — the pill says "Listen in" for audio services (Apple Music /
+        // Spotify / YouTube Music) and "Watch in" for YouTube, so the
+        // subtitle stays neutral.
+        subtitle = "Which streaming service opens albums, artists and songs from the explore dialog.",
+        onDismiss = onDismiss,
+        content = { pick ->
+            MusicService.entries.forEach { service ->
+                val selected = service == current
+                SettingsChoiceRow(
+                    selected = selected,
+                    title = service.displayName,
+                    subtitle = service.description,
+                    // v106 — the service's brand logo (keeps its own brand
+                    // colors; never tinted).
+                    leading = {
+                        Image(
+                            painter = painterResource(service.brandRes),
+                            contentDescription = null,
+                            modifier = Modifier.size(26.dp)
+                        )
+                    },
+                    onClick = { pick { onSelected(service) } }
+                )
+            }
+        }
+    )
+}
+
+/**
+ * v3xx51 — the shared settings CHOICE SHEET shell: a settings-styled
+ * ModalBottomSheet (same container / handle / 28dp top corners as the offline
+ * model picker, and the same content max width so tablets don't stretch it).
+ * [content] receives a `pick` function that swaps the sheet's OWN
+ * `onDismiss` for a swipe-down-animated close, so tapping a choice glides the
+ * sheet away instead of popping it out of composition.
+ */
+@Composable
+private fun SettingsChoiceSheet(
+    title: String,
+    subtitle: String,
+    onDismiss: () -> Unit,
+    content: @Composable (pick: (action: () -> Unit) -> Unit) -> Unit
+) {
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val scope = rememberCoroutineScope()
+    val pick: (action: () -> Unit) -> Unit = { action ->
+        action()
+        scope.launch { sheetState.hide() }.invokeOnCompletion {
+            if (!sheetState.isVisible) onDismiss()
+        }
+    }
+    ModalBottomSheet(
+        sheetMaxWidth = curioSheetMaxWidth(),
+        onDismissRequest = onDismiss,
+        sheetState = sheetState,
+        containerColor = curioDialogContainerColor(),
+        dragHandle = { BottomSheetDefaults.DragHandle() },
+        shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp)
+    ) {
+        CurioGlassWindowBlur()
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .widthIn(max = CurioContentMaxWidth)
+                .padding(bottom = 18.dp)
+        ) {
+            Text(
+                title,
+                style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.ExtraBold),
+                color = MaterialTheme.colorScheme.onSurface,
+                modifier = Modifier.padding(start = 20.dp, end = 20.dp, top = 2.dp)
+            )
+            Text(
+                subtitle,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp)
+            )
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 4.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                content(pick)
+            }
+        }
+    }
+}
+
+/** One row of a [SettingsChoiceSheet] — the settings selection language:
+ *  solid action fill when chosen, opaque surface otherwise, flat 2dp lift. */
+@Composable
+private fun SettingsChoiceRow(
+    selected: Boolean,
+    title: String,
+    subtitle: String,
+    onClick: () -> Unit,
+    leading: (@Composable () -> Unit)? = null
+) {
+    Surface(
+        onClick = onClick,
+        shape = RoundedCornerShape(16.dp),
+        color = if (selected) curioDialogActionColor()
+                else MaterialTheme.colorScheme.surfaceContainerHigh,
+        contentColor = if (selected) dialogRowSelectedInk()
+                       else MaterialTheme.colorScheme.onSurface,
+        shadowElevation = 2.dp,
+        modifier = Modifier
+            .fillMaxWidth()
+            // v28 — dark mode elevation visibility.
+            .curioDarkGlow(2.dp, RoundedCornerShape(16.dp))
+    ) {
+        Row(
+            modifier = Modifier.padding(12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            if (leading != null) {
+                leading()
+            } else {
+                RadioButton(
+                    selected = selected,
+                    onClick = null,
+                    colors = RadioButtonDefaults.colors(
+                        selectedColor = if (selected) dialogRowSelectedInk()
+                                       else curioDialogActionColor()
+                    )
+                )
+            }
+            Column(modifier = Modifier.weight(1f)) {
+                Text(title, fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium)
+                Text(
+                    subtitle,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = if (selected) dialogRowSelectedInk().copy(alpha = 0.8f)
+                           else MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
+    }
+}
+
+/**
+ * v125 — the OFFLINE voice-to-text model picker (Settings → Recording →
+ * Offline model). Each catalog model ([VoskModels.CATALOG]) shows its
+ * quality + size; tapping a downloaded model selects it, Download fetches
+ * + extracts it in-app with a live progress bar, and Delete removes a
+ * downloaded model. This model powers the "Transcribe voice note" action
+ * for pre-recorded sound bites on the entry detail page — fully on-device,
+ * no network at transcription time.
+ */
+@Composable
+fun OfflineModelDialog(
+    currentModelId: String,
+    onDismiss: () -> Unit
+) {
+    val context = LocalContext.current
+    // v137 — download state lives in the app-scoped VoskModelDownloads
+    // manager, so a transfer keeps running after this sheet closes; the
+    // rows below observe it for per-model progress / pause / resume.
+    val downloadStates by VoskModelDownloads.states.collectAsState()
+    // v138 — the model waiting on the storage confirmation before a big
+    // download starts (required size vs free space).
+    var pendingBigDownload by remember { mutableStateOf<VoskModels.Info?>(null) }
+    // v125 — the offline model version is bumped by download/delete, so
+    // re-reading the installed state below recomposes with fresh data.
+    AppPreferences.offlineModelVersionState
+    // v136 — the picker was an AlertDialog whose fixed max height squeezed
+    // the rows and clipped the bottom of the list ("squished, can't see
+    // below"); it's now a FULL-HEIGHT ModalBottomSheet with a scrolling
+    // list so all seven models fit with breathing room.
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+
+    ModalBottomSheet(
+        sheetMaxWidth = curioSheetMaxWidth(),
+        onDismissRequest = onDismiss,
+        sheetState = sheetState,
+        containerColor = curioDialogContainerColor(),
+        dragHandle = { BottomSheetDefaults.DragHandle() },
+        shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp)
+    ) {
+        CurioGlassWindowBlur()
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .widthIn(max = CurioContentMaxWidth)
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(start = 20.dp, end = 8.dp, top = 4.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    "Offline model",
+                    style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.ExtraBold),
+                    color = MaterialTheme.colorScheme.onSurface,
+                    modifier = Modifier.weight(1f)
+                )
+                Surface(
+                    onClick = onDismiss,
+                    shape = CircleShape,
+                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f)
+                ) {
+                    CurioIcon(
+                        CurioIcons.Close,
+                        "Close",
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        size = 20.dp,
+                        modifier = Modifier.padding(8.dp)
+                    )
+                }
+            }
+            Text(
+                "The offline model turns pre-recorded voice notes into text on your device. Small models are fast and light; the Large model is more accurate, at the cost of a heavier download. Downloads keep running if you close this screen, and you may pause or cancel them at any time; several can download at once. No internet is needed while it runs.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(horizontal = 20.dp, vertical = 10.dp)
+            )
+            // The model list — scrolls within the full-height sheet (the
+            // old dialog capped the height and clipped the bottom rows).
+            LazyColumn(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f, fill = false),
+                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                items(VoskModels.CATALOG, key = { it.id }) { model ->
+                    val downloaded = VoskModels.isDownloaded(context, model.id)
+                    val selected = downloaded && model.id == currentModelId
+                    // v138 — the real on-disk usage of an installed model
+                    // (vs the catalog's ~label), shown on the trailing chip.
+                    val realSize = if (downloaded) VoskModels.modelSizeBytes(context, model.id) else 0L
+                    val dl = downloadStates[model.id]
+                    val isDownloading = dl?.status == VoskModelDownloads.Status.Downloading
+                    val isPaused = dl?.status == VoskModelDownloads.Status.Paused
+                    val failed = dl?.status == VoskModelDownloads.Status.Failed
+                    Surface(
+                        onClick = { if (downloaded && !isDownloading) AppPreferences.setOfflineModelId(context, model.id) },
+                        enabled = downloaded && !isDownloading,
+                        shape = RoundedCornerShape(16.dp),
+                        // v27q — selection reads as a SOLID action fill;
+                        // unselected rows wear an opaque surface.
+                        color = if (selected) curioDialogActionColor()
+                                else MaterialTheme.colorScheme.surfaceContainerHigh,
+                        contentColor = if (selected) dialogRowSelectedInk()
+                                       else MaterialTheme.colorScheme.onSurface,
+                        shadowElevation = 2.dp,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .curioDarkGlow(2.dp, RoundedCornerShape(16.dp))
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 14.dp, vertical = 13.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            if (downloaded) {
+                                RadioButton(
+                                    selected = selected,
+                                    onClick = null,
+                                    colors = RadioButtonDefaults.colors(
+                                        selectedColor = if (selected) dialogRowSelectedInk()
+                                                       else curioDialogActionColor()
+                                    )
+                                )
+                            } else {
+                                CurioIcon(
+                                    name = CurioIcons.Download,
+                                    contentDescription = null,
+                                    tint = if (isDownloading) MaterialTheme.colorScheme.onSurfaceVariant
+                                           else curioDialogActionColor(),
+                                    size = 22.dp
+                                )
+                            }
+                            Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                                Text(model.displayName, fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium)
+                                // v140 — quality-tier badge: tier label + accuracy hint,
+                                // tinted per tier (sage = small/fast, gold = large).
+                                // v158 — the Full tier is gone (those models were
+                                // removed from the catalog).
+                                val tierInk = when (model.tier) {
+                                    VoskModels.Tier.SMALL -> curioSageInk()
+                                    VoskModels.Tier.LARGE -> curioGoldInk()
+                                }
+                                Surface(
+                                    shape = RoundedCornerShape(8.dp),
+                                    color = if (selected) dialogRowSelectedInk().copy(alpha = 0.18f)
+                                            else tierInk.copy(alpha = 0.16f)
+                                ) {
+                                    Text(
+                                        "${model.tier.label} · ${model.tier.hint}",
+                                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
+                                        color = if (selected) dialogRowSelectedInk() else tierInk,
+                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+                                    )
+                                }
+                                Text(
+                                    "${model.langLabel} · ${model.sizeLabel}",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = if (selected) dialogRowSelectedInk().copy(alpha = 0.8f)
+                                           else MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                                if (isDownloading || isPaused) {
+                                    LinearProgressIndicator(
+                                        progress = { dl?.progress ?: 0f },
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(top = 6.dp),
+                                        color = if (selected) dialogRowSelectedInk()
+                                                else curioDialogActionColor(),
+                                        trackColor = MaterialTheme.colorScheme.surfaceVariant
+                                    )
+                                }
+                                if (failed) {
+                                    Text(
+                                        text = dl?.error.orEmpty(),
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.error
+                                    )
+                                }
+                            }
+                            when {
+                                isDownloading || isPaused -> {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Text(
+                                            "${((dl?.progress ?: 0f) * 100).toInt()}%",
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = if (selected) dialogRowSelectedInk()
+                                                   else MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                        Spacer(Modifier.width(6.dp))
+                                        // Pause ⇄ Resume — resume continues from the partial file.
+                                        Surface(
+                                            onClick = {
+                                                if (isPaused) VoskModelDownloads.resume(model.id)
+                                                else VoskModelDownloads.pause(model.id)
+                                            },
+                                            shape = RoundedCornerShape(8.dp),
+                                            color = if (selected) dialogRowSelectedInk().copy(alpha = 0.18f)
+                                                   else MaterialTheme.colorScheme.surfaceVariant
+                                        ) {
+                                            CurioIcon(
+                                                name = if (isPaused) CurioIcons.PlayArrow else CurioIcons.Pause,
+                                                contentDescription = if (isPaused) "Resume ${model.displayName}" else "Pause ${model.displayName}",
+                                                tint = if (selected) dialogRowSelectedInk()
+                                                       else MaterialTheme.colorScheme.onSurfaceVariant,
+                                                size = 16.dp,
+                                                modifier = Modifier.padding(6.dp)
+                                            )
+                                        }
+                                        Spacer(Modifier.width(6.dp))
+                                        // Cancel — the only thing that stops a download for good;
+                                        // closing this sheet keeps it running in the background.
+                                        Surface(
+                                            onClick = { VoskModelDownloads.cancel(context, model.id) },
+                                            shape = RoundedCornerShape(8.dp),
+                                            color = if (selected) dialogRowSelectedInk().copy(alpha = 0.18f)
+                                                   else MaterialTheme.colorScheme.surfaceVariant
+                                        ) {
+                                            CurioIcon(
+                                                name = CurioIcons.Close,
+                                                contentDescription = "Cancel download ${model.displayName}",
+                                                tint = if (selected) dialogRowSelectedInk()
+                                                       else MaterialTheme.colorScheme.onSurfaceVariant,
+                                                size = 16.dp,
+                                                modifier = Modifier.padding(6.dp)
+                                            )
+                                        }
+                                    }
+                                }
+                                downloaded -> {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Text(
+                                            (if (selected) "In use" else "Downloaded") + " · " + VoskModels.formatModelSize(realSize),
+                                            style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
+                                            color = if (selected) dialogRowSelectedInk()
+                                                   else MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                        Spacer(Modifier.width(8.dp))
+                                        Surface(
+                                            onClick = {
+                                                VoskModels.deleteModel(context, model.id)
+                                                if (AppPreferences.getOfflineModelId(context) == model.id) {
+                                                    AppPreferences.setOfflineModelId(context, "")
+                                                }
+                                            },
+                                            shape = RoundedCornerShape(8.dp),
+                                            color = if (selected) dialogRowSelectedInk().copy(alpha = 0.18f)
+                                                   else MaterialTheme.colorScheme.surfaceVariant
+                                        ) {
+                                            CurioIcon(
+                                                name = CurioIcons.Delete,
+                                                contentDescription = "Delete ${model.displayName}",
+                                                tint = if (selected) dialogRowSelectedInk()
+                                                       else MaterialTheme.colorScheme.onSurfaceVariant,
+                                                size = 16.dp,
+                                                modifier = Modifier.padding(6.dp)
+                                            )
+                                        }
+                                    }
+                                }
+                                failed -> {
+                                    TextButton(
+                                        onClick = { VoskModelDownloads.start(context, model) },
+                                        contentPadding = PaddingValues(horizontal = 8.dp)
+                                    ) {
+                                        Text(
+                                            "Retry",
+                                            fontWeight = FontWeight.Bold,
+                                            color = if (selected) dialogRowSelectedInk() else curioDialogActionColor()
+                                        )
+                                    }
+                                }
+                                else -> {
+                                    TextButton(
+                                        onClick = {
+                                            // v138 — big models (and any model
+                                            // too large for the free space) confirm
+                                            // first with the required vs free sizes.
+                                            val free = VoskModels.availableStorageBytes(context)
+                                            if (model.sizeBytes >= BIG_MODEL_BYTES || free < model.sizeBytes) {
+                                                pendingBigDownload = model
+                                            } else {
+                                                VoskModelDownloads.start(context, model)
+                                            }
+                                        },
+                                        contentPadding = PaddingValues(horizontal = 8.dp)
+                                    ) {
+                                        Text(
+                                            "Download",
+                                            fontWeight = FontWeight.Bold,
+                                            color = if (selected) dialogRowSelectedInk() else curioDialogActionColor()
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            Spacer(Modifier.height(20.dp))
+
+            // v138 — storage confirmation before a big download starts:
+            // required size vs free space (red when it won't fit).
+            pendingBigDownload?.let { model ->
+                val free = VoskModels.availableStorageBytes(context)
+                val enough = free >= model.sizeBytes
+                AlertDialog(
+                    onDismissRequest = { pendingBigDownload = null },
+                    containerColor = curioDialogContainerColor(),
+                    shape = CurioDialogShape,
+                    title = { Text("Download ${model.displayName}?", fontWeight = FontWeight.ExtraBold) },
+                    text = {
+                        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                            Text(
+                                "This model needs ${VoskModels.formatModelSize(model.sizeBytes)} of storage.",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                            Text(
+                                if (enough) "You have ${VoskModels.formatModelSize(free)} free. Go ahead."
+                                else "Only ${VoskModels.formatModelSize(free)} free. The download will likely fail, so free up space first.",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = if (enough) MaterialTheme.colorScheme.onSurfaceVariant
+                                        else MaterialTheme.colorScheme.error
+                            )
+                        }
+                    },
+                    confirmButton = {
+                        CurioGlassWindowBlur()
+                        TextButton(
+                            onClick = {
+                                pendingBigDownload = null
+                                VoskModelDownloads.start(context, model)
+                            },
+                            colors = curioDialogActionButtonColors()
+                        ) { Text("Download", fontWeight = FontWeight.Bold) }
+                    },
+                    dismissButton = {
+                        TextButton(onClick = { pendingBigDownload = null }) { Text("Cancel") }
+                    }
+                )
+            }
+        }
+    }
+}

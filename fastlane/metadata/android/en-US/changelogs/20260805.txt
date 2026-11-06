@@ -1,0 +1,1 @@
+• New Pastel colors mode (Settings → Appearance): every category accent, the mixed-deck blends and the page tints soften to airy pastels in light mode and muted deep pastels in dark, with matching ink on every button, card, chip and hero

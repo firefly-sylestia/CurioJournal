@@ -1,0 +1,20 @@
+• Mood board: drag a tile to the top zone to pin it to the front
+• Clear board action in the expanded mood board editor
+• Richer mixed-deck colors: verified premium blends for every pair and triple of categories, plus order-independent blends for bigger mixes
+• Multi-select decks now show as a "Mixed" category — sparkles glyph, blended accent, and a Mixed · N badge — instead of the first picked category
+• Spin: bigger peek cards behind the shuffle card, and Categories/Filter back to filled pill buttons
+• Review stars get an outline (solid fill + crisp stroke)
+• Home tint removed (plain background); Cabinet keeps its chips but drops the page wash
+• Dark mode rose/coral tint deepened to a rich burgundy
+• Removed the now-redundant Home tint toggle from Settings (Home is always plain now)
+• Multi-select category confirm button now says Mix (with count) instead of Done
+• Category picker: unselected cards now show soft category tints and pop bright when selected
+• Cabinet filter chips: neutral inactive color that never re-tints when you switch categories
+• Spin deck: bigger peek cards so the topic title reads, plus a gentler, subtler card bounce
+• Editing an entry: leaving with unsaved edits now offers Save and switch, Keep editing, or Discard
+• Editing an entry: removing a take with drafted content now asks for confirmation first
+• Dark mode: category cards and chips wear a clearer, more visible category tint (deep shades, same as light mode)
+• Bottom nav bar blends with the category tint on the Spin screen (Home and Cabinet stay plain)
+• Fixed navigation from the Cabinet empty state: Shuffle now switches tabs cleanly instead of corrupting the back stack
+• Fixed a build issue with the category picker's idle card tint
+• Mood board editor: removing a tile via its × now asks for confirmation first

@@ -1,0 +1,393 @@
+package com.curio.app
+
+import android.content.Intent
+import android.os.Bundle
+import androidx.activity.ComponentActivity
+import androidx.activity.compose.setContent
+import androidx.activity.enableEdgeToEdge
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.remember
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.Density
+import androidx.lifecycle.lifecycleScope
+import android.net.Uri
+import com.curio.app.data.AppPreferences
+import com.curio.app.data.CaptureRepository
+import com.curio.app.data.CurioBackupManager
+import com.curio.app.data.CurioDatabase
+import com.curio.app.data.CurioPet
+import com.curio.app.data.CurioQuests
+import com.curio.app.data.CurioRepositoryHolder
+import com.curio.app.data.ExploreSessionStore
+import com.curio.app.data.IncursionStore
+import com.curio.app.data.PersonalRepositoryHolder
+import com.curio.app.data.RecycleBinExpiry
+import com.curio.app.data.TopicJsonLoader
+import com.curio.app.data.VoskModels
+import com.curio.app.data.TopicProgressStore
+import com.curio.app.data.UpdateChecker
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import com.curio.app.infrastructure.CurioCrashReporter
+import com.curio.app.infrastructure.ExploreSessionService
+import com.curio.app.features.community.SocialNotificationWatcher
+import com.curio.app.navigation.CurioNavHost
+import com.curio.app.navigation.PendingCommunityOpen
+import com.curio.app.navigation.PendingDirectMessageOpen
+import com.curio.app.navigation.PendingEntryOpen
+import com.curio.app.navigation.PendingSpinOpen
+import com.curio.app.ui.CurioLayout
+import com.curio.app.ui.theme.CurioTheme
+import com.curio.app.ui.theme.CurioThemeTransitionHost
+
+/**
+ * Curio's single Activity — see Curio design contract.
+ *
+ * Hosts the entire app via [CurioNavHost] inside [CurioTheme]. Edge-to-edge
+ * is enabled so the splash background and bottom-nav surface extend behind
+ * the system bars (M3 expressive + the spec's "warm cream" feel).
+ *
+ * Installs [TopicJsonLoader] before any Compose code runs so the loader
+ * has access to the AssetManager. Topic JSONs are read lazily on first
+ * access; screens load only the category data they need.
+ */
+class MainActivity : ComponentActivity() {
+
+    private companion object {
+        // Auto-backup fallback cadence — overridden per-launch by the
+        // user's chosen frequency (Settings → Backup & restore).
+        const val AUTO_BACKUP_INTERVAL_MILLIS = 24L * 60 * 60 * 1000
+    }
+
+    /**
+     * v227c — run the auto backup when it's DUE: enabled + destination
+     * saved + the user-chosen frequency elapsed. Called from onCreate AND
+     * onResume so a long-lived process still backs up on schedule (the old
+     * onCreate-only hook could go days without firing while Android kept
+     * the process warm). The due-date gate makes repeat calls no-ops.
+     */
+    private fun runAutoBackupIfDue() {
+        if (!AppPreferences.isAutoBackupEnabled(this)) return
+        val autoUri = AppPreferences.getAutoBackupUri(this)
+        if (autoUri.isBlank()) return
+        val interval = AppPreferences.getAutoBackupFrequencyDays(this)
+            .coerceAtLeast(1) * AUTO_BACKUP_INTERVAL_MILLIS
+        val lastAuto = AppPreferences.getAutoBackupLastAtMillis(this)
+        if (lastAuto != 0L && System.currentTimeMillis() - lastAuto < interval) return
+        lifecycleScope.launch {
+            withContext(kotlinx.coroutines.Dispatchers.IO) {
+                runCatching {
+                    CurioBackupManager.export(this@MainActivity, Uri.parse(autoUri))
+                    AppPreferences.setAutoBackupLastAtMillis(this@MainActivity, System.currentTimeMillis())
+                }
+            }
+        }
+    }
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        enableEdgeToEdge()
+        super.onCreate(savedInstanceState)
+
+        // A "Done exploring" notification action may carry the topic to open,
+        // and the daily-reminder tap may carry a spin-deck request
+        // (cold-start path) — stash both for the NavHost to navigate to once
+        // the splash settles on HOME. Gated on a FRESH process (no saved
+        // instance state): recreation (rotation / process-death restore)
+        // re-delivers the same intent and would otherwise re-trigger the
+        // navigation over a state the user already has on screen.
+        if (savedInstanceState == null) {
+            PendingEntryOpen.capture(intent)
+            PendingSpinOpen.capture(intent)
+            PendingDirectMessageOpen.capture(intent)
+            PendingCommunityOpen.capture(intent)
+        }
+
+        // Wire the asset manager into the topic loader before any Compose
+        // code runs. Must happen here (not in SplashScreen's LaunchedEffect)
+        // because CurioNavHost routes are resolved synchronously on first
+        // composition, before the splash coroutine has a chance to run.
+        TopicJsonLoader.install(this)
+
+        // Shared Coil ImageLoader with an EXPLICIT memory + disk cache so the
+        // fetched book covers (and any other network image) download ONCE and
+        // are served from disk on every later visit — including app restarts.
+        // respectCacheHeaders(false) stops servers' no-cache headers from
+        // busting the cache every open.
+        // Coil's setImageLoader may only run once per process (it throws if
+        // the singleton was already created — e.g. on Activity recreation), so
+        // guard it: the first call installs our caching loader, and any later
+        // call falls back to the existing singleton (which already has Coil's
+        // own memory + disk caches).
+        runCatching {
+            coil.Coil.setImageLoader(
+                coil.ImageLoader.Builder(this)
+                    .crossfade(true)
+                    .memoryCache {
+                        coil.memory.MemoryCache.Builder(this)
+                            .maxSizePercent(0.22)
+                            .build()
+                    }
+                    .diskCache {
+                        coil.disk.DiskCache.Builder()
+                            .directory(java.io.File(cacheDir, "curio_image_cache"))
+                            .maxSizePercent(0.03)
+                            .build()
+                    }
+                    .components { add(coil.decode.SvgDecoder.Factory()) }
+                    .build()
+            )
+        }
+
+        // Initialize Room once per process. The repository mutex also protects
+        // cold starts, while this guard prevents a fresh Activity from
+        // scheduling another import/read cycle.
+        if (!com.curio.app.data.TopicRepository.isInitialized()) {
+            lifecycleScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+                com.curio.app.data.TopicRepository.init(this@MainActivity)
+            }
+        }
+
+        // Initialize crash reporter before anything else
+        CurioCrashReporter.init(this)
+
+        // Initialize Room database and repository singleton
+        val db = CurioDatabase.getInstance(this)
+        CurioRepositoryHolder.init(db.captureDao(), db.cachedTopicDao())
+        // v387 — the personal writing store (journals, books, chapter
+        // reviews). Installed here with the capture repository so every
+        // personal screen (Home chips, journals, the book shelf, the
+        // Cabinet's personal shelf) can read it without touching the DB
+        // singleton itself.
+        PersonalRepositoryHolder.init(db.personalDao())
+        // v27 — auto-delete recycle-bin captures that passed their retention
+        // window (runs again whenever the recycle bin opens).
+        lifecycleScope.launch { RecycleBinExpiry.purgeExpired(this@MainActivity) }
+
+        // v158 — the Full server-grade Vosk models were removed from the
+        // catalog (they lagged and crashed phones): prune any already-
+        // installed one and clear a stale selection so transcription can
+        // never load a removed model again.
+        VoskModels.pruneRemovedModels(this)
+
+        AppPreferences.initThemeMode(this)
+        // v461 — and Home's two writing rows, from the same place and for the same
+        // reason: a switch that is only read from prefs would leave the row on
+        // screen until the next launch.
+        AppPreferences.initHomeRows(this)
+        // Load the persisted explore-session flow state (active session +
+        // recently explored/unexplored lists) before any screen reads it.
+        ExploreSessionStore.seed(this)
+        // ── v473 — A READING THAT IS NOT RUNNING HOLDS NOTHING ───────────────
+        //
+        // The member: *"the curio is now staying in active apps in background even
+        // though nothing is being played or active notifications"*. The read-aloud
+        // keep-alive is a foreground service, and this is the reconciliation that
+        // makes opening the app the last word on it: the LIVE session is process
+        // state, so if this process has none there is no reading to keep alive —
+        // whatever pinned those threads is finished, and any notification a paused
+        // reading had detached (which the system never removes on its own) goes with
+        // it, because the service cancels it in `onDestroy`. A reading that IS live
+        // is left exactly as it is: this only ever takes down what has nothing behind
+        // it.
+        if (!com.curio.app.infrastructure.ReadAloudSession.active) {
+            com.curio.app.infrastructure.ReadAloudService.stop(this)
+        }
+        // v29 — load per-topic reading/watching progress before any screen
+        // (reveal / Cabinet / detail) reads it.
+        TopicProgressStore.seed(this)
+        // v29 — prewarm the topic catalog in the background so the Topic
+        // Database opens with ZERO loading: the merged index (search keys +
+        // years; v174f builds it at runtime from the per-category pools —
+        // the 23MB prebuilt asset no longer ships) is built once here, and
+        // the per-category pools land in the loader cache while the user
+        // does anything else. Both are cached, so screens read them instantly.
+        // v55 — NonCancellable: a rotation (activity destroy) mid-warmup
+        // used to cancel loadIndex and restart the whole parse; the warm-up
+        // now runs to completion regardless (parses are bounded by the
+        // loader's gate, so it can't hog the CPU).
+        // v389 — this warm-up STAYS, and it is now the trade it always claimed
+        // to be. The merged index no longer holds the topic objects (see
+        // TopicIndexEntry), so the per-lane pools it used to pin ARE released by
+        // TopicJsonLoader.shedForMemory on a memory trim — which is the honest
+        // fix for "background memory climbs sharply". Deleting the warm-up
+        // instead (the earlier "keep the catalog cold" attempt) moved the same
+        // parse onto the busy path of the screens and left Home's Topics stat,
+        // the reveal's first-frame resolve and TopicCatalog.findByName reading a
+        // cache nothing had filled.
+        lifecycleScope.launch {
+            withContext(kotlinx.coroutines.NonCancellable) {
+                runCatching { TopicJsonLoader.loadIndex() }
+                runCatching { TopicJsonLoader.preloadAll() }
+            }
+        }
+
+        // v348 — warm the Cabinet's entry snapshot the same way. The Cabinet
+        // seeds itself from [CaptureRepository.peekLight], which is only
+        // non-empty once SOMETHING has collected the light flow — so a cold
+        // start straight into Cabinet showed a skeleton while the first Room
+        // read landed. Collecting it once here fills the snapshot before the
+        // user can navigate there; later changes keep flowing to screens
+        // through their own collectors (the repository's decode cache makes
+        // the shared emissions cheap). Softly cancelled on teardown — a
+        // process that dies mid-warm simply re-reads on the next open.
+        lifecycleScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+            runCatching {
+                // The warm-up's effect lives inside the flow's map (the
+                // repository caches each emission); the collector body is
+                // deliberately empty.
+                CurioRepositoryHolder.repo.observeLight().collect { }
+            }
+        }
+        // v53 — update notifier on app start: a toast whenever a check finds
+        // a newer release, and a notification ONCE per version (never
+        // re-notified for the same tag). Offline/failures are silent.
+        // OPT-IN: Curio is offline-first, so the background check (which
+        // costs data every launch) only runs when the Updates page toggle is
+        // ON. The manual check on the Updates page always works.
+        if (AppPreferences.isUpdateCheckerEnabled(this)) {
+            lifecycleScope.launch {
+                runCatching { UpdateChecker.notifyIfUpdateAvailable(this@MainActivity) }
+            }
+        }
+        // Auto backup: when enabled with a saved destination, write a
+        // backup there automatically — throttled to the user's chosen
+        // frequency so a frequent launch never spams the drive. Runs in the
+        // background; failures are silent (the manual "Back up now" path
+        // remains authoritative).
+        runAutoBackupIfDue()
+        // Load the persisted quests/levels state (XP, journey, daily quests,
+        // achievements) before any screen reads it.
+        CurioQuests.seed(this)
+        // v425 — THE SIGNED-IN SESSION IS PART OF THE LAUNCH, not of whichever
+        // screen happens to be opened. [OnlineAccount.restore] was only ever
+        // called by the Online Mode / Privacy / Community screens, so on a cold
+        // start "signed in" was a state the app discovered late: the feedback
+        // form's read (which needs the member's own token) saw no account and
+        // stayed empty until a trip through Settings restored one. Restore is
+        // idempotent and keeps only the application context, so seeding it here
+        // simply means a returning member is signed in from the first frame —
+        // the same reason [SocialNotificationReceiver] calls it itself.
+        com.curio.app.data.supabase.OnlineAccount.restore(this)
+        // v8.14 — the pet wakes on its own in the morning (and stays tucked
+        // in at night); afternoon/evening launches keep asleep-until-tapped.
+        CurioPet.wakeForMorning()
+        if (AppPreferences.isReminderEnabled(this)) {
+            com.curio.app.data.DailyReminderScheduler.schedule(
+                this,
+                AppPreferences.getReminderHour(this),
+                AppPreferences.getReminderMinute(this)
+            )
+        }
+        setContent {
+            // v510 — THE APP READS ONE STEP SMALLER, IN EVERY WINDOW.
+            //
+            // The member, of landscape: *"many things feels too big in buttom
+            // sheets and dialog box etc … and make everything smaller and
+            // compact"*, and then, of the fix: *"smaller 90% also overllay make
+            // everything a little smaller in portraight too. like just a little"*.
+            //
+            // One reader instead of a hundred paddings: the composition's DENSITY
+            // is re-provided with a font scale of 90% in a compact window
+            // (landscape, or a body under 520dp tall) and 97% everywhere else. dp
+            // spacing is untouched — only `sp` type shrinks — so every theme,
+            // sheet, dialog, list and page inherits it at once and no layout is
+            // rebuilt around it. `fontScale` is MULTIPLIED, not replaced, so a
+            // member's own system text size still scales from their setting.
+            val windowDensity = LocalDensity.current
+            val compactWindow = CurioLayout.isCompact()
+            val readingDensity = remember(windowDensity, compactWindow) {
+                val step = if (compactWindow) 0.90f else 0.97f
+                Density(windowDensity.density, windowDensity.fontScale * step)
+            }
+            CompositionLocalProvider(LocalDensity provides readingDensity) {
+                CurioTheme {
+                    CurioThemeTransitionHost {
+                        CurioNavHost()
+                    }
+                // v389 — INCURSION's one announcement. Composed at the root,
+                // over whatever page the member happened to type the phrase in,
+                // because the door it opens is on Home and they are somewhere
+                // else. It draws nothing at all until the lock is offered and
+                // accepted.
+                com.curio.app.features.incursion.IncursionUnlockReveal()
+                // v3xx54 — social arrivals while the app is alive (a friend's
+                // message, a new community post). It no-ops unless the user is
+                // signed in, Online Mode is on, and the Notifications switch
+                // is on, so an offline user never pays for it.
+                SocialNotificationWatcher()
+                // v437 — ONE frame clock for every animated social face (see
+                // [BlobatarIdleClock]). Composed once, at the root, because N
+                // faces must not mean N frame loops: it draws nothing, does
+                // nothing until a face asks to move, and stops the moment the
+                // last one leaves the screen.
+                com.curio.app.features.community.BlobatarIdleClock()
+                } // CurioTheme
+            } // CompositionLocalProvider (the compact window's reading density)
+        }
+    }
+
+    override fun onTrimMemory(level: Int) {
+        super.onTrimMemory(level)
+        // Topic catalogs are immutable and reloadable. Release the process
+        // cache when Android reports real running-low pressure instead of
+        // retaining every parsed topic object through the next screen.
+        // v55 — the shed is TIERED inside the loader (pools at RUNNING_LOW,
+        // the heavy 16k-entry index only at RUNNING_CRITICAL+) so a trim
+        // never triggers a full re-parse storm that lags + heats the device.
+        if (level >= android.content.ComponentCallbacks2.TRIM_MEMORY_RUNNING_LOW) {
+            TopicJsonLoader.shedForMemory(level)
+        }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        // v227c — warm starts re-check the auto-backup schedule too (a
+        // process kept alive by Android would otherwise skip its due date).
+        runAutoBackupIfDue()
+        // v29 — re-seed progress on every resume: a killed-in-background
+        // process could otherwise show stale progress until a full restart
+        // (the vanish-then-reappear-after-restart symptom). The read is a
+        // tiny prefs load and the in-memory state is always newer-or-equal.
+        TopicProgressStore.seed(this)
+        // v389 — the hidden Incursion page's two facts: whether it has been
+        // unlocked on this device, and where each title stands. One small prefs
+        // read; nothing here touches the topic catalog or the database.
+        IncursionStore.seed(this)
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        // v226 — closing the app auto-pauses the running explore session so
+        // the timer stops counting while Curio is closed (the paused state
+        // is what makes it resumable from Home / the return prompt instead
+        // of silently burning minutes in a drawer). Configuration changes
+        // (rotation, fold, dark-mode flip) are excluded — isFinishing is
+        // false on a recents-swipe destroy too, so this also covers the
+        // swipe-the-app-away path.
+        if (!isChangingConfigurations) {
+            val session = ExploreSessionStore.getActiveSession(this)
+            if (session != null && !session.paused) {
+                ExploreSessionStore.pauseSession(this)
+                // Re-arm the service so the shade flips to its Paused
+                // readout instead of ticking a chronometer that the frozen
+                // session no longer agrees with.
+                ExploreSessionStore.getActiveSession(this)?.let { paused ->
+                    if (AppPreferences.exploreServiceShouldRun(this)) {
+                        ExploreSessionService.start(this, paused)
+                    }
+                }
+            }
+        }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        // Warm-start path: the activity was already running, so pending
+        // notification targets arrive here instead of onCreate.
+        PendingEntryOpen.capture(intent)
+        PendingSpinOpen.capture(intent)
+        PendingDirectMessageOpen.capture(intent)
+        PendingCommunityOpen.capture(intent)
+    }
+}

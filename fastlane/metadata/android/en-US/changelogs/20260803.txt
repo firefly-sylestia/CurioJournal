@@ -1,0 +1,15 @@
+• Note paper got real texture — faint grain and creases like a crumpled sheet smoothed back out, richer coffee rings, and a deeper folded corner; torn notes can now also carry coffee stains or a folded dog-ear
+• Spin sizing is now two-way and tunable — low-density phones get a smaller deck, high-density phones a roomier one (Settings → Experimental → Smart density layout)
+• Profile and Settings got a full redesign — a quest-card hero with your stats, level, and lanes, and a Settings screen grouped into General, Preferences, Data, Experimental, and Support
+• Spin now fits every screen: low-density phones stay compact automatically, and very short screens shrink the deck and move Categories/Filter to the edges — tunable in Settings → Experimental
+• Spin: top peek cards now drop down into the deck while bottom peeks rise up — softer, slower glides make the reel smooth instead of a fast hard wipe
+• Tapping “Done exploring” on the timer notification opens Curio straight to the write-it-down page, and Back returns home instead of exiting
+• Backing out of a capture with any draft now offers Save and switch, Keep editing, or Discard — optional fields (rating, images, captions) are protected too
+• Switching formats keeps your draft: Save and switch, or switch and clear
+• Mood board captures now have the "How did it make you feel?" mood picker
+• Bold/italic/highlight and paper-style icons are clearly visible in dark and AMOLED mode
+• Exploring shows a floating timer bubble that hovers over other apps — pause, stop, or hide it, long topic names slowly scroll across it, and Curio asks for the Display over other apps permission in setup and when you explore
+• Optional live explore notification with Pause/Resume controls (Settings → Notifications), now tinted with a short timer readout
+• Topic cards show the creator — Artist · The Beatles, Author · George Orwell, Director · Christopher Nolan, Painter · Vincent van Gogh
+• Film filters now include Hollywood and Bollywood, plus a new batch of iconic Bollywood films and directors
+• Spin feels like a real shuffle — peek cards glide through the deck in a smooth reel and the dice settles into place when the spin lands

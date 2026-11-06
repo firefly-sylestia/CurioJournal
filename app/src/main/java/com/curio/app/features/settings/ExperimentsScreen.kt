@@ -1,0 +1,647 @@
+package com.curio.app.features.settings
+
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import androidx.navigation.NavController
+import com.curio.app.data.AppPreferences
+import com.curio.app.data.CategoryId
+import com.curio.app.data.CurioCategories
+import com.curio.app.data.CurioRecall
+import com.curio.app.data.CurioTimeCapsules
+import com.curio.app.navigation.CurioRoutes
+import com.curio.app.ui.adaptive.isWide
+import com.curio.app.ui.adaptive.wideContentEdgePadding
+import com.curio.app.ui.adaptive.windowWidthSizeClass
+import com.curio.app.ui.components.CurioSettingsDivider
+import com.curio.app.ui.components.CurioWatermarkBackdrop
+import com.curio.app.ui.components.liquidglass.CurioGlassWindowBlur
+import com.curio.app.ui.theme.CurioDialogShape
+import com.curio.app.ui.theme.CurioIcons
+import com.curio.app.ui.theme.curioDialogActionButtonColors
+import com.curio.app.ui.theme.curioDialogContainerColor
+import com.kyant.backdrop.backdrops.layerBackdrop
+import com.kyant.backdrop.backdrops.rememberLayerBackdrop
+
+/**
+ * Experimental controls live here instead of inside Appearance. Each switch
+ * keeps its existing preference and remains independently reversible.
+ */
+@Composable
+fun ExperimentsScreen(navController: NavController) {
+    val context = LocalContext.current
+    // v27v — the ring-style picker (Coil spring / Split ring / Oblique coil).
+    var showRingStylePicker by remember { mutableStateOf(false) }
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            // v30 — "Hero follows Spin lane": the page wears the lane wash.
+            // v31 — settings-family pages wear the soft page tint (a small
+            // rose-lean of the background shade; the spin-lane wash when
+            // Adaptive Hero is on) instead of the plain cream background.
+            .background(heroPageBackground(androidx.compose.ui.graphics.lerp(MaterialTheme.colorScheme.background, settingsRoseAccent(), 0.10f)))
+    ) {
+        // ── Watermark backdrop — muted category glyphs behind the content
+        // (wildcard sparkle leads; experiments are category-neutral).
+        // v7.76 — the flat rows below the hero sit directly on this
+        // backdrop, so the glyphs drop to a faint whisper and the text,
+        // headers and chips always read first.
+        // Wide windows: the NavHost's full-bleed collage replaces the page's
+        // own backdrop so there is ONE continuous collage, not a double.
+        if (!windowWidthSizeClass().isWide) {
+            CurioWatermarkBackdrop(
+                activeCat = CurioCategories.byId(CategoryId.WILDCARD),
+                alphaScale = 0.45f
+            )
+        }
+        // RESTORED (user request) — STICKY HERO: the banner is pinned on top
+        // of the page and rows scroll UP BEHIND the ragged tear. The list
+        // records into a local capture so the hero's back pill can wear REAL
+        // liquid glass (rows bending through it) — the pill itself lives
+        // OUTSIDE this capture, so no self-sample cycle.
+        val listState = rememberLazyListState()
+        val glassBackdrop = rememberLayerBackdrop()
+        // v-tablet — the torn hero is NOT sticky on wide windows (landscape
+        // tablet): it leads the list as its first item and scrolls away with
+        // it; the pinned glass overlay stays phone-only.
+        val wide = windowWidthSizeClass().isWide
+        LazyColumn(
+            state = listState,
+            modifier = Modifier.layerBackdrop(glassBackdrop).fillMaxSize(),
+            contentPadding = PaddingValues(start = wideContentEdgePadding(), end = wideContentEdgePadding(), top = if (wide) 0.dp else SettingsHeroTotalHeight, bottom = 24.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            if (wide) {
+                item(key = "hero", contentType = "hero") {
+                    SettingsHeroHeader(
+                        title = "Dev page",
+                        subtitle = "Experimental features and developer options",
+                        onBack = { navController.popBackStack() }
+                    )
+                }
+            }
+            // v3xx — the shared settings nav rail: switch sections without
+            // going back to the hub (the open page sits in the 2nd slot).
+            item(key = "settings-nav", contentType = "settings-nav") {
+                SettingsNavRail(
+                    active = "experiments",
+                    onSelect = { navigateToSettingsSection(navController, it) },
+                    navController = navController
+                )
+            }
+            // v223 — the "Spin visuals" section is GONE: all five
+            // experiments (Main card shadow, Nav-style buttons, Top-lit deck
+            // cards, Tinted deck edges, Roomier deck titles) CONCLUDED with
+            // the new look ON — their toggles were removed and the reads in
+            // SpinScreen are hardcoded true. The v25 Deck & controls card was
+            // already gone (3D shuffle button always on, Pastel crown depth
+            // passed), and v24 removed the Layout & input section.
+
+            // v427 — THE SOURCE-FETCH LAB (member's request: "add a api test
+            // fetching in dev settings", and — asked which sources — "Every
+            // content source"). It sits FIRST on this page because it is the one
+            // section here that answers a question rather than changing the app:
+            // one fixed query per content source, with the raw answer under it.
+            // See SourceFetchLab.kt for the contract (the URLs are the app's own,
+            // a keyed door says so instead of firing a 401, and nothing is
+            // persisted).
+            item { SourceFetchLabSection() }
+
+            // v431 — THE READING SETTINGS, on the Dev page for now. The member
+            // asked for the reader's own settings to be reachable from the
+            // settings side too, and for the door to be wired here first ("wire it
+            // in dev exp for now"). The PAGE is the reader's — its own paper, its
+            // own ink, its own pills, never the settings family's ("dont use
+            // settings style use the reader style ui for it") — so this row is
+            // only a door. See ReaderSettingsScreen.kt.
+            item { SettingsSectionHeading("Reading") }
+            item {
+                SettingsOptionCard {
+                    Column(modifier = Modifier.fillMaxWidth()) {
+                        // v492 — THE PENCIL MARGIN. Off removes the reader's own
+                        // Margin door from the ⋯ grid, which is then exactly
+                        // the six tiles it was; ink already written is kept and
+                        // comes back the moment it is switched on again.
+                        ExperimentSwitchRow(
+                            "Pencil margin",
+                            "Write in a book's margin with your finger — the reader's ⋯ menu has a Margin door that opens a strip over the page's edge, and what you scrawl is kept per page, in the book. Off removes that door; nothing already written is lost.",
+                            AppPreferences.readerMarginState
+                        ) { wanted -> AppPreferences.setReaderMarginEnabled(context, wanted) }
+                    }
+                }
+            }
+            item {
+                SettingsOptionCard {
+                    SettingsOptionRow(
+                        CurioIcons.MenuBook,
+                        "Reading settings",
+                        "Paper, type, face, orientation and the page's tap zones"
+                    ) { navController.navigate(CurioRoutes.READER_SETTINGS) }
+                    // ── v469 — AND THE READ-ALOUD SETTINGS, ONE DOOR IN ──────
+                    //
+                    // They were a section of the Reading page and are a page of
+                    // their own now (the member: *"the read aloud settings from the
+                    // setting page … its own screen"*), so the settings side needs
+                    // a door of its own to them — this one, beside the Reading one,
+                    // because they are the same family: the reader's own world,
+                    // opened from here until the app grows a real Reading hub.
+                    CurioSettingsDivider()
+                    SettingsOptionRow(
+                        CurioIcons.PlayArrow,
+                        "Read aloud",
+                        "Speed, engine, voice, narrator and the voice packs"
+                    ) { navController.navigate(CurioRoutes.READ_ALOUD_SETTINGS) }
+                }
+            }
+
+            // v293 — LIQUID GLASS + PILL GLOW moved here from Appearance.
+            item { SettingsSectionHeading("Liquid glass") }
+            item {
+                SettingsOptionCard {
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    ExperimentSwitchRow("Liquid glass", "Refracting glass on the nav bar and floating pills (real on Android 12+, simulated on older devices)", AppPreferences.liquidGlassPillsState) {
+                        AppPreferences.setLiquidGlassPillsEnabled(context, it)
+                    }
+                    if (AppPreferences.liquidGlassPillsState) {
+                        CurioSettingsDivider()
+                        // v482/v487 — the FROSTED look (default ON): a heavy,
+                        // real blur under a thin tint of the surface's own colour,
+                        // so text on the glass stays crisp. Turning it off returns
+                        // the clear refracting glass.
+                        ExperimentSwitchRow("Frosted glass", "A heavy, real blur with only a thin tint on top — the page behind reads as soft, out-of-focus glass and anything drawn on the glass stays sharp. Reaches bottom sheets and dialogs too, and blurs the page behind them.", AppPreferences.glassFrostedState) {
+                            AppPreferences.setGlassFrostedEnabled(context, it)
+                        }
+                        CurioSettingsDivider()
+                        ExperimentSwitchRow("Force glass", "Bypass device capability checks and always enable glass", AppPreferences.forceGlassEnabled) {
+                            AppPreferences.setForceGlassEnabled(context, it)
+                        }
+                        if (!AppPreferences.glassFrostedState) {
+                        CurioSettingsDivider()
+                        ExperimentSwitchRow("Clear glass", "Less frost, stronger refraction. Glass reads clear, like the glow under your finger", AppPreferences.glassClarityState) {
+                            AppPreferences.setGlassClarityEnabled(context, it)
+                        }
+                        }
+                        CurioSettingsDivider()
+                        var showGlassTuning by remember { mutableStateOf(false) }
+                        SettingsOptionRow(
+                            CurioIcons.Tune,
+                            "Tune glass",
+                            "Reflection, refraction and blur, with a live preview"
+                        ) { showGlassTuning = true }
+                        if (showGlassTuning) {
+                            GlassTuningDialog(onDismiss = { showGlassTuning = false })
+                        }
+                    }
+                }
+                }
+            }
+            // v3xx — CABINET v2 experiment (default OFF): the saved-entries +
+            // liked-books surfaces render as collections with jacket-art
+            // covers, and Home's Save shortcut repoints into the new view —
+            // only while this toggle is on (see the AppPreferences state).
+            item { SettingsSectionHeading("Cabinet v2") }
+            item {
+                SettingsOptionCard {
+                    Column(modifier = Modifier.fillMaxWidth()) {
+                        ExperimentSwitchRow(
+                            "Cabinet v2 collections",
+                            "Experimental: saved discoveries and liked books / series live in a new collections view with jacket-art covers (books half-book, albums square, series poster — never stretched). While on, Home's Save shortcut leads here; the old view returns when you turn it off.",
+                            AppPreferences.cabinetV2EnabledState
+                        ) { wanted -> AppPreferences.setCabinetV2Enabled(context, wanted) }
+                    }
+                }
+            }
+            // v3xx — the "Subtle pill glow" experiment concluded: subtle is
+            // the always-on default (toggle removed).
+            // v3xx — the app-wide HEADER STYLE: torn paper banner (default)
+            // or the content-height glass toolbar (the old Cabinet v2 look,
+            // more blurry + its own tint). Applies to every Settings/Cabinet
+            // hero plus Home and Profile (Spin keeps its own chrome).
+            item { SettingsSectionHeading("Headers") }
+            item {
+                SettingsOptionCard {
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    ExperimentSwitchRow(
+                        "Glass toolbar header",
+                        "Swap the torn paper banners for a content-height liquid-glass bar (more blur, own tint) across Settings, Cabinet, Home and Profile",
+                        AppPreferences.headerStyleState == AppPreferences.HeaderStyle.GLASS
+                    ) {
+                        AppPreferences.setHeaderStyle(
+                            context,
+                            if (it) AppPreferences.HeaderStyle.GLASS else AppPreferences.HeaderStyle.TORN
+                        )
+                    }
+                    // v468 — THE FLOATING PILL HEADER.
+                    //
+                    // Two headers already existed and both are a BAR: the torn
+                    // banner and the content-height glass toolbar. This one is a
+                    // small detached capsule instead, and the member asked for it
+                    // in **both orientations**, not just landscape — so the switch
+                    // is the everywhere form and the compact window is the always-on
+                    // one (see `CurioLayout.floatingPillHeader`).
+                    ExperimentSwitchRow(
+                        "Floating pill header",
+                        "A small detached pill (back chevron + title) floating over the page instead of a full-height header. It is always used in landscape and on short windows; this switch turns it on in portrait too.",
+                        AppPreferences.floatingPillHeadersState
+                    ) { wanted -> AppPreferences.setFloatingPillHeadersEnabled(context, wanted) }
+                }
+                }
+            }
+            // ── v496 — NO DECK SECTION: THE RIFFLE IS DELETED ─────────────
+            //
+            // The deck's thumb-drag and the Spin button's pump are gone with the
+            // switch that gated them (the member: *"remove riffle the deck"*).
+
+            // v3xx45 — SCREEN REVEAL experiment (default OFF): opening any
+            // v491 — THE PASSPORT'S STAMP IS PRESSED. Masteries earned before
+            // this version are grandfathered in as already pressed, so off is
+            // exactly the passport that was there before.
+            item { SettingsSectionHeading("Passport") }
+            item {
+                SettingsOptionCard {
+                    Column(modifier = Modifier.fillMaxWidth()) {
+                        ExperimentSwitchRow(
+                            "Press the stamp",
+                            "A lane you master waits for its stamp: bring your thumb down on the cell and the imprint lands with a thunk, squashed and a little crooked. Every stamp on the page is crooked in its own fixed way, like real ink. Off stamps a mastered lane on its own, as before.",
+                            AppPreferences.passportStampState
+                        ) { wanted -> AppPreferences.setPassportStampEnabled(context, wanted) }
+                    }
+                }
+            }
+
+            // screen plays the same feathered iris as the light/dark flip,
+            // centred on your tap, a touch faster than the theme wipe.
+            item { SettingsSectionHeading("Transitions") }
+            item {
+                SettingsOptionCard {
+                    Column(modifier = Modifier.fillMaxWidth()) {
+                        ExperimentSwitchRow(
+                            "Screen reveal transitions",
+                            "Experimental: opening a screen plays the same soft circular reveal as the light/dark flip, growing from where you tapped. Off keeps the current page transitions.",
+                            AppPreferences.screenRevealEnabledState
+                        ) { wanted -> AppPreferences.setScreenRevealEnabled(context, wanted) }
+                    }
+                }
+            }
+            // v489 — THE RETURN: the one measure in Curio tied to RECALL rather
+            // than to actions, and the reason it exists is in
+            // docs/plans/curio-idea-agenda.md §3.1. On by default (the project's
+            // rule for a new measure); the toggle comes out once the behaviour
+            // has settled.
+            item { SettingsSectionHeading("Memory") }
+            item {
+                SettingsOptionCard {
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    ExperimentSwitchRow("The Return", "A topic you finished comes back on a widening schedule — a day, then three, then a week — as one card on Home asking what you still remember. Answering earns more XP than saving does.", AppPreferences.recallEnabledState) {
+                        AppPreferences.setRecallEnabled(context, it)
+                        // Recompute at once: switching it off must clear a due
+                        // card the member is looking at, not leave it until the
+                        // next launch.
+                        CurioRecall.refresh(context)
+                    }
+                    CurioSettingsDivider()
+                    // v493 — THE TIME CAPSULE. It belongs in Memory and not in a
+                    // section of its own: like the Return it is something the
+                    // member gets BACK rather than does, and both are letters
+                    // from their own past. On by default (the project's rule for
+                    // a new measure); the switch comes out once it has settled.
+                    ExperimentSwitchRow(
+                        "Time capsule",
+                        "Write a letter to a future day. Home's \"+\" opens a page with a brass dial for how far ahead, and on the day you set the letter covers the whole screen until you break its wax seal. Off hides the arrival; every letter already sealed is kept and lands when you switch it back on.",
+                        AppPreferences.timeCapsuleEnabledState
+                    ) {
+                        AppPreferences.setTimeCapsuleEnabled(context, it)
+                        // Recompute at once: switching it off must clear a letter
+                        // the member is looking at rather than waiting for a
+                        // relaunch, and switching it on must show one already due.
+                        CurioTimeCapsules.refresh(context)
+                    }
+                }
+                }
+            }
+
+            // v293 — Pet behavior + explore options moved here from Preferences/Recording.
+            item { SettingsSectionHeading("Pet & explore") }
+            item {
+                SettingsOptionCard {
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    // Voice-to-text
+                    ExperimentSwitchRow("Voice-to-text", "Live dictation while typing, and transcription of recordings", AppPreferences.voiceToTextEnabledState) {
+                        AppPreferences.setVoiceToTextEnabled(context, it)
+                    }
+                    // v3xx — the "Live explore notification" experiment
+                    // concluded: always on (toggle removed).
+                    CurioSettingsDivider()
+                    // Pet outside app
+                    ExperimentSwitchRow("Pet outside the app", "Let your pet float over other apps. Long-press to bring it home.", AppPreferences.petOutsideAppState) { wanted ->
+                        if (wanted && !android.provider.Settings.canDrawOverlays(context)) {
+                            runCatching {
+                                context.startActivity(
+                                    android.content.Intent(
+                                        android.provider.Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                                        android.net.Uri.parse("package:" + context.packageName)
+                                    ).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+                                )
+                            }
+                        } else {
+                            AppPreferences.setPetOutsideAppEnabled(context, wanted)
+                            com.curio.app.infrastructure.PetOverlayService.sync(context)
+                        }
+                    }
+                    CurioSettingsDivider()
+                    // Pet chatter segmented row
+                    Column(modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp)) {
+                        Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text("Pet chatter", style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold))
+                                Text("How chatty Curie is", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
+                        }
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                            listOf("Quiet", "Cozy", "Talkative").forEachIndexed { index, label ->
+                                val selected = when (AppPreferences.petChatterState) { "quiet" -> 0; "talkative" -> 2; else -> 1 } == index
+                                Surface(
+                                    onClick = { AppPreferences.setPetChatter(context, when (index) { 0 -> "quiet"; 2 -> "talkative"; else -> "cozy" }) },
+                                    shape = androidx.compose.foundation.shape.RoundedCornerShape(20.dp),
+                                    color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceContainerHighest,
+                                    modifier = Modifier.weight(1f)
+                                ) {
+                                    Text(label, style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold), color = if (selected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface, modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 8.dp), textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+                                }
+                            }
+                        }
+                    }
+                    CurioSettingsDivider()
+                    // Pet games segmented row
+                    Column(modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp)) {
+                        Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text("Pet games", style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold))
+                                Text("How often Curie starts games", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
+                        }
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                            listOf("Relaxed", "Normal", "Eager").forEachIndexed { index, label ->
+                                val selected = when (AppPreferences.petGameFrequencyState) { "relaxed" -> 0; "eager" -> 2; else -> 1 } == index
+                                Surface(
+                                    onClick = { AppPreferences.setPetGameFrequency(context, when (index) { 0 -> "relaxed"; 2 -> "eager"; else -> "normal" }) },
+                                    shape = androidx.compose.foundation.shape.RoundedCornerShape(20.dp),
+                                    color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceContainerHighest,
+                                    modifier = Modifier.weight(1f)
+                                ) {
+                                    Text(label, style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold), color = if (selected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface, modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 8.dp), textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+                                }
+                            }
+                        }
+                    }
+                }
+                }
+            }
+            // v27 — paper & header experiments, all OFF by default.
+            item { SettingsSectionHeading("Paper & headers") }
+            item {
+                SettingsOptionCard {
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    ExperimentSwitchRow("Title cut lines", "Two short lines under header titles", AppPreferences.paperHeaderCutsState) {
+                        AppPreferences.setPaperHeaderCutsEnabled(context, it)
+                    }
+                    CurioSettingsDivider()
+                    ExperimentSwitchRow("Stamped pin holes", "See-through punch holes on the paper stat card (needs the card on)", AppPreferences.paperHeaderHolesState) {
+                        AppPreferences.setPaperHeaderHolesEnabled(context, it)
+                    }
+                    CurioSettingsDivider()
+                    ExperimentSwitchRow("Hole rings", "3D steel rings through the pin holes (needs Stamped pin holes on)", AppPreferences.paperHoleRingsState) {
+                        AppPreferences.setPaperHoleRingsEnabled(context, it)
+                    }
+                    CurioSettingsDivider()
+                    // v27v — pick between the three 3D ring looks; only
+                    // enabled while Hole rings is on.
+                    val ringStyleEnabled = AppPreferences.paperHoleRingsState
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .alpha(if (ringStyleEnabled) 1f else 0.45f)
+                    ) {
+                        SettingsOptionRow(
+                            CurioIcons.Tune,
+                            "Ring style",
+                            when (AppPreferences.paperHoleRingStyleState) {
+                                "split" -> "Split ring"
+                                "oblique" -> "Oblique coil"
+                                else -> "Coil spring"
+                            }
+                        ) {
+                            if (ringStyleEnabled) showRingStylePicker = true
+                        }
+                    }
+                    CurioSettingsDivider()
+                    ExperimentSwitchRow("Paper stat card", "Soft rose paper card on the stat panes and the Profile quests block (on by default)", AppPreferences.paperStatCardsState) {
+                        AppPreferences.setPaperStatCardsEnabled(context, it)
+                    }
+                    CurioSettingsDivider()
+                    ExperimentSwitchRow("Torn paper edges", "Torn edges on the stat card, with an extended tear on top", AppPreferences.paperStatTearState) {
+                        AppPreferences.setPaperStatTearEnabled(context, it)
+                    }
+                    CurioSettingsDivider()
+                    ExperimentSwitchRow("Deeper header color", "Torn-hero headers wear a slightly darker category accent (on by default)", AppPreferences.headerDeepState) {
+                        AppPreferences.setHeaderDeepEnabled(context, it)
+                    }
+                    CurioSettingsDivider()
+                    // v108 — the layered white paper lip below the hero's own
+                    // bottom tear is OFF by default; the toggle restores it
+                    // for comparison.
+                    ExperimentSwitchRow("Torn hero under-sheet", "The white paper lip below torn heroes. When off, the hero tears straight into the page.", AppPreferences.heroTearSheetState) {
+                        AppPreferences.setHeroTearSheetEnabled(context, it)
+                    }
+                }
+                }
+            }
+            // v409 — the "Constellation" section is gone with the painted
+            // constellation itself (see CurioLaneGrid): "3D star zoom" and
+            // "Drawer constellation" were switches for a canvas that no
+            // longer exists, since the drawer and the Stats page both draw
+            // their lane map as real UI now. The nav-bar row that shared this
+            // card stays, under an honest heading.
+            item { SettingsSectionHeading("Navigation") }
+            item {
+                SettingsOptionCard {
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    ExperimentSwitchRow(
+                        "Classic active indicator",
+                        "The nav bar's blob renders as fully transparent refracting glass instead of the solid white/black pill (needs Liquid glass)",
+                        AppPreferences.glassClassicIndicatorState
+                    ) {
+                        AppPreferences.setGlassClassicIndicatorEnabled(context, it)
+                    }
+                    // v3xx — the "Real blur (older devices)" + custom blur
+                    // engine experiments were fully REMOVED.
+                }
+                }
+            }
+            item {
+                SettingsOptionCard {
+                    // v281 - in-app editor: works even on launchers without
+                    // the long-press Edit flow for reconfigurable widgets.
+                    SettingsOptionRow(
+                        CurioIcons.Settings,
+                        "Edit home screen widgets",
+                        "Change mode, pane and corners of placed widgets in-app"
+                    ) {
+                        navController.navigate(com.curio.app.navigation.CurioRoutes.GLASS_WIDGET_EDITOR) { launchSingleTop = true }
+                    }
+                }
+            }
+            // v413's "Journal gestures" section was REMOVED (v427): fifteen
+            // hidden writing gestures, each with its own switch, and the member's
+            // verdict was "not good — we will do it better way later". Gone with
+            // it: the recogniser (`PersonalGestures.kt`), its wiring on the
+            // writing page, the page's own undo ring (which existed for the
+            // undo gesture alone) and the stored bitmask. Nothing hidden fires
+            // on a writing page any more, and a better version starts from a
+            // clean slate.
+            // ── v456 — THE SHARE HUB'S DOOR, ON THE DEV PAGE ─────────────
+            //
+            // The member: *"make the share hub hide from settings and its only
+            // accessible from the dev settings"*. The Hub is a gallery of every
+            // share-card design drawn at full size — a page for looking at the
+            // app's own output while that output is being worked on, which is
+            // what this page is for (the source-fetch lab beside it answers the
+            // same kind of question). It left Settings entirely rather than being
+            // duplicated: one door, and this is it. It still lets a design be
+            // picked and a card shared from here, exactly as before.
+            item { SettingsSectionHeading("Sharing") }
+            item {
+                SettingsOptionCard {
+                    SettingsOptionRow(
+                        CurioIcons.Share,
+                        "Share hub",
+                        "Every share-card design at full size, ready to pick and share"
+                    ) {
+                        navController.navigate(CurioRoutes.SHARE_HUB) { launchSingleTop = true }
+                    }
+                }
+            }
+            item {
+                SettingsOptionCard {
+                    SettingsOptionInfoRow(CurioIcons.Info, "About experiments", "These controls are temporary and may change")
+                }
+            }
+        }
+        // Drawn on TOP of the scroll content — rows slide under the ragged
+        // tear as they scroll up. Its back pill refracts the captured rows.
+        // (Phone-only: wide windows scroll the hero as the first list item.)
+        if (!wide) {
+            SettingsHeroHeader(
+                title = "Dev page",
+                subtitle = "Experimental features and developer options",
+                onBack = { navController.popBackStack() },
+                glassBackdrop = glassBackdrop
+            )
+        }
+    }
+
+    // ── Ring style picker — the three 3D ring looks, single-select ──
+    if (showRingStylePicker) {
+        AlertDialog(
+            containerColor = curioDialogContainerColor(),
+            shape = CurioDialogShape,
+            onDismissRequest = { showRingStylePicker = false },
+            title = { Text("Ring style") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    listOf(
+                        Triple("coil", "Coil spring", "Wire coil through the hole, for a spiral-notebook look"),
+                        Triple("split", "Split ring", "Closed metal torus, for a keyring or binder-ring look"),
+                        Triple("oblique", "Oblique coil", "Short coil segments springing out of the hole")
+                    ).forEach { (value, label, desc) ->
+                        Surface(
+                            onClick = { AppPreferences.setPaperHoleRingStyle(context, value) },
+                            shape = androidx.compose.foundation.shape.RoundedCornerShape(14.dp),
+                            color = if (AppPreferences.paperHoleRingStyleState == value)
+                                MaterialTheme.colorScheme.primary
+                            else
+                                MaterialTheme.colorScheme.surface,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Column(
+                                modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp)
+                            ) {
+                                Text(
+                                    label,
+                                    style = MaterialTheme.typography.labelLarge.copy(
+                                        fontWeight = FontWeight.Bold
+                                    ),
+                                    color = if (AppPreferences.paperHoleRingStyleState == value)
+                                        MaterialTheme.colorScheme.onPrimary
+                                    else
+                                        MaterialTheme.colorScheme.onSurface
+                                )
+                                Text(
+                                    desc,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = if (AppPreferences.paperHoleRingStyleState == value)
+                                        MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.85f)
+                                    else
+                                        MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+                    }
+                    Text(
+                        "The stat cards on Home and Profile preview the change immediately.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            },
+            confirmButton = {
+                CurioGlassWindowBlur()
+                TextButton(
+                    onClick = { showRingStylePicker = false },
+                    colors = curioDialogActionButtonColors()
+                ) {
+                    Text("Done")
+                }
+            }
+        )
+    }
+}
+
+@Composable
+private fun ExperimentSwitchRow(
+    title: String,
+    subtitle: String,
+    checked: Boolean,
+    enabled: Boolean = true,
+    onCheckedChange: (Boolean) -> Unit
+) {
+    SettingsOptionSwitchRow(
+        icon = null, title, subtitle, checked, enabled,
+        modifier = Modifier.alpha(if (enabled) 1f else 0.45f),
+        onCheckedChange = onCheckedChange
+    )
+}

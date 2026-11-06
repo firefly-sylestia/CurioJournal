@@ -1,0 +1,4859 @@
+package com.curio.app.data
+
+import android.app.AppOpsManager
+import android.content.Context
+import android.content.res.Configuration
+import android.os.Build
+import android.os.Process
+import android.provider.Settings
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
+import com.curio.app.data.supabase.SOCIAL_AVATAR_STYLE_COUNT
+import org.json.JSONArray
+import org.json.JSONObject
+
+/**
+ * Simple SharedPreferences wrapper for Curio user preferences.
+ *
+ * Stores display name, theme mode, daily reminder, and data flags
+ * across app restarts. Used by ProfileScreen and SettingsScreen.
+ */
+/**
+ * Spin density sizing strength (v7.4) — replaces the old on/off switch with
+ * three levels:
+ *  - [OFF] — density sizing disabled entirely (the DIMENSION rule can still
+ *    compact short screens via "Smart Spin layout").
+ *  - [COMPACT] — classic rule: under 440 dpi the deck compacts, 440+ dpi
+ *    gets a roomier deck.
+ *  - [EXTRA_COMPACT] — adds a 2x tier: under ~350 dpi the deck shrinks even
+ *    further so very low-dpi phones fit everything comfortably.
+ */
+enum class SmartDensityMode { OFF, COMPACT, EXTRA_COMPACT }
+
+object AppPreferences {
+
+    /** Topic sentiment constants — like/dislike from Topic Reveal feeds the
+     *  Spin shuffle weighting (liked topics + their category get more weight,
+     *  disliked get less — never fully blocked). [SENTIMENT_NONE] clears. */
+    const val SENTIMENT_LIKE = "like"
+    const val SENTIMENT_DISLIKE = "dislike"
+    const val SENTIMENT_NONE = "none"
+
+    /** Theme mode constants (v81 — the reimagined dark mode): "light"
+     *  (default, the v78 shipped behavior), "dark" (pitch-black + glow),
+     *  or "system" (follows the device night flag). */
+    const val THEME_LIGHT = "light"
+    const val THEME_DARK = "dark"
+    const val THEME_SYSTEM = "system"
+
+    /**
+     * v411 — THE COLOR THEME. One choice instead of the three old switches
+     * (Material theme, hero rose/azure, Adaptive Hero), which is what the
+     * Appearance page shows as a single "Color theme" row opening a sheet of
+     * previews.
+     *
+     * v414 — THE THREE PANTONE THEMES ARE RETIRED. They are gone from
+     * [COLOR_THEMES] and every surface that painted them; a member who had one
+     * stored migrates back to Curio rose (see [getColorTheme]).
+     */
+    const val COLOR_THEME_CURIO = "curio"
+    const val COLOR_THEME_AZURE = "azure"
+    const val COLOR_THEME_MATERIAL = "material"
+    const val COLOR_THEME_LANE = "lane"
+    /** v414 — the retired Pantone ids' shared prefix, kept only so a stored
+     *  choice can be recognised and migrated to [COLOR_THEME_CURIO]. */
+    private const val LEGACY_PANTONE_PREFIX = "pantone-"
+
+    /**
+     * v420 — THE NAMED THEMES. Five full themes (see `CurioNamedTheme`), each
+     * with its own page, card ladder, hero and dark twin. Every named id carries
+     * this prefix, so the stored id is recognised here without the data layer
+     * having to know the ui types. A named theme is "neither Material, nor a
+     * lane, nor the azure hero": like Curio rose it clears all three legacy
+     * switches. Its own palette comes from the scheme. */
+    const val NAMED_ID_PREFIX = "named-"
+    const val COLOR_THEME_JADE = "named-jade"
+    const val COLOR_THEME_ORCHID = "named-orchid"
+    const val COLOR_THEME_OCEAN = "named-ocean"
+    const val COLOR_THEME_SAND = "named-sand"
+    const val COLOR_THEME_EMBER = "named-ember"
+
+    /** Every stored color-theme id, in the order the sheet lists them. */
+    val COLOR_THEMES = listOf(
+        COLOR_THEME_CURIO,
+        COLOR_THEME_AZURE,
+        COLOR_THEME_MATERIAL,
+        COLOR_THEME_LANE,
+        COLOR_THEME_JADE,
+        COLOR_THEME_ORCHID,
+        COLOR_THEME_OCEAN,
+        COLOR_THEME_SAND,
+        COLOR_THEME_EMBER
+    )
+
+    private const val NAME = "curio_app_prefs"
+    private const val KEY_DISPLAY_NAME = "display_name"
+    private const val KEY_USERNAME = "username"
+    private const val KEY_SOCIAL_AVATAR_STYLE = "social_avatar_style"
+    private const val KEY_FAVORITE_SONG = "favorite_song"
+    // v336 — per-album favorite tracks (heart picks in the album track-list
+    // sheet): JSON object album name → JSON array of picked track titles in
+    // the order they were picked. Feeds the Vinyl share card's "favorite
+    // tracks" strip (multi-select hearts, replaces the single typed line).
+    private const val KEY_ALBUM_FAV_TRACKS = "album_fav_tracks"
+    // v353 — whether the heart-picked favorite-tracks strip renders on the
+    // album share card (default ON; the share editor can hide it).
+    private const val KEY_ALBUM_FAV_STRIP_VISIBLE = "album_fav_strip_visible"
+    // v384 — album favorite-tracks strip LAYOUT: false = list rows (default),
+    // true = side-by-side ROWS (chips). Global across every card design.
+    private const val KEY_ALBUM_FAV_ROWS = "album_fav_rows"
+    private const val KEY_BOOK_FAVORITES = "book_favorites"
+    // v350 — per-category cover-fetch consent: ALBUMS and SERIES get their
+    // own toggles alongside books (opt-OUT by default like books), so the
+    // user can switch fetching on for each category in Settings.
+    private const val KEY_ALBUM_FETCH_ENABLED = "album_fetch_enabled"    // legacy — superseded by KEY_COVER_FETCH_ENABLED
+    private const val KEY_SERIES_FETCH_ENABLED = "series_fetch_enabled"  // legacy — superseded by KEY_COVER_FETCH_ENABLED
+    private const val KEY_SERIES_FAVORITES = "series_favorites"
+    // v3xx — when a book / album / series was LIKED ("kind|name" → epoch
+    // ms). Feeds the Cabinet Everything "Recent" rail with recently liked
+    // media next to recent captures; no reorder info is derivable from the
+    // favorite SETS (unordered), so the timestamps live in their own map.
+    private const val KEY_LIKED_AT = "liked_at"
+    private const val KEY_THEME_MODE = "theme_mode"       // "light", "dark", "system" (v81)
+
+    // ── v461 — HOME'S TWO WRITING ROWS, EACH ON ITS OWN SWITCH ─────────────
+    //
+    // The member: *"ability to turn off journal shelf etc"*, and to the follow-up
+    // (which row a switch should hide) they answered **"each row its own
+    // switch"** — so these are two flags, not one. Both DEFAULT TRUE: a member
+    // who never touches them has exactly the Home they had before, and turning a
+    // row off hides the row, not the data (the journals and the shelf keep their
+    // own screens and their entry points in Settings).
+    private const val KEY_HOME_PAGES_ROW = "home_pages_row"    // Pages row (default on)
+    private const val KEY_HOME_SHELF_ROW = "home_shelf_row"    // My shelf row (default on)
+
+    // ── v461 — THE ONE BOOK PINNED TO HOME'S SHELF DOOR ────────────────────
+    //
+    // The member: *"how about when added a pdf in book, user can pin it in home
+    // screen shelf door and it shows with the small in icon"*. ONE book, not a
+    // list: the shelf door is a strip of chips, and the point of a pin is that the
+    // book you are actually reading is always the first thing in it — a set of
+    // pins would just be the shelf again, in a worse order. Empty means nothing is
+    // pinned, which is the default the app has always had.
+    private const val KEY_PINNED_BOOK = "pinned_book_id"
+    private const val KEY_CUSTOM_TAGLINE = "custom_streak_tagline"
+    private const val KEY_LAST_NOTIFIED_UPDATE = "last_notified_update_version"
+    private const val KEY_PET_CHATTER = "pet_chatter"     // "talkative", "cozy", "quiet"
+    private const val KEY_PET_GAME_FREQUENCY = "pet_game_frequency" // "relaxed", "normal", "eager"
+    private const val KEY_PET_BIRTHDAY = "pet_birthday_epoch_day"
+    private const val KEY_SAVES_WEEK_START = "saves_week_start_epoch_day"
+    private const val KEY_SAVES_WEEK_COUNTS = "saves_week_counts"
+    private const val KEY_PASTEL_COLORS_ENABLED = "pastel_colors_enabled"
+    private const val KEY_PASTEL_CROWN_DEPTH = "pastel_crown_depth"
+    // v407 — the background glyph backdrop's DEPTH (Appearance). The page-wide
+    // category glyph scatter shipped at alphas tuned for the deep look, which
+    // read as a busy scatter behind flat content on every screen; OFF (the
+    // default) draws the whole collage at a whisper, ON restores the old deep
+    // look. The multiplier lives in CurioWatermarkBackdrop.kt.
+    private const val KEY_GLYPH_BACKDROP_DEEP = "glyph_backdrop_deep"
+    private const val KEY_PAPER_CREAM_CARDS = "paper_cream_cards"    // white page + cream cards (v409)
+    // v185 — proper M3 Material theme (opt-in, default OFF): the whole
+    // color system re-does per M3 guidelines (single primary, neutral
+    // surfaces, 36 lane accents collapsed to ~6 muted families).
+    private const val KEY_MATERIAL_THEME = "material_theme"
+    // v411 — the ONE color-theme choice (the Appearance sheet); the three
+    // legacy switches above stay in step with it (see [setColorTheme]).
+    private const val KEY_COLOR_THEME = "color_theme"
+    private const val KEY_MATERIAL_HERO_TEARS = "material_hero_tears"
+    private const val KEY_HERO_BLUE = "hero_azure_enabled"   // sky-azure hero variant (v27l)
+    private const val KEY_HERO_FOLLOW_LANE = "hero_follow_lane"  // shared hero + page follow the Spin lane (v30)
+    // v28 — dark-mode elevation visibility: black shadows vanish on
+    // near-black surfaces, so dark mode can draw a soft LIGHT glow shadow
+    // (default OFF). The v28 hairline outline option was REMOVED.
+    private const val KEY_DARK_GLOW = "dark_glow"
+    // v7.7 — experimental peek-card redesign, four independent toggles so
+    // each upgrade can be A/B'd on its own: top-lit gradient fill, tinted
+    // hairline, soft shadows, roomier two-line near titles. Each OFF by
+    // default — the classic flat deck stays the shipping look until the
+    // experiment settles.
+    private const val KEY_PEEK_GRADIENT = "peek_gradient"
+    private const val KEY_PEEK_HAIRLINE = "peek_hairline"
+    private const val KEY_PEEK_SHADOWS = "peek_shadows"
+    private const val KEY_PEEK_TITLES = "peek_titles"
+    private const val KEY_PEEK_TAIL_FADE = "peek_tail_fade"
+    // v7.13 — Main card (hero ticket) redesign toggles: enhanced gradient
+    // fill, accent border, soft shadow. All OFF by default so the current
+    // hero card stays exactly as-is until enabled. (Enhanced typography was
+    // promoted to the shipped default in v7.16 — no longer toggleable.)
+    private const val KEY_HERO_GRADIENT = "hero_gradient"
+    private const val KEY_HERO_BORDER = "hero_border"
+    private const val KEY_HERO_SHADOW = "hero_shadow"
+    // v10 — dual-accent blend gradient: the hero card wears the category
+    // accent blended with a warm golden companion for a richer palette.
+    // Toggleable (default OFF); works across all theme styles.
+    private const val KEY_HERO_BLEND_GRADIENT = "hero_blend_gradient"
+    private const val KEY_3D_BUTTON_GRADIENT = "3d_button_gradient"
+    private const val KEY_REMINDER_ENABLED = "reminder_enabled"
+    // ── v440 — THE JOURNAL'S OWN DAILY GOAL AND NUDGE ───────────────
+    private const val KEY_JOURNAL_GOAL = "journal_goal_words"
+    private const val KEY_JOURNAL_GOAL_REMINDER = "journal_goal_reminder"
+    private const val KEY_JOURNAL_OPEN_TODAY = "journal_open_today"
+    private const val KEY_LAST_JOURNAL_ID = "journal_last_id"
+    private const val JOURNAL_GOAL_HOUR = 20
+    private const val JOURNAL_GOAL_MINUTE = 30
+    private const val KEY_REMINDER_HOUR = "reminder_hour"
+    // v3xx51 — the reminder's MINUTE (the clock picker can set any time, not
+    // just the preset hours). Defaults to 0 = on the hour.
+    private const val KEY_REMINDER_MINUTE = "reminder_minute"
+    private const val KEY_TINT_WASH_ENABLED = "tint_wash_enabled"
+    private const val KEY_SHARE_AUTO_FIT = "share_auto_fit"
+    private const val KEY_ENTRY_META_ENABLED = "entry_meta_enabled"
+    private const val KEY_SMART_SPIN_LAYOUT = "smart_spin_layout"
+    // v7.4 — the density rule is a 3-way STRENGTH picker now. The legacy
+    // boolean key below is read once for migration and then removed.
+    private const val KEY_SMART_DENSITY_MODE = "smart_density_mode"
+    private const val KEY_LEGACY_SMART_DENSITY_LAYOUT = "smart_density_layout"
+    private const val KEY_EXPLORE_SESSIONS_ENABLED = "explore_sessions_enabled"
+    private const val KEY_OVERLAY_BUBBLE_ENABLED = "overlay_bubble_enabled"
+    // v23 — whether the "Show the explore bubble" opt-in row appears inside
+    // the Explore now dialog (default OFF; the Notifications toggle
+    // re-shows it there as a single-line choice).
+    private const val KEY_SHOW_BUBBLE_OPT_IN_DIALOG = "show_bubble_opt_in_dialog"
+    // v3xx54 — notify for social arrivals: a friend's message, or someone new
+    // on the community wall. Default ON (a message app that stays silent is a
+    // message app you keep opening by hand); the Notifications page owns it.
+    private const val KEY_SOCIAL_NOTIFICATIONS = "social_notifications_enabled"
+    // v19 — the search engine the "Explore in browser" button opens (Google
+    // by default; DuckDuckGo, Bing, Brave, Ecosia, Startpage, Yahoo).
+    private const val KEY_SEARCH_ENGINE = "search_engine"
+    // v27s — the music service the "Watch in" explore action opens for
+    // Album / Artist / Song topics (YouTube Music by default; Apple Music,
+    // Spotify).
+    private const val KEY_MUSIC_SERVICE = "music_service"
+    // v27 — recycle-bin retention: how many days soft-deleted captures stay
+    // before being auto-deleted forever (0 = keep forever). Default 30 days.
+    private const val KEY_RECYCLE_BIN_EXPIRY_DAYS = "recycle_bin_expiry_days"
+    private const val DEFAULT_RECYCLE_BIN_EXPIRY_DAYS = 30
+    // v8.1 — "don't nag" flag: once the user declines the "Display over
+    // other apps" permission (dismisses the prompt or returns from system
+    // settings without granting), all AUTOMATIC overlay prompts are
+    // suppressed until they explicitly try to enable the bubble from
+    // Settings (the Settings toggle clears it).
+    private const val KEY_OVERLAY_ASK_DECLINED = "overlay_ask_declined"
+    // Experimental voice-to-text/dictation. Default OFF so microphone
+    // transcription never appears or starts until the user opts in.
+    private const val KEY_VOICE_TO_TEXT_ENABLED = "voice_to_text_enabled"
+    // v465f — THE EDGE TTS EXPERIMENT (Settings → Experiments → Dev page).
+    // Default OFF, and it is the ONLY experimental flag in this file whose
+    // feature talks to a service that is not an API: Edge TTS is the Edge
+    // BROWSER's own read-aloud endpoint, undocumented and unsanctioned by
+    // Microsoft, so it can be changed or blocked without notice. That is exactly
+    // why it ships behind a switch that is off until a member goes looking for
+    // it, and why it is never a default and never the only voice.
+    private const val KEY_EDGE_VOICE_ENABLED = "edge_voice_enabled"
+
+    // v465h — read aloud in the BACKGROUND, default ON (opt-OUT: the member chose
+    // a switch they "can turn off", not one they have to find). Unlike the two
+    // experiments above, background listening is not a behaviour swap being
+    // A/B-tested — it is what a reading voice is for — so the default is the
+    // feature and the switch is the escape hatch. A phone that freezes a cached
+    // app is the reason this exists at all: without a foreground service the
+    // reader's own driver is frozen mid-sentence the moment Curio leaves the
+    // foreground, which reads as the voice stopping for no reason.
+    private const val KEY_READ_ALOUD_BACKGROUND = "read_aloud_background"
+    // v125 — the selected offline transcription model id (Vosk catalog id).
+    private const val KEY_OFFLINE_MODEL = "offline_model_id"
+    // v8.5 — the Curio pet companion (spec §10): the pixel pet + its
+    // rule-based dialogue + the category passport/discovery features on
+    // Quests and Home. Default ON; a user-facing Appearance toggle gates
+    // the whole companion layer so it can be A/B'd and reverted without a
+    // code change (per the experiment rules, the toggle is removed once the
+    // companion design is decided).
+    private const val KEY_PET_ENABLED = "pet_enabled"
+    private const val KEY_FLOATING_PET_ENABLED = "floating_pet_enabled"
+    // v256 — the pet companion OUTSIDE the app: a system-overlay window
+    // (PetOverlayService) that keeps the sprite floating over other apps.
+    private const val KEY_PET_OUTSIDE_APP = "pet_outside_app_enabled"
+    // v8.43 — the pet's local LEARNING model (CurioPetBrain): the pet
+    // observes real activity and grows its own personality + catchphrases.
+    // Default ON per the user; off falls back to the classic rule-based
+    // lines. Independent of [KEY_PET_ENABLED]: the pet layer can be on
+    // while the learning brain is off.
+    private const val KEY_PET_BRAIN_ENABLED = "pet_brain_enabled"
+
+    // v489 — THE RETURN (CurioRecall): a finished topic comes back on a widening
+    // schedule and Home's quest hero leads with it on the day it falls due. ON by
+    // default (the member's answer), so a member who never opens Settings gets it;
+    // off means nothing is ever due and Home is exactly what it was before.
+    private const val KEY_RECALL_ENABLED = "recall_enabled"
+    private const val KEY_AUTO_OPEN_REVEAL = "auto_open_reveal"
+    private const val KEY_PINNED_TOPICS = "pinned_topics"   // JSON array of PinnedTopic
+    private const val KEY_SAVED_QUOTES = "saved_quotes"      // JSON array of SavedQuote
+    private const val KEY_TOPIC_SENTIMENTS = "topic_sentiments"  // JSON object: "CATEGORY:topicId" -> "like"/"dislike"
+    private const val KEY_LAST_SPIN_CATEGORY = "last_spin_category"
+    private const val KEY_LAST_SPIN_CATEGORIES = "last_spin_categories"   // comma-joined set
+    private const val KEY_LANDED_TOPIC_PREFIX = "landed_topic_"
+    // v7.94 — Manage Categories persistence: the hidden set + the custom
+    // order, both comma-joined CategoryId names. Previously the screen kept
+    // only a local rememberSaveable list, so toggles/order died on app
+    // restart and nothing else in the app honored them.
+    private const val KEY_HIDDEN_CATEGORIES = "hidden_categories"
+    private const val KEY_CATEGORY_ORDER = "category_order"
+    // Pinned categories for the new picker — up to 5 comma-joined CategoryId
+    // names. Defaults to Wildcard + good-to-explore picks on first launch.
+    private const val KEY_PINNED_CATEGORIES = "pinned_categories"
+    // New category picker ("Category Mix Studio"):
+    // - KEY_NAMED_MIXES — the named mixes the user creates/saves (JSON
+    //   array of NamedMix). Seeded from the old quick presets once.
+    // - (KEY_CLASSIC_PICKER removed — the old glass-pill picker experiment
+    //   was fully removed; the new picker is the only picker.)
+    // - KEY_PICKER_MIXES_SEEDED — the starter mixes were written once, so
+    //   deleting every mix doesn't resurrect them.
+    private const val KEY_NAMED_MIXES = "named_mixes"               // JSON array of NamedMix
+    private const val KEY_CABINET_COLLECTIONS = "cabinet_collections" // JSON array of CurioCollection
+    // v3xx50 — the last known saved-entry count, so a cold Cabinet open can
+    // paint a skeleton of EXACTLY that many cards (see getCabinetEntryCount).
+    private const val KEY_CABINET_ENTRY_COUNT = "cabinet_entry_count"   // int
+    private const val KEY_LAST_MIX_NAME = "last_mix_name"          // String? — the applied deck's mix name
+    private const val KEY_PICKER_MIXES_SEEDED = "picker_mixes_seeded" // bool — starter mixes written once
+    // v3xx — picker page default + curated suggestions (add/remove):
+    // - KEY_PICKER_DEFAULT_PAGE — which page of the new picker opens first
+    //   (0 = browse, 1 = mixes).
+    // - KEY_PICKER_SUGGESTIONS — a JSON array of CategoryId names the user
+    //   curated as the "fun to explore" list below the mixes. Empty/missing
+    //   falls back to a curated default list.
+    private const val KEY_PICKER_DEFAULT_PAGE = "picker_default_page"   // int — 0 browse, 1 mixes
+    private const val KEY_PICKER_SUGGESTIONS = "picker_suggestions"     // JSON array of CategoryId
+    // v3xx13 — per-page scroll persistence for the sheet's classic/new pager;
+    // v3xx14 — page 0 is now per-TAB: the Curio/Knowledge/Mix mode survives
+    // restarts, and each tab keeps its own "index:offset" scroll.
+    private const val KEY_PICKER_PAGE0_MODE = "picker_page0_mode"            // PickerMode.name
+    private const val KEY_PICKER_PAGE0_TAB_SCROLL = "picker_page0_tab_scroll_" // suffix = tab name
+    private const val KEY_PICKER_PAGE1_SCROLL = "picker_page1_scroll"   // "index:offset" of page 1
+    // v320/v320b — book-cover hub: whether bulk cover + rating fetching is
+    // ENABLED (opt-out by default — OFF until the user turns it on, so no
+    // surprise data usage), which provider the bulk fetch uses, the books
+    // whose covers failed (survive restarts so "Retry failed" works), and
+    // the keyless-fetched average ratings (book name → Google Books rating).
+    private const val KEY_BOOK_FETCH_ENABLED = "book_fetch_enabled"    // legacy — superseded by KEY_COVER_FETCH_ENABLED
+    // v3xx51 — the MERGED cover-fetch consent (books + albums + series).
+    private const val KEY_COVER_FETCH_ENABLED = "cover_fetch_enabled"  // bool — opt-out, default false
+    private const val KEY_BOOK_COVER_PROVIDER = "book_cover_provider"  // BookCoverProvider.name
+    private const val KEY_BOOK_COVER_FAILED = "book_cover_failed"     // JSON array of book names
+    // v360 — book names whose covers VERIFIED as real images (not Open
+    // Library's 1x1 placeholder) in a bulk fetch. The hub skips these on
+    // "Fetch all covers" so a re-tap resumes where the last run left off
+    // instead of restarting from book #1.
+    private const val KEY_BOOK_COVER_DONE = "book_cover_done"
+    // v389 — book ids whose metadata lookup already COMPLETED. A pass that
+    // threw (offline, a timeout) is never recorded — the marker is durable, so
+    // recording a failure would make one bad attempt permanent. Stops the
+    // detail page repeating a finished lookup after a process restart.
+    private const val KEY_BOOK_LOOKUP_DONE = "book_lookup_done"
+    // v362 — per-chapter PERSONAL notes (book name → chapter number → text).
+    private const val KEY_BOOK_CHAPTER_NOTES = "book_chapter_notes"
+    // v375 — rich runs per chapter note (mirrors KEY_BOOK_CHAPTER_NOTES).
+    private const val KEY_BOOK_CHAPTER_NOTE_SPANS = "book_chapter_note_spans"
+    private const val KEY_BOOK_RATINGS = "book_ratings"               // JSON object name->avg rating
+    private const val KEY_BOOK_RATINGS_COUNT = "book_ratings_count"    // JSON object name->ratings count
+    // v328 — per-book reading progress: JSON object book name -> number of
+    // chapters read (the highest chapter the user has marked read in the
+    // BookNotes chapter view). Powers the reveal's chapter-progress bar and
+    // the share card's "I'm N chapters in" element.
+    private const val KEY_BOOK_READING = "book_reading_progress"      // JSON object name->int
+    private const val KEY_SERIES_WATCHED = "series_watched_progress"   // JSON object show -> JSON array "S1E3" keys
+    // v352 — per-chapter heart picks: JSON object book name -> JSON array of
+    // chapter numbers the user liked. Toggled from the book-notes sheet rows.
+    private const val KEY_BOOK_CHAPTER_LIKES = "book_chapter_likes"
+    // v352 — per-episode heart picks: JSON object show name -> JSON array of
+    // "S1E3" keys the user liked. Toggled from the episode-list sheet rows.
+    private const val KEY_SERIES_EPISODE_LIKES = "series_episode_likes"
+    // v352 — the user's OWN book rating (pen-nib pick, 0..5): book name -> double.
+    private const val KEY_BOOK_CUSTOM_RATINGS = "book_custom_ratings"
+    // v354 — whether the user's own book-rating row (the pen/book picker in
+    // the book-notes sheet) is visible; separate from reading progress.
+    private const val KEY_BOOK_RATING_VISIBLE = "book_rating_visible"
+    // v352 — the LAST RESOLVED cover URL per book (what the hub's provider
+    // actually found, e.g. a Google Books thumbnail). The reveal poster and
+    // share card prefer this over the bare Open Library fallback so
+    // hub-fetched covers appear on the reveal instead of a placeholder.
+    private const val KEY_BOOK_COVER_URLS = "book_cover_urls"
+    // v375 — NOTES-SHEET palette memory: the cover-art swatches extracted for
+    // a URL are cached per URL (JSON obj url → JSON array of 7 ARGB ints:
+    // vibrant, muted, darkVibrant, darkMuted, lightVibrant, lightMuted,
+    // dominant; 0 = absent). Reopening a notes sheet seeds its palette from
+    // this cache INSTANTLY instead of flashing the category tint and only
+    // switching to the cover palette after the swatch fetch finishes, and
+    // the palette survives restarts.
+    private const val KEY_COVER_SWATCH_CACHE = "cover_swatch_cache"
+    // v375 — the LAST RESOLVED artwork/poster URL per notes sheet (keyed
+    // "album|<name>" / "series|<name>"). Albums and series have no authored
+    // imageUrl, so every open used to re-resolve the art (iTunes / TVMaze)
+    // before the palette could even be looked up — the "switches after a
+    // second" lag. The resolved URL is persisted so a revisit skips the
+    // lookup and goes straight to the (also cached) swatches.
+    private const val KEY_SHEET_ART_URLS = "sheet_art_urls"
+    // v389d — WHAT THIS ACCOUNT MAY MODERATE, remembered between opens. The
+    // Social page started from "not an admin" and only raised its Moderation
+    // door once `myAdminRow` answered, so the door was missing for a round trip
+    // every single time the page opened (user report: "in moderator … each time
+    // i open and close social they appear very late"). The flag the server last
+    // confirmed is kept here and each open's own check still corrects it — the
+    // server is the authority, this is only what was already known.
+    private const val KEY_COMMUNITY_ADMIN = "community_admin"
+    private const val KEY_COMMUNITY_ADMIN_REPLIES = "community_admin_replies"
+    // v8.34 — custom pet design (Pet designer playground): the imported
+    // design's full text (palette + body/curled grids). Always-on when
+    // saved — the pet sprite renders this instead of the default until the
+    // user resets it. Null = default design.
+    private const val KEY_PET_DESIGN = "pet_design"
+    // v8.39 — custom reaction speech is saved with the pet design but stays
+    // opt-in so the built-in Curie dialogue remains the default experience.
+    private const val KEY_CUSTOM_REACTION_LINES = "custom_reaction_lines"
+    // v8.47 — recently-applied palette colors for the pet designer picker.
+    private const val KEY_PET_RECENT_COLORS = "pet_recent_colors"
+    // v8.56 — the two user-saved custom pet slots (Pet studio Pets page).
+    private const val KEY_PET_CUSTOM_1 = "pet_custom_1"
+    private const val KEY_PET_CUSTOM_2 = "pet_custom_2"
+    // v9.3 — custom flower bed design (32×18 pixel rows).
+    private const val KEY_BED_DESIGN = "bed_design_rows"
+    // Share card edit persistence — per-topic card customisations saved
+    // on share/save so they restore next time the same topic is shared.
+    private const val KEY_SHARE_CARD_EDITS = "share_card_edits"   // JSON: topicName → edit data
+    private const val KEY_SHARED_CARDS = "shared_cards"            // JSON array of shared card records
+    private const val KEY_ONLINE_MODE_ENABLED = "online_mode_enabled"
+    // The opt-in that puts the Community wall on the bottom navigation bar.
+    // Off by default: Online Mode alone is about sync, this is the louder
+    // "I want the community in my nav" choice.
+    private const val KEY_COMMUNITY_TAB_ENABLED = "community_tab_enabled"
+    private const val KEY_TERMS_ACCEPTED_VERSION = "terms_accepted_version"
+    private const val KEY_LOCAL_FRIEND_IDS = "local_friend_ids"
+    const val CURRENT_TERMS_VERSION = 1
+
+    // ── Display name ─────────────────────────────────────────────────
+    fun getDisplayName(context: Context): String =
+        prefs(context).getString(KEY_DISPLAY_NAME, null) ?: "Curious Explorer"
+
+    fun setDisplayName(context: Context, name: String) {
+        prefs(context).edit().putString(KEY_DISPLAY_NAME, name).apply()
+        displayNameState = name
+    }
+
+    // ── Social username ─────────────────────────────────────────────
+    fun getUsername(context: Context): String =
+        prefs(context).getString(KEY_USERNAME, null)?.trim()?.removePrefix("@")?.lowercase().orEmpty()
+
+    fun setUsername(context: Context, username: String) {
+        prefs(context).edit().putString(KEY_USERNAME, username.trim().removePrefix("@").lowercase()).apply()
+    }
+
+    // The pick is an index into the app's drawn portrait list, so both ends
+    // clamp against SOCIAL_AVATAR_STYLE_COUNT — a hardcoded 0..15 here silently
+    // reverted every style added after the first sixteen.
+    fun getSocialAvatarStyle(context: Context): Int =
+        prefs(context).getInt(KEY_SOCIAL_AVATAR_STYLE, 0)
+            .coerceIn(0, SOCIAL_AVATAR_STYLE_COUNT - 1)
+
+    fun setSocialAvatarStyle(context: Context, style: Int) {
+        prefs(context).edit()
+            .putInt(KEY_SOCIAL_AVATAR_STYLE, style.coerceIn(0, SOCIAL_AVATAR_STYLE_COUNT - 1))
+            .apply()
+    }
+
+    // ── Online Mode ───────────────────────────────────��──────────────
+    fun isOnlineModeEnabled(context: Context): Boolean =
+        prefs(context).getBoolean(KEY_ONLINE_MODE_ENABLED, false)
+
+    fun setOnlineModeEnabled(context: Context, enabled: Boolean) {
+        prefs(context).edit().putBoolean(KEY_ONLINE_MODE_ENABLED, enabled).apply()
+        // Sign-in/sign-out move this switch too (OnlineAccount), and the nav
+        // bar's Community tab hangs off it — keep the Compose mirror in step.
+        onlineModeEnabledState = enabled
+    }
+
+  // ── Terms acceptance ──────────────────────────────────────────────
+  fun hasAcceptedCurrentTerms(context: Context): Boolean =
+  prefs(context).getInt(KEY_TERMS_ACCEPTED_VERSION, 0) >= CURRENT_TERMS_VERSION
+
+  fun acceptCurrentTerms(context: Context) {
+  prefs(context).edit().putInt(KEY_TERMS_ACCEPTED_VERSION, CURRENT_TERMS_VERSION).apply()
+  }
+
+  fun getLocalFriendIds(context: Context): Set<String> =
+  prefs(context).getStringSet(KEY_LOCAL_FRIEND_IDS, emptySet()).orEmpty()
+
+  fun rememberLocalFriend(context: Context, userId: String) {
+  prefs(context).edit().putStringSet(KEY_LOCAL_FRIEND_IDS, getLocalFriendIds(context) + userId).apply()
+  }
+
+  // ── Community tab (opt-in bottom-nav entry) ───────────────────────
+  fun isCommunityTabEnabled(context: Context): Boolean =
+  prefs(context).getBoolean(KEY_COMMUNITY_TAB_ENABLED, false)
+
+    fun setCommunityTabEnabled(context: Context, enabled: Boolean) {
+        prefs(context).edit().putBoolean(KEY_COMMUNITY_TAB_ENABLED, enabled).apply()
+        communityTabEnabledState = enabled
+    }
+
+    // ── Social privacy (v3xx55) ───────────────────────────────────────
+    // These three decisions belong to the member, not the build: they are
+    // stored locally (so they hold offline, where the account layer cannot
+    // answer) and mirrored onto the profile row so the server enforces the
+    // same thing. See `supabase/schema.sql` §5e.
+    private const val KEY_PROFILE_VISIBILITY = "social_profile_visibility"
+    private const val KEY_HIDE_ACTIVITY = "social_hide_activity"
+    private const val KEY_PRESENCE_MODE = "social_presence_mode"
+    const val PRESENCE_ACTIVE = "active"
+    const val PRESENCE_DND = "dnd"
+    const val PRESENCE_HIDDEN = "hidden"
+
+    /**
+     * Who may see this account's profile: "public" (any discoverable member)
+     * or "friends" (accepted friends only). The local value is authoritative
+     * so the choice survives offline; [SocialApi.updatePrivacy] mirrors it.
+     */
+    fun getProfileVisibility(context: Context): String =
+        prefs(context).getString(KEY_PROFILE_VISIBILITY, "public") ?: "public"
+
+    fun setProfileVisibility(context: Context, visibility: String) {
+        val clean = if (visibility == "friends") "friends" else "public"
+        prefs(context).edit().putString(KEY_PROFILE_VISIBILITY, clean).apply()
+        profileVisibilityState = clean
+    }
+
+    /**
+     * When on, this account never publishes a last-active stamp, so no
+     * presence line can be drawn about it — and the switch clears any stamp
+     * that was already stored the moment it is turned on.
+     */
+    fun isActivityHidden(context: Context): Boolean =
+        prefs(context).getBoolean(KEY_HIDE_ACTIVITY, false)
+
+    fun getPresenceMode(context: Context): String = prefs(context)
+        .getString(KEY_PRESENCE_MODE, if (isActivityHidden(context)) PRESENCE_HIDDEN else PRESENCE_ACTIVE)
+        ?.takeIf { it == PRESENCE_ACTIVE || it == PRESENCE_DND || it == PRESENCE_HIDDEN }
+        ?: PRESENCE_ACTIVE
+
+    fun setPresenceMode(context: Context, mode: String) {
+        val clean = mode.takeIf { it == PRESENCE_ACTIVE || it == PRESENCE_DND || it == PRESENCE_HIDDEN } ?: PRESENCE_ACTIVE
+        prefs(context).edit()
+            .putString(KEY_PRESENCE_MODE, clean)
+            .putBoolean(KEY_HIDE_ACTIVITY, clean == PRESENCE_HIDDEN)
+            .apply()
+        presenceModeState = clean
+        hideActivityState = clean == PRESENCE_HIDDEN
+    }
+
+    fun setActivityHidden(context: Context, hidden: Boolean) {
+        setPresenceMode(context, if (hidden) PRESENCE_HIDDEN else PRESENCE_ACTIVE)
+    }
+
+    // ── Favorite song (v... — Vinyl share card) ───────────────────────
+    // The user's own favorite song, shown as a small corner element on the
+    // Vinyl share card. Empty = a gentle default line.
+    fun getFavoriteSong(context: Context): String =
+        prefs(context).getString(KEY_FAVORITE_SONG, "") ?: ""
+
+    fun setFavoriteSong(context: Context, song: String) {
+        prefs(context).edit().putString(KEY_FAVORITE_SONG, song).apply()
+        favoriteSongState = song
+    }
+
+    // ── Book favorites (v348 — heart pick) ───────────────────────────────
+    // A single heart per book (favorite shelf), stored by book NAME (keys are
+    // the same identity the reading progress and fetched ratings use). The
+    // book notes sheet toggles it; the book share card can read it later.
+    fun getBookFavorites(context: Context): Set<String> {
+        val raw = prefs(context).getString(KEY_BOOK_FAVORITES, null) ?: return emptySet()
+        return runCatching {
+            val arr = org.json.JSONArray(raw)
+            (0 until arr.length()).mapNotNull { i -> arr.optString(i).takeIf { it.isNotBlank() } }.toSet()
+        }.getOrDefault(emptySet())
+    }
+
+    /** Toggle the favorite heart for [bookName]; returns true when it is now a favorite. */
+    fun toggleBookFavorite(context: Context, bookName: String): Boolean {
+        val cur = getBookFavorites(context).toMutableSet()
+        val added = !cur.remove(bookName)
+        if (added) cur.add(bookName)
+        persistBookFavorites(context, cur)
+        // v3xx — liked timestamp for the Cabinet Everything "Recent" rail.
+        recordLikedAt(context, "book|$bookName", added)
+        return added
+    }
+
+    private fun persistBookFavorites(context: Context, cur: Set<String>) {
+        val arr = org.json.JSONArray(cur.toList())
+        prefs(context).edit().putString(KEY_BOOK_FAVORITES, arr.toString()).apply()
+        bookFavoritesState = cur
+    }
+
+    // ── Liked timestamps (v3xx — Cabinet Everything "Recent" rail) ──────
+    // "kind|name" → epoch ms when the user last liked that book / album /
+    // series. Unliking removes the stamp. Reactive so the Cabinet rail
+    // re-sorts the moment a heart is tapped anywhere.
+    fun getLikedAt(context: Context): Map<String, Long> {
+        val raw = prefs(context).getString(KEY_LIKED_AT, null) ?: return emptyMap()
+        return runCatching {
+            val obj = org.json.JSONObject(raw)
+            val out = LinkedHashMap<String, Long>()
+            val keys = obj.keys()
+            while (keys.hasNext()) {
+                val k = keys.next()
+                out[k] = obj.optLong(k, 0L)
+            }
+            out.filterValues { it > 0L }
+        }.getOrDefault(emptyMap())
+    }
+
+    fun recordLikedAt(context: Context, key: String, liked: Boolean) {
+        val cur = getLikedAt(context).toMutableMap()
+        if (liked) cur[key] = System.currentTimeMillis() else cur.remove(key)
+        val obj = org.json.JSONObject()
+        cur.forEach { (k, v) -> obj.put(k, v) }
+        prefs(context).edit().putString(KEY_LIKED_AT, obj.toString()).apply()
+        likedAtState = cur
+    }
+
+    // ── Series favorites (v350 — heart pick) ────────────────────────────
+    // One heart per series (favorite shelf), stored by show NAME just like
+    // the book favorites. The episode-list sheet header toggles it.
+    fun getSeriesFavorites(context: Context): Set<String> {
+        val raw = prefs(context).getString(KEY_SERIES_FAVORITES, null) ?: return emptySet()
+        return runCatching {
+            val arr = org.json.JSONArray(raw)
+            (0 until arr.length()).mapNotNull { i -> arr.optString(i).takeIf { it.isNotBlank() } }.toSet()
+        }.getOrDefault(emptySet())
+    }
+
+    /** Toggle the favorite heart for [showName]; returns true when it is now a favorite. */
+    fun toggleSeriesFavorite(context: Context, showName: String): Boolean {
+        val cur = getSeriesFavorites(context).toMutableSet()
+        val added = !cur.remove(showName)
+        if (added) cur.add(showName)
+        val arr = org.json.JSONArray(cur.toList())
+        prefs(context).edit().putString(KEY_SERIES_FAVORITES, arr.toString()).apply()
+        seriesFavoritesState = cur
+        // v3xx — liked timestamp for the Cabinet Everything "Recent" rail.
+        recordLikedAt(context, "series|$showName", added)
+        return added
+    }
+
+    // ── Series watched progress (v350) ───────────────────
+    // Per-show set of watched episode keys ("S1E3"): JSON object show name →
+    // JSON array of keys. The episode-list sheet toggles an episode; the UI
+    // derives watched counts per season from the authored episode list.
+    fun getSeriesWatched(context: Context): Map<String, Set<String>> {
+        val raw = prefs(context).getString(KEY_SERIES_WATCHED, null) ?: return emptyMap()
+        return runCatching {
+            val obj = org.json.JSONObject(raw)
+            val out = LinkedHashMap<String, Set<String>>()
+            val keys = obj.keys()
+            while (keys.hasNext()) {
+                val k = keys.next()
+                val arr = obj.optJSONArray(k) ?: continue
+                out[k] = (0 until arr.length()).mapNotNull { i ->
+                    arr.optString(i).takeIf { it.isNotBlank() }
+                }.toSet()
+            }
+            out
+        }.getOrDefault(emptyMap())
+    }
+
+    /** Toggle one episode ("S1E3") of [showName] as watched; returns true when it is now watched. */
+    fun toggleSeriesEpisodeWatched(context: Context, showName: String, episodeKey: String): Boolean {
+        val cur = getSeriesWatched(context).toMutableMap()
+        val set = (cur[showName] ?: emptySet()).toMutableSet()
+        val added = !set.remove(episodeKey)
+        if (added) set.add(episodeKey)
+        if (set.isEmpty()) cur.remove(showName) else cur[showName] = set
+        val obj = org.json.JSONObject()
+        cur.forEach { (name, keys) -> obj.put(name, org.json.JSONArray(keys.toList())) }
+        prefs(context).edit().putString(KEY_SERIES_WATCHED, obj.toString()).apply()
+        seriesWatchedState = cur
+        return added
+    }
+
+    // ── Book chapter likes (v352 — per-chapter heart picks) ─────────────
+    // One heart per CHAPTER (multiple per book allowed), keyed by chapter
+    // NUMBER so grouped chapters keep a stable identity. Toggled from the
+    // book-notes sheet's per-row heart chip.
+    fun getBookChapterLikes(context: Context): Map<String, Set<Int>> {
+        val raw = prefs(context).getString(KEY_BOOK_CHAPTER_LIKES, null) ?: return emptyMap()
+        return runCatching {
+            val obj = org.json.JSONObject(raw)
+            val out = LinkedHashMap<String, Set<Int>>()
+            val keys = obj.keys()
+            while (keys.hasNext()) {
+                val k = keys.next()
+                val arr = obj.optJSONArray(k) ?: continue
+                out[k] = (0 until arr.length()).mapNotNull { i -> arr.optInt(i, -1).takeIf { it > 0 } }.toSet()
+            }
+            out
+        }.getOrDefault(emptyMap())
+    }
+
+    /** Toggle the like heart for [chapterNumber] of [bookName]; true = now liked. */
+    fun toggleBookChapterLike(context: Context, bookName: String, chapterNumber: Int): Boolean {
+        val cur = getBookChapterLikes(context).toMutableMap()
+        val set = (cur[bookName] ?: emptySet()).toMutableSet()
+        val added = !set.remove(chapterNumber)
+        if (added) set.add(chapterNumber)
+        if (set.isEmpty()) cur.remove(bookName) else cur[bookName] = set
+        val obj = org.json.JSONObject()
+        cur.forEach { (name, nums) -> obj.put(name, org.json.JSONArray(nums.toList())) }
+        prefs(context).edit().putString(KEY_BOOK_CHAPTER_LIKES, obj.toString()).apply()
+        bookChapterLikesState = cur
+        return added
+    }
+
+    // ── Book chapter PERSONAL notes (v362) ──────────────────────────────
+    // One text note per chapter (book name → chapter number → text), written
+    // from the book-notes sheet's expanded chapter panel. Empty text removes
+    // the note; keyed by chapter NUMBER (stable across re-groupings).
+    fun getBookChapterNotes(context: Context): Map<String, Map<Int, String>> {
+        val raw = prefs(context).getString(KEY_BOOK_CHAPTER_NOTES, null) ?: return emptyMap()
+        return runCatching {
+            val obj = org.json.JSONObject(raw)
+            val out = LinkedHashMap<String, Map<Int, String>>()
+            val keys = obj.keys()
+            while (keys.hasNext()) {
+                val k = keys.next()
+                val inner = obj.optJSONObject(k) ?: continue
+                val notes = LinkedHashMap<Int, String>()
+                val inKeys = inner.keys()
+                while (inKeys.hasNext()) {
+                    val num = inKeys.next().toIntOrNull() ?: continue
+                    val text = inner.optString(num.toString()).takeIf { it.isNotBlank() }
+                    if (text != null) notes[num] = text
+                }
+                if (notes.isNotEmpty()) out[k] = notes
+            }
+            out
+        }.getOrDefault(emptyMap())
+    }
+
+    /** Save (or clear, when [text] is blank) the personal note for
+     *  [chapterNumber] of [bookName]. */
+    fun setBookChapterNote(context: Context, bookName: String, chapterNumber: Int, text: String) {
+        val cur = getBookChapterNotes(context).toMutableMap()
+        val notes = (cur[bookName] ?: emptyMap()).toMutableMap()
+        if (text.isBlank()) notes.remove(chapterNumber) else notes[chapterNumber] = text
+        if (notes.isEmpty()) cur.remove(bookName) else cur[bookName] = notes
+        val obj = org.json.JSONObject()
+        cur.forEach { (name, map) ->
+            val inner = org.json.JSONObject()
+            map.forEach { (num, t) -> inner.put(num.toString(), t) }
+            obj.put(name, inner)
+        }
+        prefs(context).edit().putString(KEY_BOOK_CHAPTER_NOTES, obj.toString()).apply()
+        bookChapterNotesState = cur
+    }
+
+    // ── Book chapter note RICH SPANS (v375) ─────────────────────────────
+    // Mirrors KEY_BOOK_CHAPTER_NOTES 1:1 (book name → chapter number → runs):
+    // the formatted bold/italic/highlight runs that style a note's text.
+    // Written by the enlarged note editor together with the text so
+    // "Share as Chapter review" carries the formatting onto the share card.
+    fun getBookChapterNoteSpans(context: Context): Map<String, Map<Int, List<TextSpan>>> {
+        val raw = prefs(context).getString(KEY_BOOK_CHAPTER_NOTE_SPANS, null) ?: return emptyMap()
+        return runCatching {
+            val obj = org.json.JSONObject(raw)
+            val out = LinkedHashMap<String, Map<Int, List<TextSpan>>>()
+            val keys = obj.keys()
+            while (keys.hasNext()) {
+                val k = keys.next()
+                val inner = obj.optJSONObject(k) ?: continue
+                val notes = LinkedHashMap<Int, List<TextSpan>>()
+                val inKeys = inner.keys()
+                while (inKeys.hasNext()) {
+                    val num = inKeys.next().toIntOrNull() ?: continue
+                    val arr = inner.optJSONArray(num.toString()) ?: continue
+                    if (arr.length() == 0) continue
+                    val spans = (0 until arr.length()).mapNotNull { i ->
+                        val so = arr.optJSONObject(i) ?: return@mapNotNull null
+                        val s = so.optInt("s", 0)
+                        val e = so.optInt("e", 0)
+                        if (e <= s) null
+                        else TextSpan(
+                            s, e,
+                            so.optBoolean("b", false),
+                            so.optBoolean("i", false),
+                            so.optBoolean("h", false),
+                            so.optDouble("fs", Double.NaN).takeIf { !it.isNaN() }?.toFloat()
+                        )
+                    }
+                    if (spans.isNotEmpty()) notes[num] = spans
+                }
+                if (notes.isNotEmpty()) out[k] = notes
+            }
+            out
+        }.getOrDefault(emptyMap())
+    }
+
+    /** Save (or clear) the rich runs for [chapterNumber] of [bookName]. */
+    fun setBookChapterNoteSpans(context: Context, bookName: String, chapterNumber: Int, spans: List<TextSpan>) {
+        val cur = getBookChapterNoteSpans(context).toMutableMap()
+        val notes = (cur[bookName] ?: emptyMap()).toMutableMap()
+        if (spans.isEmpty()) notes.remove(chapterNumber) else notes[chapterNumber] = spans
+        if (notes.isEmpty()) cur.remove(bookName) else cur[bookName] = notes
+        val obj = org.json.JSONObject()
+        cur.forEach { (name, map) ->
+            val inner = org.json.JSONObject()
+            map.forEach { (num, list) ->
+                val arr = org.json.JSONArray()
+                list.forEach { sp ->
+                    val o = org.json.JSONObject()
+                    o.put("s", sp.start)
+                    o.put("e", sp.end)
+                    if (sp.bold) o.put("b", true)
+                    if (sp.italic) o.put("i", true)
+                    if (sp.highlight) o.put("h", true)
+                    sp.fontSizeSp?.let { o.put("fs", it.toDouble()) }
+                    arr.put(o)
+                }
+                inner.put(num.toString(), arr)
+            }
+            obj.put(name, inner)
+        }
+        prefs(context).edit().putString(KEY_BOOK_CHAPTER_NOTE_SPANS, obj.toString()).apply()
+        bookChapterNoteSpansState = cur
+    }
+
+    // ── Series episode likes (v352 — per-episode heart picks) ────────────
+    // One heart per EPISODE (multiple per show allowed), keyed by the same
+    // "S1E3" identity the watched store uses. Toggled from the episode-list
+    // sheet's per-row heart chip.
+    fun getSeriesEpisodeLikes(context: Context): Map<String, Set<String>> {
+        val raw = prefs(context).getString(KEY_SERIES_EPISODE_LIKES, null) ?: return emptyMap()
+        return runCatching {
+            val obj = org.json.JSONObject(raw)
+            val out = LinkedHashMap<String, Set<String>>()
+            val keys = obj.keys()
+            while (keys.hasNext()) {
+                val k = keys.next()
+                val arr = obj.optJSONArray(k) ?: continue
+                out[k] = (0 until arr.length()).mapNotNull { i -> arr.optString(i).takeIf { it.isNotBlank() } }.toSet()
+            }
+            out
+        }.getOrDefault(emptyMap())
+    }
+
+    /** Toggle the like heart for [episodeKey] of [showName]; true = now liked. */
+    fun toggleSeriesEpisodeLike(context: Context, showName: String, episodeKey: String): Boolean {
+        val cur = getSeriesEpisodeLikes(context).toMutableMap()
+        val set = (cur[showName] ?: emptySet()).toMutableSet()
+        val added = !set.remove(episodeKey)
+        if (added) set.add(episodeKey)
+        if (set.isEmpty()) cur.remove(showName) else cur[showName] = set
+        val obj = org.json.JSONObject()
+        cur.forEach { (name, keys) -> obj.put(name, org.json.JSONArray(keys.toList())) }
+        prefs(context).edit().putString(KEY_SERIES_EPISODE_LIKES, obj.toString()).apply()
+        seriesEpisodeLikesState = cur
+        return added
+    }
+
+    // ── Custom book ratings (v352 — pen-nib pick, 0..5) ──────────────────
+    // The user's OWN star rating for a book, stored separately from the
+    // fetched Google Books average so the sheet can show both.
+    fun getBookCustomRatings(context: Context): Map<String, Double> {
+        val raw = prefs(context).getString(KEY_BOOK_CUSTOM_RATINGS, null) ?: return emptyMap()
+        return runCatching {
+            val obj = org.json.JSONObject(raw)
+            val out = LinkedHashMap<String, Double>()
+            val keys = obj.keys()
+            while (keys.hasNext()) {
+                val k = keys.next()
+                out[k] = obj.optDouble(k, 0.0)
+            }
+            out
+        }.getOrDefault(emptyMap())
+    }
+
+    /** Set (or clear, when [rating] <= 0) the user's own rating for [name]. */
+    fun setBookCustomRating(context: Context, name: String, rating: Double) {
+        val cur = getBookCustomRatings(context).toMutableMap()
+        if (rating <= 0.0) cur.remove(name) else cur[name] = rating
+        prefs(context).edit().putString(KEY_BOOK_CUSTOM_RATINGS, org.json.JSONObject(cur).toString()).apply()
+        bookCustomRatingsState = cur
+    }
+
+    // ── Book rating visibility (v354) ────────────────────────────────────
+    // Whether the book notes sheet shows the user's own rating row, separate
+    // from reading progress. Default ON; the sheet can hide it without
+    // clearing the rating.
+    fun isBookRatingVisible(context: Context): Boolean =
+        prefs(context).getBoolean(KEY_BOOK_RATING_VISIBLE, true)
+
+    fun setBookRatingVisible(context: Context, visible: Boolean) {
+        prefs(context).edit().putBoolean(KEY_BOOK_RATING_VISIBLE, visible).apply()
+        bookRatingVisibleState = visible
+    }
+
+    // ── Resolved book cover URLs (v352 — hub results) ────────────────────
+    // The hub's providers resolve real cover URLs (Google Books thumbnails
+    // especially) that the reveal poster has no way to guess on its own.
+    // Persisting the winner lets the reveal + share card reuse it.
+    fun getBookCoverUrls(context: Context): Map<String, String> {
+        val raw = prefs(context).getString(KEY_BOOK_COVER_URLS, null) ?: return emptyMap()
+        return runCatching {
+            val obj = org.json.JSONObject(raw)
+            val out = LinkedHashMap<String, String>()
+            val keys = obj.keys()
+            while (keys.hasNext()) {
+                val k = keys.next()
+                out[k] = obj.optString(k)
+            }
+            out
+        }.getOrDefault(emptyMap())
+    }
+
+    /** Remember the resolved cover URL for [name] (ignores blanks). */
+    fun setBookCoverUrl(context: Context, name: String, url: String) {
+        if (url.isBlank()) return
+        val cur = getBookCoverUrls(context).toMutableMap()
+        if (cur[name] == url) return
+        cur[name] = url
+        prefs(context).edit().putString(KEY_BOOK_COVER_URLS, org.json.JSONObject(cur).toString()).apply()
+        bookCoverUrlsState = cur
+    }
+
+    // ── Notes-sheet cover-swatch cache (v375) ────────────────────────────
+    // See KEY_COVER_SWATCH_CACHE above. Values are 7-ARGB lists (the same
+    // slot order CoverPalette uses) so prefs never touches Compose Color.
+    fun getCoverSwatchCache(context: Context): Map<String, List<Int>> {
+        val raw = prefs(context).getString(KEY_COVER_SWATCH_CACHE, null) ?: return emptyMap()
+        return runCatching {
+            val obj = org.json.JSONObject(raw)
+            val out = LinkedHashMap<String, List<Int>>()
+            val keys = obj.keys()
+            while (keys.hasNext()) {
+                val k = keys.next()
+                val arr = obj.optJSONArray(k) ?: continue
+                if (arr.length() < 7) continue
+                out[k] = (0 until arr.length()).map { arr.optInt(it, 0) }
+            }
+            out
+        }.getOrDefault(emptyMap())
+    }
+
+    /** Persist the extracted swatches (as ARGB ints) for [url]. */
+    fun setCoverSwatchCache(context: Context, url: String, argbs: List<Int>) {
+        if (url.isBlank() || argbs.isEmpty()) return
+        val cur = getCoverSwatchCache(context).toMutableMap()
+        val compact = argbs.take(7)
+        if (cur[url] == compact) return
+        cur[url] = compact
+        val obj = org.json.JSONObject()
+        cur.forEach { (u, list) -> obj.put(u, org.json.JSONArray(list)) }
+        prefs(context).edit().putString(KEY_COVER_SWATCH_CACHE, obj.toString()).apply()
+        coverSwatchCacheState = cur
+    }
+
+    // ── Remembered moderation rights (v389d) ─────────────────────────────
+    /** The last confirmed moderation right, for the Social page's own door. */
+    fun isCommunityAdmin(context: Context): Boolean =
+        prefs(context).getBoolean(KEY_COMMUNITY_ADMIN, false)
+
+    fun canModerateReplies(context: Context): Boolean =
+        prefs(context).getBoolean(KEY_COMMUNITY_ADMIN_REPLIES, false)
+
+    /** Remember what the server just said (no write when nothing changed). */
+    fun setCommunityAdmin(context: Context, admin: Boolean, replies: Boolean) {
+        if (communityAdminState == admin && communityAdminRepliesState == replies) return
+        prefs(context).edit()
+            .putBoolean(KEY_COMMUNITY_ADMIN, admin)
+            .putBoolean(KEY_COMMUNITY_ADMIN_REPLIES, replies)
+            .apply()
+        communityAdminState = admin
+        communityAdminRepliesState = replies
+    }
+
+    // Keyed "album|<topic name>" / "series|<topic name>". See KEY_SHEET_ART_URLS.
+    fun getSheetArtUrls(context: Context): Map<String, String> {
+        val raw = prefs(context).getString(KEY_SHEET_ART_URLS, null) ?: return emptyMap()
+        return runCatching {
+            val obj = org.json.JSONObject(raw)
+            val out = LinkedHashMap<String, String>()
+            val keys = obj.keys()
+            while (keys.hasNext()) {
+                val k = keys.next()
+                out[k] = obj.optString(k)
+            }
+            out
+        }.getOrDefault(emptyMap())
+    }
+
+    // ── An author's written works, as fetched once (v389e) ─────────────
+    //
+    // The author sheet looks a person's books up on Open Library, keyless and
+    // free, and used to hold the answer only for the life of the process: open
+    // the sheet again tomorrow and it went looking a second time — and a lookup
+    // that failed answered "no books" for someone who has plenty (user request:
+    // "authors written work should save as cache"). The LIST is what is cached,
+    // not a verdict: only an answer with rows in it is written down, so a failure
+    // can never become a fact about the author.
+    //
+    // Stored as the raw JSON the fetcher produced, because the shape belongs to
+    // the reveal (`AuthorWork`) and this file owns no feature types.
+    private const val KEY_AUTHOR_WORKS = "author_works_json"
+
+    /** The JSON an author's works were fetched as, or null when never fetched. */
+    fun getAuthorWorksJson(context: Context, author: String): String? {
+        val key = author.trim().lowercase()
+        if (key.isBlank()) return null
+        val raw = prefs(context).getString(KEY_AUTHOR_WORKS, null) ?: return null
+        return runCatching {
+            org.json.JSONObject(raw).optString(key).takeIf { it.isNotBlank() }
+        }.getOrNull()
+    }
+
+    /** Keeps an author's works (ignores blanks, so a failure stores nothing). */
+    fun setAuthorWorksJson(context: Context, author: String, json: String) {
+        val key = author.trim().lowercase()
+        if (key.isBlank() || json.isBlank()) return
+        runCatching {
+            val raw = prefs(context).getString(KEY_AUTHOR_WORKS, null)
+            val root = if (raw.isNullOrBlank()) org.json.JSONObject()
+            else runCatching { org.json.JSONObject(raw) }.getOrDefault(org.json.JSONObject())
+            root.put(key, json)
+            prefs(context).edit().putString(KEY_AUTHOR_WORKS, root.toString()).apply()
+        }
+    }
+
+    // ── Resolved album/series sheet artwork URLs (v375) ─────────────────
+    /** Remember the resolved artwork URL for a sheet (ignores blanks). */
+    fun setSheetArtUrl(context: Context, key: String, url: String) {
+        if (key.isBlank() || url.isBlank()) return
+        val cur = getSheetArtUrls(context).toMutableMap()
+        if (cur[key] == url) return
+        cur[key] = url
+        prefs(context).edit().putString(KEY_SHEET_ART_URLS, org.json.JSONObject(cur).toString()).apply()
+        sheetArtUrlsState = cur
+    }
+
+    // ── Album favorite tracks (v336 — heart picks) ───────────────────────
+    // Per-album heart picks (multiple allowed): album name → list of picked
+    // track titles in pick order. The album track-list sheet toggles these
+    // and the Vinyl share card renders the strip.
+    fun getAlbumFavoriteTracks(context: Context): Map<String, List<String>> {
+        val raw = prefs(context).getString(KEY_ALBUM_FAV_TRACKS, null) ?: return emptyMap()
+        return runCatching {
+            val obj = org.json.JSONObject(raw)
+            val out = LinkedHashMap<String, List<String>>()
+            val keys = obj.keys()
+            while (keys.hasNext()) {
+                val k = keys.next()
+                val arr = obj.optJSONArray(k) ?: continue
+                val list = (0 until arr.length()).mapNotNull { i -> arr.optString(i).takeIf { it.isNotBlank() } }
+                if (list.isNotEmpty()) out[k] = list
+            }
+            out
+        }.getOrDefault(emptyMap())
+    }
+
+    /** Replace the whole favorite set for [albumName] (an empty list clears it). */
+    fun setAlbumFavoriteTracks(context: Context, albumName: String, tracks: List<String>) {
+        val cur = getAlbumFavoriteTracks(context).toMutableMap()
+        if (tracks.isEmpty()) cur.remove(albumName) else cur[albumName] = tracks
+        persistAlbumFavoriteTracks(context, cur)
+    }
+
+    /** Toggle one track's heart for [albumName]; returns the new list. */
+    fun toggleAlbumFavoriteTrack(context: Context, albumName: String, trackTitle: String): List<String> {
+        val cur = getAlbumFavoriteTracks(context).toMutableMap()
+        val list = (cur[albumName] ?: emptyList()).toMutableList()
+        if (!list.remove(trackTitle)) list.add(trackTitle)
+        if (list.isEmpty()) cur.remove(albumName) else cur[albumName] = list
+        persistAlbumFavoriteTracks(context, cur)
+        // v3xx — an album is "liked" while it has any favorite track; keep
+        // its liked timestamp in step for the Cabinet Everything "Recent" rail.
+        recordLikedAt(context, "album|$albumName", list.isNotEmpty())
+        return cur[albumName] ?: emptyList()
+    }
+
+    private fun persistAlbumFavoriteTracks(context: Context, cur: Map<String, List<String>>) {
+        val obj = org.json.JSONObject()
+        cur.forEach { (k, v) -> obj.put(k, org.json.JSONArray(v)) }
+        prefs(context).edit().putString(KEY_ALBUM_FAV_TRACKS, obj.toString()).apply()
+        albumFavTracksState = cur
+    }
+
+    // ── Album favorite-tracks strip visibility (v353) ────────────────────
+    // The share-card editor can hide the heart-picked strip per user
+    // preference (global, default visible). Kept reactive so the card hides
+    // the moment the toggle flips.
+    fun isAlbumFavStripVisible(context: Context): Boolean =
+        prefs(context).getBoolean(KEY_ALBUM_FAV_STRIP_VISIBLE, true)
+
+    fun setAlbumFavStripVisible(context: Context, visible: Boolean) {
+        prefs(context).edit().putBoolean(KEY_ALBUM_FAV_STRIP_VISIBLE, visible).apply()
+        albumFavStripVisibleState = visible
+    }
+
+    // ── Album favorite-tracks strip layout: list vs rows (v384) ──────────
+    // The share editor's strip tool flips the strip between LIST rows and
+    // side-by-side ROWS (chips). Global so every design follows.
+    fun isAlbumFavRows(context: Context): Boolean =
+        prefs(context).getBoolean(KEY_ALBUM_FAV_ROWS, false)
+
+    fun setAlbumFavRows(context: Context, rows: Boolean) {
+        prefs(context).edit().putBoolean(KEY_ALBUM_FAV_ROWS, rows).apply()
+        albumFavRowsState = rows
+    }
+
+    // ── Custom streak tagline (v53) ──────────────────────────────────
+    // The Profile hero tagline: a user-set line replaces the automatic
+    // streak-based tagline; empty = use the automatic one again.
+    fun getCustomStreakTagline(context: Context): String =
+        prefs(context).getString(KEY_CUSTOM_TAGLINE, "").orEmpty()
+
+    fun setCustomStreakTagline(context: Context, tagline: String) =
+        prefs(context).edit().putString(KEY_CUSTOM_TAGLINE, tagline.trim()).apply()
+
+    // ── Profile avatar (v103) ────────────────────────────────────────
+    // The saved profile photo's absolute path inside the app's private
+    // files dir ("" = none). The image itself lives in filesDir as
+    // profile_avatar_<timestamp>.png; only the path is stored here.
+    private const val KEY_PROFILE_AVATAR = "profile_avatar"
+    fun getProfileAvatarPath(context: Context): String =
+        prefs(context).getString(KEY_PROFILE_AVATAR, "").orEmpty()
+
+    fun setProfileAvatarPath(context: Context, path: String) {
+        prefs(context).edit().putString(KEY_PROFILE_AVATAR, path).apply()
+        profileAvatarPathState = path
+    }
+
+    /**
+     * v439 — AND THE PICTURE MAY BE THE MEMBER'S OWN BLOB INSTEAD.
+     *
+     * The member: *"let user set that blob as their pfp in app profile too"*.
+     * The photo below is a picture this device holds; the blob is the face
+     * Social already draws for them from their handle. Both are legitimate, and
+     * the member chooses — so this is a CHOICE STORED BESIDE the photo's path
+     * rather than a replacement for it: turning the blob on never deletes the
+     * photo they picked, and turning it off puts that photo straight back
+     * (see [com.curio.app.ui.components.CurioMemberAvatar]).
+     *
+     * It is a real preference and not a derived fact because a member with a
+     * handle has a face whether or not they want to WEAR it on this device.
+     */
+    private const val KEY_PROFILE_AVATAR_BLOB = "profile_avatar_blob"
+    fun isProfileAvatarBlob(context: Context): Boolean =
+        prefs(context).getBoolean(KEY_PROFILE_AVATAR_BLOB, false)
+
+    fun setProfileAvatarBlob(context: Context, blob: Boolean) {
+        prefs(context).edit().putBoolean(KEY_PROFILE_AVATAR_BLOB, blob).apply()
+        profileAvatarBlobState = blob
+    }
+
+    // ── Update-notification dedupe (v53) ─────────────────────────────
+    // The version tag of the newest update that has ALREADY been announced
+    // with a notification — the updater only notifies once per new release
+    // ("once the update comes, not always"), while the toast fires on every
+    // check that finds an update.
+    fun getLastNotifiedUpdateVersion(context: Context): String =
+        prefs(context).getString(KEY_LAST_NOTIFIED_UPDATE, "").orEmpty()
+
+    fun setLastNotifiedUpdateVersion(context: Context, version: String) =
+        prefs(context).edit().putString(KEY_LAST_NOTIFIED_UPDATE, version).apply()
+
+    // ── Topic catalog sync version (v294) ─────────────────────────────
+    // The app version code whose topic catalog was last imported/synced into
+    // Room. The JSON→Room sync runs ONCE per app update (newly authored
+    // topics ship in releases); every other launch serves topics straight
+    // from Room without re-parsing the JSON assets.
+    private const val KEY_LAST_CATALOG_SYNC_VERSION = "last_catalog_sync_version"
+
+    fun getTopicCatalogSyncVersion(context: Context): Int =
+        prefs(context).getInt(KEY_LAST_CATALOG_SYNC_VERSION, 0)
+
+    fun setTopicCatalogSyncVersion(context: Context, version: Int) =
+        prefs(context).edit().putInt(KEY_LAST_CATALOG_SYNC_VERSION, version).apply()
+
+    // ── What's New seen version (v403) ────────────────────────────────
+    // The versionCode whose What's New page has already been shown. The page
+    // opens itself ONCE per version — on a fresh install and on an update
+    // alike — so nobody sees the same highlights twice, and the Settings row
+    // stays the way back to it at any time.
+    private const val KEY_WHATS_NEW_SEEN_VERSION = "whats_new_seen_version"
+
+    fun getWhatsNewSeenVersion(context: Context): Int =
+        prefs(context).getInt(KEY_WHATS_NEW_SEEN_VERSION, 0)
+
+    fun setWhatsNewSeenVersion(context: Context, version: Int) =
+        prefs(context).edit().putInt(KEY_WHATS_NEW_SEEN_VERSION, version).apply()
+
+    // ── Feedback forms: what THIS device has already dealt with (v403) ────
+    // The server cannot know that a member has answered (an answer carries no
+    // identity, by design), so the device keeps the two flags the member's own
+    // experience needs: which forms were already answered, and which ones they
+    // asked never to see again. Both are keyed by form id.
+    private const val KEY_FEEDBACK_ANSWERED = "feedback_answered_ids"
+    private const val KEY_FEEDBACK_HIDDEN = "feedback_hidden_ids"
+
+    fun feedbackAnsweredIds(context: Context): Set<String> =
+        prefs(context).getStringSet(KEY_FEEDBACK_ANSWERED, emptySet()).orEmpty()
+
+    fun markFeedbackAnswered(context: Context, formId: String) {
+        if (formId.isBlank()) return
+        prefs(context).edit()
+            .putStringSet(KEY_FEEDBACK_ANSWERED, feedbackAnsweredIds(context) + formId)
+            .apply()
+    }
+
+    fun feedbackHiddenIds(context: Context): Set<String> =
+        prefs(context).getStringSet(KEY_FEEDBACK_HIDDEN, emptySet()).orEmpty()
+
+    fun markFeedbackHidden(context: Context, formId: String) {
+        if (formId.isBlank()) return
+        prefs(context).edit()
+            .putStringSet(KEY_FEEDBACK_HIDDEN, feedbackHiddenIds(context) + formId)
+            .apply()
+    }
+
+    // ── Topic catalog install stamp (v3xx) ────────────────────────────
+    // The package's lastUpdateTime the catalog was last synced under.
+    // versionCode only changes on RELEASES, so a data edit shipped in a
+    // build that kept the same versionCode never triggered the sync — and
+    // removed/renamed/deduped topics stayed in Room forever. Every APK
+    // install/update bumps lastUpdateTime, so the reconcile below also
+    // fires across same-versionCode builds (dev iteration, CI installs).
+    private const val KEY_LAST_CATALOG_SYNC_UPDATE = "last_catalog_sync_update_ms"
+
+    fun getTopicCatalogLastUpdate(context: Context): Long =
+        prefs(context).getLong(KEY_LAST_CATALOG_SYNC_UPDATE, 0L)
+
+    fun setTopicCatalogLastUpdate(context: Context, time: Long) =
+        prefs(context).edit().putLong(KEY_LAST_CATALOG_SYNC_UPDATE, time).apply()
+
+    // ── Update-check result cache (v115) ─────────────────────────────
+    // The last successful check's release info is SAVED locally so the
+    // Updates page shows the release notes instantly on open — no
+    // reloading the network result on every visit (the page still
+    // refreshes in the background).
+    private const val KEY_UPDATE_CACHE_TAG = "update_cache_tag"
+    private const val KEY_UPDATE_CACHE_NOTES = "update_cache_notes"
+    private const val KEY_UPDATE_CACHE_HTML = "update_cache_html_url"
+    private const val KEY_UPDATE_CACHE_APK = "update_cache_apk_url"
+
+    fun getCachedUpdateInfo(context: Context): UpdateInfo? {
+        val tag = prefs(context).getString(KEY_UPDATE_CACHE_TAG, "").orEmpty()
+        if (tag.isBlank()) return null
+        return UpdateInfo(
+            tagName = tag,
+            htmlUrl = prefs(context).getString(KEY_UPDATE_CACHE_HTML, "").orEmpty()
+                .ifBlank { "https://github.com/firefly-sylestia/Curio/releases/tag/$tag" },
+            releaseNotes = prefs(context).getString(KEY_UPDATE_CACHE_NOTES, "").orEmpty()
+                .takeIf { it.isNotBlank() },
+            apkUrl = prefs(context).getString(KEY_UPDATE_CACHE_APK, "").orEmpty()
+                .takeIf { it.isNotBlank() }
+        )
+    }
+
+    fun setCachedUpdateInfo(context: Context, info: UpdateInfo) {
+        prefs(context).edit()
+            .putString(KEY_UPDATE_CACHE_TAG, info.tagName)
+            .putString(KEY_UPDATE_CACHE_NOTES, info.releaseNotes.orEmpty())
+            .putString(KEY_UPDATE_CACHE_HTML, info.htmlUrl)
+            .putString(KEY_UPDATE_CACHE_APK, info.apkUrl.orEmpty())
+            .apply()
+    }
+
+    // Theme mode (v81) — "light" / "dark" / "system". v78 removed the
+    // theme system; the reimagined dark mode (pitch-black pages, dark
+    // same-hue hero shades, Samsung-style inner glow) returns here as a
+    // single mode (no AMOLED/Material styles). Default LIGHT — the v78
+    // shipped behavior. Seeded from prefs in [initThemeMode].
+    var themeModeState by mutableStateOf(THEME_LIGHT)
+        private set
+
+    // ── v461 — Home's writing rows, as reactive state (see the KEY_HOME_* note
+    //    above). Seeded by [initHomeRows], read by `PersonalChipsRow`, written by
+    //    the two switches in Settings. A flag that is only ever read from prefs
+    //    would leave the row on screen until the next launch, which is exactly
+    //    the "switch does nothing" report this project keeps learning from.
+    var homePagesRowState by mutableStateOf(true)
+        private set
+    var homeShelfRowState by mutableStateOf(true)
+        private set
+
+    /** The book pinned to Home's shelf door, or "" when nothing is pinned. */
+    var pinnedBookIdState by mutableStateOf("")
+        private set
+
+    // Pastel color mode (v7.5) — a user toggle that softens every category
+    // accent (fills become pastel with deep-matching ink in light mode,
+    // muted deep pastels in dark) and pastel-izes the mixed-deck blends and
+    // every blended/tinted color derived from the accents. Independent of
+    // theme STYLE (combines with Curio, AMOLED and Material) and theme MODE.
+    // Default ON (v7.x — the soft look is the app's shipped default now).
+    // Seeded from prefs in [initThemeMode].
+    var pastelColorsState by mutableStateOf(true)
+        private set
+
+    // v185 — proper M3 Material theme (default OFF): the whole color system
+    // re-does per M3 guidelines when on. Opt-in — the default app look is
+    // untouched.
+    var materialThemeState by mutableStateOf(false)
+        private set
+
+    // v411 — THE COLOR THEME (see [COLOR_THEME_CURIO] … [COLOR_THEME_LANE]).
+    // A DERIVED read: the three legacy switches below stay the source of
+    // truth for every other surface in the app, and this is the one value the
+    // Appearance page's "Color theme" sheet writes (through
+    // [setColorTheme], which sets them in step). Seeded in [initThemeMode].
+    var colorThemeState by mutableStateOf(COLOR_THEME_AZURE)
+        private set
+
+    // v223 — "Material hero tears" (Appearance, default OFF): when the
+    // Material theme is on AND this option is on, the shared torn heroes
+    // (Home / Profile / Settings / Cabinet-All / drawer / onboarding) wear
+    // the scheme's primaryContainer (+ onPrimaryContainer ink) instead of
+    // the app-default rose/azure. Only meaningful while [materialThemeState]
+    // is on — the Appearance row greys out otherwise.
+    var materialHeroTearsState by mutableStateOf(false)
+        private set
+
+    // Sky-azure hero variant (v27l) — when ON, the shared torn hero
+    // (Home / Profile / Settings / Cabinet) wears the app's airy pastel
+    // azure instead of the rose-wood. v42 — azure is back AND the DEFAULT
+    // (the v31 grey-out is gone); rose is now the opt-out.
+    var heroBlueState by mutableStateOf(true)
+        private set
+
+    // v30 — "Hero follows Spin lane" (Appearance): when ON and the Spin
+    // deck is on a single lane, the shared hero AND its page background
+    // wear that category's accent + wash (the Cabinet's language) instead
+    // of the rose/azure. Off by default — rose stays.
+    var heroFollowLaneState by mutableStateOf(false)
+        private set
+
+    // v28 — dark-mode elevation: black shadows are invisible on the
+    // midnight surfaces, so dark mode draws a soft LIGHT glow shadow
+    // (default OFF; users can opt into the glow from Appearance). Light mode
+    // is untouched either way.
+    var darkGlowState by mutableStateOf(false)
+        private set
+
+    // v407 — the background glyph backdrop's depth (Appearance): OFF (the
+    // default) draws the page glyph collage very subtle, ON restores the
+    // pre-v407 deep look. Seeded from prefs in [initThemeMode].
+    var glyphBackdropDeepState by mutableStateOf(false)
+        private set
+
+    // v409 — WHICH SURFACE LEADS (Appearance): the shipped light look is a
+    // WHITE page with CREAM cards, and this switch (default ON) flips it back
+    // to the pre-v409 construction — a cream page with white cards — for
+    // anyone who preferred that. It is the member's own reversal of the very
+    // change they asked for, which is why it is a visible option and not a
+    // hidden flag. Dark mode is untouched either way (black page, raised
+    // plates — both states agree there). Seeded in [initThemeMode].
+    var paperCreamCardsState by mutableStateOf(true)
+        private set
+
+    // Pastel crown depth (v7.12, EXPERIMENTAL) — when pastel mode is ON
+    // and this toggle is ON, the top of pastel card gradients gets a
+    // subtle 5% black deepen so every card reads with a gentle darker
+    // crown for depth instead of a uniform pastel from edge to edge.
+    // Default ON. Only takes effect when pastel mode is active.
+    var pastelCrownDepthState by mutableStateOf(true)
+        private set
+
+    // Hidden promo/demo-content mode (v7.107) — OFF by default; v24 it is
+    // v3xx — the PROMO MODE experiment was fully REMOVED (screen, route,
+    // flag and all demo-content branches in Home/Profile/Quests/Cabinet
+    // were deleted; the app always shows real data).
+    // Peek-deck upgrades (v7.7) — the Spin deck's background peek cards:
+    // top-lit gradient fill, category-tinted hairline border, roomier
+    // two-line near-card titles. v223 — the experiments CONCLUDED with all
+    // three ON: the toggles were removed from Experiments and the reads in
+    // SpinScreen are hardcoded true; these APIs stay dormant (defaults true).
+    var peekGradientState by mutableStateOf(true)
+        private set
+    var peekHairlineState by mutableStateOf(true)
+        private set
+    var peekShadowsState by mutableStateOf(false)
+        private set
+    var peekTitlesState by mutableStateOf(true)
+        private set
+    /** Experimental newer peek motion: travel first, then fade at the exit tail. */
+    var peekTailFadeState by mutableStateOf(false)
+        private set
+
+    // Main card (hero ticket) redesign (v7.13, EXPERIMENTAL) — the Spin
+    // deck's front hero card wears four independently-toggleable upgrades:
+    // an enhanced top-lit gradient fill, an accent-tinted border, a soft
+    // ambient shadow, and enhanced typography (bolder title, bigger
+    // subtitle). v15 — the enhanced gradient is promoted to the shipped
+    // default (ON, still toggleable in Experiments); the other upgrades
+    // stay OFF.
+    var heroGradientState by mutableStateOf(true)
+        private set
+    // v10 — promoted from experiment to always-on: the accent border on the
+    // hero card is now the shipped default.
+    var heroBorderState by mutableStateOf(true)
+        private set
+    // v223 — the Main card shadow experiment CONCLUDED ON: the One UI
+    // tinted shadow is the shipped default, the toggle is removed and the
+    // read in SpinScreen is hardcoded true. API stays dormant (default true).
+    var heroShadowState by mutableStateOf(true)
+    /** v27 — experimental paper accents (Settings → Experiments → Paper & headers). */
+    var paperHeaderCutsState by mutableStateOf(false)
+    var paperHeaderHolesState by mutableStateOf(false)
+    var paperHoleRingsState by mutableStateOf(false)
+    /** v27v — which 3D ring style the pin holes wear ("coil" | "split" | "oblique"). */
+    var paperHoleRingStyleState by mutableStateOf("coil")
+    // v97 — the Paper stat card experiment PASSED: on by default app-wide
+    // (the Experiments toggles stay for comparison).
+    var paperStatCardsState by mutableStateOf(true)
+    // v101 — the pill glow (dark mode) is the SUBTLE top-only version
+    // (gentler glass edge + a glow that hugs the pill's top). v3xx — the
+    // experiment concluded: subtle is the always-on default, no toggle.
+    // v3xx — CABINET v2 (Settings → Experiments → Cabinet v2): the
+    // collections view — jacket-art covers, glass toolbar, search, batch
+    // select — is now the DEFAULT (decided): new installs and members who
+    // never touched the toggle land on it, while a member who explicitly
+    // turned the experiment OFF keeps the classic grid. The toggle stays for
+    // comparison until the experiment formally settles.
+    var cabinetV2EnabledState by mutableStateOf(true)
+    // v3xx45 — SCREEN REVEAL experiment (Settings → Dev page, default OFF):
+    // opening a screen plays the SAME circular iris as the light/dark flip —
+    // the current screen is frozen and peels away from where you tapped, a
+    // touch faster than the theme wipe. Off = today's plain transitions.
+    var screenRevealEnabledState by mutableStateOf(false)
+    // v394 — PINNED TITLES (Settings ▸ Experiments, default ON since v496):
+    // keeps the current title line visible while scrolling Book Review and
+    // Journal. It shipped opt-in; the member has since reported the bar as
+    // MISSING ("sometimes the heading dont show") — an experiment whose answer is
+    // "I want it and it isn't there" is decided, so a fresh install (and every
+    // install that never touched the switch) gets it. The switch stays: a stored
+    // choice still wins, and turning it off is still one tap. Same rule v406
+    // applied to the capture studio and the cover consent.
+    var pinnedTitleViewState by mutableStateOf(true)
+    // v3xx52 — CAPTURE STUDIO experiment (Settings ▸ Experiments, default OFF):
+    // the Save-your-take page gets a redesigned workspace shell — tinted topic
+    // hero, a take rail riding the bottom tray, pickers moved into a tools
+    // bottom sheet, a live recording pulse and springy take switching. The
+    // paper notes themselves are untouched; OFF = today's capture page.
+    var captureStudioState by mutableStateOf(true)
+    // v386 — SOCIAL TEXT EDITING now defaults ON (it was an opt-in experiment).
+    // Edit-own-message / edit-own-comment works out of the box; anyone who
+    // explicitly switched the Experiments toggle OFF keeps that choice — only
+    // the untouched default moved (see [isSocialTextEditingEnabled]).
+    var socialTextEditingState by mutableStateOf(true)
+    // v389 — CONVERSATIONS MUTED ON THE SHADE. A device-side set of user ids:
+    // muting a friend silences their message notifications (the inbox keeps
+    // counting them, so unmuting never dumps a backlog) while the conversation
+    // itself stays fully readable. Set from the notification's own action, from
+    // the thread's bell, and cleared on sign-out (the ids belong to an account).
+    var mutedConversationsState by mutableStateOf<Set<String>>(emptySet())
+        private set
+    // v389 — the wall's density experiment CLOSED: the compact card spacing
+    // (and its "Roomy social wall" switch, v387) was reverted on the member's
+    // call, so the airier row is the shipped one and nothing here toggles it.
+    // v3xx — the four empty starter shelves (Curiying now / Want to
+    // Read / Completed / Personal) were seeded once into the Cabinet's
+    // collection store; the virtual shelves (Favorites / Saved entries /
+    // Notes) are computed and never persisted.
+    var cabinetShelvesSeededState by mutableStateOf(false)
+    var paperStatTearState by mutableStateOf(false)
+        private set
+    // v108 — torn heroes wear ONLY their bottom tear by default; the white
+    // paper under-sheet (the extra layered lip below the seam) is an opt-in
+    // experiment in Settings → Experiments → Paper & headers.
+    var heroTearSheetState by mutableStateOf(false)
+    // v223 — the Nav-style buttons experiment CONCLUDED ON: the Spin
+    // Categories/Filter buttons (and their vertical variants) wear the
+    // floating NAV-PILL look as the shipped default; the toggle is removed
+    // and the reads in SpinScreen are hardcoded true. API stays dormant.
+    var navPillButtonsState by mutableStateOf(true)
+        private set
+    /** v27u — Home tint experiments (Settings → Experiments → Home tint). */
+    var homeTintState by mutableStateOf(false)
+    var homeHeroTintState by mutableStateOf(false)
+    var homeTintFollowLaneState by mutableStateOf(false)
+    var homeTintCategoryIdState by mutableStateOf(CategoryId.WILDCARD.name)
+    // v27j — header fill depth. ON by default: the torn-hero headers wear a
+    // slightly DARKER version of the category's painter accent. Turning it
+    // off restores the exact pre-toggle accent. Watermark glyphs, ink and
+    // everything else are untouched — only the banner fill color deepens.
+    var headerDeepState by mutableStateOf(true)
+        private set
+    // v3xx — the app-wide header style: TORN (default, the classic torn
+    // paper banner) or GLASS (the Cabinet v2 glass-toolbar look — a
+    // content-height liquid-glass bar with its own tint). Selected in
+    // Settings → Experiments → "Glass toolbar header".
+    enum class HeaderStyle { TORN, GLASS }
+    var headerStyleState by mutableStateOf(HeaderStyle.TORN)
+        private set
+    // ── v468 — THE FLOATING-PILL HEADER ────────────────────────────────
+    //
+    // The member: *"make the header that floating pill style … and add a toggle for
+    // floating pill style headers"*. A THIRD header shape: a small detached capsule
+    // (back chevron + title) that floats over the page instead of the
+    // content-height glass bar or the torn banner. Chosen in
+    // Settings → Experiments → "Floating pill header", and **default OFF like every
+    // experiment**.
+    //
+    // **IT IS A FLAG, NOT A THIRD [HeaderStyle], AND THAT IS THE SAFE CHOICE.**
+    // Every header site in the app branches with `== HeaderStyle.GLASS` — a
+    // comparison, not a `when` — so a new enum value would read as TORN at all of
+    // them and the toggle would ship as a switch that changes nothing. A flag is
+    // read through `com.curio.app.ui.CurioLayout.floatingPillHeader`, which is also
+    // where the LANDSCAPE default lives, so one reader serves the switch and the
+    // orientation and no screen has to know about either.
+    var floatingPillHeadersState by mutableStateOf(false)
+        private set
+    // v10 — dual-accent blend gradient toggle (default OFF). When on, the
+    // hero card wears a richer multi-accent blend instead of the plain
+    // vertical gradient.
+    var heroBlendGradientState by mutableStateOf(false)
+        private set
+
+    // 3D button gradient & shadow (v7.11, EXPERIMENTAL) — when ON, the
+    // Spin shuffle button wears a radial 3D gradient (highlighted top,
+    // shaded bottom) with a soft ambient shadow so it reads as a raised
+    // sphere instead of a flat circle. Also fixes the orbiting ring dots
+    // in pastel mode (they switch to a contrasting ink so they stay
+    // visible on the pastel surface). Default ON. When the experiment
+    // settles, hardcode the winner and remove the toggle.
+    var threeDButtonState by mutableStateOf(true)
+        private set
+
+    var reminderEnabledState by mutableStateOf(false)
+        private set
+
+    // ── Reactive display name & avatar (v280) ──────────────────────
+    // Read via these states in Compose so the drawer/profile recompose
+    // when the user saves a new name or photo — the old getDisplayName()
+    // / getProfileAvatarPath() functions read SharedPreferences once and
+    // don't trigger recomposition.
+    var displayNameState by mutableStateOf("Curious Explorer")
+        internal set
+    // v439 — whether the member's picture is their derived blob rather than the
+    // photo on this device (see [isProfileAvatarBlob]). Reactive like the path
+    // above, so choosing one repaints the hero and the drawer immediately.
+    var profileAvatarBlobState by mutableStateOf(false)
+        internal set
+    var favoriteSongState by mutableStateOf("")
+        internal set
+    // v348 — favorite books (heart pick): book names, reactive so the sheet
+    // heart + any future share-card chip update the moment it is tapped.
+    var bookFavoritesState by mutableStateOf<Set<String>>(emptySet())
+        internal set
+    // v350 — favorite series (heart pick): show names, reactive like the
+    // book favorites. The episode-list sheet heart updates instantly.
+    var seriesFavoritesState by mutableStateOf<Set<String>>(emptySet())
+        internal set
+    // v3xx — liked timestamps ("kind|name" → epoch ms) for the Cabinet
+    // Everything "Recent" rail (recently liked books/albums/series).
+    var likedAtState by mutableStateOf<Map<String, Long>>(emptyMap())
+        internal set
+    // v350 — watched episodes per show: show name → set of "S1E3" keys.
+    // Reactive so the episode sheet's toggles + progress update in place.
+    var seriesWatchedState by mutableStateOf<Map<String, Set<String>>>(emptyMap())
+        internal set
+    // v352 — per-chapter heart picks: book name → set of liked chapter numbers.
+    var bookChapterLikesState by mutableStateOf<Map<String, Set<Int>>>(emptyMap())
+        internal set
+    // v362 — personal text notes per chapter (book name → chapter number →
+    // text). Reactive so the sheet's note field updates immediately.
+    var bookChapterNotesState by mutableStateOf<Map<String, Map<Int, String>>>(emptyMap())
+        internal set
+    // v352 — per-episode heart picks: show name → set of liked "S1E3" keys.
+    var seriesEpisodeLikesState by mutableStateOf<Map<String, Set<String>>>(emptyMap())
+        internal set
+    // v352 — the user's own book ratings: book name → 0..5 (pen-nib pick).
+    var bookCustomRatingsState by mutableStateOf<Map<String, Double>>(emptyMap())
+        internal set
+    // v354 — the user's own book-rating row visible in the book-notes sheet.
+    var bookRatingVisibleState by mutableStateOf(true)
+        internal set
+    // v352 — last resolved cover URL per book (hub provider results).
+    var bookCoverUrlsState by mutableStateOf<Map<String, String>>(emptyMap())
+        internal set
+    // v375 — rich runs per chapter note (mirror of bookChapterNotesState).
+    var bookChapterNoteSpansState by mutableStateOf<Map<String, Map<Int, List<TextSpan>>>>(emptyMap())
+        internal set
+    // v375 — cached cover-art swatches per artwork URL (ARGB slot lists).
+    var coverSwatchCacheState by mutableStateOf<Map<String, List<Int>>>(emptyMap())
+        internal set
+    // v375 — last resolved album/series sheet artwork URL per "family|name".
+    var sheetArtUrlsState by mutableStateOf<Map<String, String>>(emptyMap())
+        internal set
+    // v389d — the moderation right the server last confirmed for this account
+    // (see KEY_COMMUNITY_ADMIN). Reactive so the door appears the moment it is
+    // confirmed, and is already there on the next open.
+    var communityAdminState by mutableStateOf(false)
+        internal set
+    var communityAdminRepliesState by mutableStateOf(false)
+        internal set
+    // v336 — per-album favorite tracks (heart picks): album name → picked
+    // track titles in pick order. Reactive so the sheet hearts + the Vinyl
+    // share-card strip update the moment a heart is tapped.
+    var albumFavTracksState by mutableStateOf<Map<String, List<String>>>(emptyMap())
+        internal set
+    // v353 — heart-picked favorite-tracks strip visible on share cards.
+    var albumFavStripVisibleState by mutableStateOf(true)
+        internal set
+    // v384 — favorite-tracks strip layout: list rows vs side-by-side chips.
+    var albumFavRowsState by mutableStateOf(false)
+        internal set
+    var profileAvatarPathState by mutableStateOf("")
+        internal set
+
+    // ── Online Mode + the Community tab (observable mirrors) ──────────
+    // Both are read from COMPOSITION (the bottom nav bar decides whether the
+    // Community tab exists, and every online surface tests the gate), so the
+    // stored prefs are mirrored into Compose state here. Without this the nav
+    // bar would keep a stale tab list until the next app launch.
+    /** Mirrors [isOnlineModeEnabled] so the nav chrome reacts to the switch. */
+    var onlineModeEnabledState by mutableStateOf(false)
+        private set
+    /** Mirrors [isCommunityTabEnabled] — the opt-in Community nav tab. */
+    var communityTabEnabledState by mutableStateOf(false)
+        private set
+    /** Mirrors [getProfileVisibility] — "public" or "friends". */
+    var profileVisibilityState by mutableStateOf("public")
+        private set
+    /** Mirrors [isActivityHidden] — no last-active stamp is ever published. */
+    var hideActivityState by mutableStateOf(false)
+    private set
+    var presenceModeState by mutableStateOf(PRESENCE_ACTIVE)
+    private set
+
+    /**
+     * Whether the Community tab belongs on the bottom nav right now.
+     * Requires BOTH switches: Online Mode (the account layer is live) and the
+     * explicit "show it in the nav" opt-in. The gate is a getter so every
+     * caller — nav bar, rail, glass tab bar — reads the same answer.
+     */
+    val communityTabVisible: Boolean
+        get() = communityTabEnabledState && onlineModeEnabledState
+
+    // Liquid-glass navigation pills experiment (v227) — OPT-IN (default
+    // OFF): the three floating nav-style capsules (bottom tab bar, Topic
+    // Reveal category/favorite bar, Pet Designer studio bar) render a
+    // REAL-TIME frosted backdrop — vibrancy + blur + lens refraction of
+    // whatever is behind them (the io.github.kyant0:backdrop recipe) —
+    // instead of the solid elevated fill. Needs Android 12+ (RenderEffect);
+    // older devices silently keep the current look.
+    var liquidGlassPillsState by mutableStateOf(false)
+        private set
+
+    // v248 — CLASSIC ACTIVE INDICATOR (experiment, default OFF): the nav
+    // bar's draggable blob renders as fully TRANSPARENT refracting glass
+    // (the pre-v247 style) instead of the solid white/black pill. Needs
+    // Liquid glass pills on.
+    var glassClassicIndicatorState by mutableStateOf(false)
+        private set
+
+    // v292 — NAV INDICATOR COLOR: what the liquid-glass tab bar's resting
+    // active pill wears. "auto" follows the theme (Material → scheme
+    // primary, azure hero → azure, rose → rose); "white" and "black" are
+    // the fixed options.
+    const val NAV_INDICATOR_AUTO = "auto"
+    const val NAV_INDICATOR_WHITE = "white"
+    const val NAV_INDICATOR_BLACK = "black"
+    var navIndicatorColorState by mutableStateOf(NAV_INDICATOR_AUTO)
+        private set
+
+    // v292b — INDICATOR OPACITY: how transparent the resting active pill's
+    // frosted wash is (0 = clear glass, 1 = fully solid). The touch blob —
+    // the small capsule that appears under your finger while pressed — is
+    // NOT affected: it always fades the fill away so the press-glass shows.
+    const val NAV_INDICATOR_OPACITY_DEFAULT = 0.55f
+    var navIndicatorOpacityState by mutableStateOf(NAV_INDICATOR_OPACITY_DEFAULT)
+        private set
+
+    // v233 — Clear-glass style (experiment, default OFF): when the liquid-
+    // glass pills are showing, drop the heavy frost (blur 8dp → 2dp, wash
+    // cut to a third) so the capsule reads CLEAR and refractive — like the
+    // bright blob it becomes under your finger while pressed — instead of
+    // milky frosted glass.
+    var glassClarityState by mutableStateOf(false)
+        private set
+
+    // v482/v484/v487 — FROSTED GLASS (default ON): the member: *"make it whitish
+    // frosty glass not transparent at all more smudged, add a toggle for the whole
+    // smudged look too"*, then *"the frosted blur doesnt refract and its too opaque
+    // make it 40 mybe … also for dark mode too"*, then (v487, with it on) *"the nav
+    // bar's own labels look smudgy … make it heavy, a real blurred, thinner tint
+    // without the wash"*. When ON, every glass surface — the floating pills, the
+    // toolbars, the nav bar, and the bottom sheets' and dialogs' own panels — wears
+    // a HEAVY real blur with a THIN tint of its own colour on top (see
+    // `CurioGlassPills.Frost`): the blurred page is the look, the tint only says
+    // which surface this is, and text drawn on the glass stays crisp. The nav bar
+    // additionally stops sampling its own hidden tab-row copy in this mode, which
+    // is what ghosted its labels (see `CurioLiquidGlassTabBar`). The lens refraction
+    // is back everywhere it was dropped except the reader's chrome (see
+    // `LocalCurioGlassFrostRefraction`). Turning it off restores the clear recipe
+    // (and the separate Clear glass option still applies in that mode). The same
+    // switch drives the frost on sheets and dialogs (see
+    // [com.curio.app.ui.theme.curioSheetContainerColor] and
+    // [com.curio.app.ui.theme.curioDialogContainerColor]).
+    var glassFrostedState by mutableStateOf(true)
+        private set
+
+    // ── v496 — THREE EXPERIMENTS ARE GONE, NOT SWITCHED OFF ──────────────
+    //
+    // The member judged three of the second-round experiments out (*"remove
+    // riffle the deck"*, *"the fold the entry remove it"*, and the tear with
+    // them), so the riffle (`deck_riffle_v1`), the reveal's tear-off
+    // (`reveal_tear_v1`) and the Cabinet's folded cards (`cabinet_fold_v1` +
+    // the `folded_entries` set) have no state, no switch and no code path any
+    // more — root rule 3 of the experimental-changes section: when the answer
+    // is in, the switch goes with it. The ripple is one behaviour again: Spin's
+    // swipe past 48dp deals one card; the reveal's Completed star is the only
+    // save write; a Cabinet card is never folded.
+
+    // v491 — THE PASSPORT'S STAMP IS PRESSED (default ON): a lane's MASTERED
+    // stamp is earned by real activity and then physically pressed — a rubber
+    // stamp head comes down, the ink lands squashed and slightly crooked, and
+    // the imprint is imperfect in a way that is stable for that lane's whole
+    // life. **Nothing is lost when it is off**: masteries earned before this
+    // are grandfathered in as already pressed ([CurioPassport.ensurePressSeed]),
+    // and with the switch off a mastered lane stamps itself exactly as it
+    // always did.
+    var passportStampState by mutableStateOf(true)
+        private set
+
+    // v492 — THE READER'S PENCIL MARGIN (default ON): a strip over the page's
+    // right edge you scrawl in with your finger, kept per page of the book (see
+    // [com.curio.app.data.ReaderMarginInk]). It is the reader's own door in the
+    // ⋯ menu, so with the switch off that grid is exactly the six tiles it was.
+    var readerMarginState by mutableStateOf(true)
+        private set
+
+    // v493 — THE TIME CAPSULE (default ON): a letter written now that Curio hands
+    // back on the day it is set for — the writing page is its own route (see
+    // [com.curio.app.features.timecapsule.TimeCapsuleScreen]) and the return is a
+    // full-screen arrival over Home (see `TimeCapsuleArrival`). The switch gates
+    // what Home shows and nothing else: with it off the letters stay sealed in
+    // `curio_time_capsules` and arrive the moment it is switched back on.
+    var timeCapsuleEnabledState by mutableStateOf(true)
+        private set
+
+    // v483 — THE DRAWER'S CONSTELLATION WEARS ONE OF THREE CONNECTION STYLES.
+    // The member: *"the drawer pattern and connections are still very much
+    // messy and overlapping … make it beautiful"* — and, asked how the lines
+    // should look, wanted **all three** styles with a **tap-and-hold on the
+    // sky** cycling between them. Stored as the `DrawerLinkStyle` ordinal
+    // (0 = delicate threads, 1 = branch bones, 2 = swept arcs); the gesture in
+    // `DrawerLaneStarMap` writes it, so the choice survives a restart.
+    var drawerLinkStyleState by mutableStateOf(0)
+        private set
+
+    // v454 — LITE MODE (default OFF): one switch that makes the app cheaper
+    // on weaker hardware — refraction/blur everywhere is skipped, the
+    // always-running decorative clocks (shimmer, twinkle, breathe, pulse)
+    // hold still, and transitions run shorter. It is deliberately NOT a
+    // "turn the app ugly" switch: layouts, colours, state and every actual
+    // transition stay exactly as they are, so nothing reads as broken —
+    // only the motion that exists just to be looked at stops.
+    var liteModeState by mutableStateOf(false)
+        private set
+
+    // v242 — LIQUID GLASS TUNING: user-adjustable multipliers for the glass
+    // recipe (Appearance → Liquid glass). 1f = the tuned default; 0f turns
+    // the effect off; up to 2f doubles it.
+    // v243 — the DEFAULT sits at 25% (a much clearer glass than the old
+    // full-frost 100%); users can still slide 0–200% in Appearance.
+    // v487 — the FROST no longer reads this as a fraction of its own radius: it
+    // centres on this default, so 0.25 is the frost's FULL heavy blur and the
+    // slider moves it either way (see `CurioGlassPills.Frost.blurFactor`). The
+    // clear recipe still spends it directly, exactly as before.
+    var glassBlurScaleState by mutableStateOf(0.25f)
+        private set
+    var glassRefractionScaleState by mutableStateOf(1f)
+        private set
+    var glassReflectionScaleState by mutableStateOf(1f)
+        private set
+    var glassIndicatorShadowScaleState by mutableStateOf(1f)
+        private set
+
+    /**
+     * Reactive category-tint state — updated by [setTintWashEnabled] so page
+     * backgrounds (via categoryBackgroundWash) instantly revert to the plain
+     * theme background when the user toggles it in settings.
+     *
+     * v508 — DEFAULT OFF: the plain theme background is the shipped look, and
+     * a member who wants every category-aware page washed in its lane's colour
+     * turns **Category tint** on in Settings → Appearance. This starts on the
+     * same value [isTintWashEnabled] reads, so a fresh install and a stored
+     * preference can never disagree.
+     */
+    var tintWashEnabledState by mutableStateOf(false)
+        private set
+
+    /**
+     * Reactive share-card SMART AUTO-FIT state — updated by
+     * [setShareAutoFitEnabled] so the editor's toggle applies instantly:
+     * long quick-fact text auto-shrinks, grows the fact box and nudges it
+     * up (default ON; manual moves/resizes of a box disable auto-fit for
+     * that box).
+     */
+    var shareAutoFitState by mutableStateOf(true)
+        private set
+
+    /**
+     * Reactive entry-meta state — updated by [setEntryMetaEnabled] so the
+     * saved-entry meta card (date & time / mood / type), the "Captured
+     * today · 3:42 PM" time, and the journal's mood + attachment sections
+     * recompose instantly when the user toggles it in Settings. Default ON.
+     * Seeded from prefs in [initThemeMode].
+     */
+    var entryMetaEnabledState by mutableStateOf(true)
+    // Smart Spin layout — the DIMENSION rule of the Spin page's smart
+    // compact system: short screens get the compact (or extra-compact)
+    // layout. v7.35 — Default OFF: the roomy Spin layout ships by default
+    // and compact is opt-in (still toggleable in Settings). Seeded from
+    // prefs in [initThemeMode].
+    var smartSpinLayoutState by mutableStateOf(false)
+    // Smart density mode — the DENSITY rule of the Spin page's smart
+    // sizing, now a 3-way strength picker (v7.4): OFF disables density
+    // sizing, COMPACT keeps the classic rule (under 440 dpi → smaller,
+    // 440+ dpi → roomier), EXTRA_COMPACT adds a 2x tier for very low dpi
+    // (under 350 dpi → even smaller deck). v7.35 — Default OFF: the deck
+    // ships at its natural size; compact sizing is opt-in. Seeded from
+    // prefs in [initThemeMode].
+    var smartDensityModeState by mutableStateOf(SmartDensityMode.OFF)
+    // Explore sessions — the explore-now timer/reminder/done flow. Default
+    // ON; off disables the timer notification + reminder + done prompt while
+    // Explore-now still opens the browser and records recently-explored.
+    var exploreSessionsEnabledState by mutableStateOf(true)
+        private set
+
+    // v19 — the chosen search engine id ("google", "duckduckgo", …) for the
+    // Explore browser button. Reactive so the Topic Reveal dialog copy and
+    // the Settings row update the moment it changes.
+    var searchEngineState by mutableStateOf(SearchEngine.GOOGLE.id)
+    // v27s — the chosen music service id ("youtube", "youtube_music",
+    // "apple_music", "spotify") for the "Watch in" action on Album /
+    // Artist / Song topics. YouTube is the default for new preferences.
+    var musicServiceState by mutableStateOf(MusicService.YOUTUBE.id)
+    var recycleBinExpiryDaysState by mutableStateOf(DEFAULT_RECYCLE_BIN_EXPIRY_DAYS)
+        private set
+
+    // v3xx — the "Live explore notification" experiment concluded: the
+    // persistent chronometer notification is ALWAYS on (no toggle).
+
+    // Floating explore bubble — a Messenger-style timer bubble drawn over
+    // OTHER apps (the browser) via SYSTEM_ALERT_WINDOW. Default ON; off
+    // means the timer lives only in the notification (when live
+    // notifications are on) — there is no in-app pill fallback.
+    // v22 — default OFF: the bubble is now opt-in from the explore dialog
+    // (and the Settings toggle enables it anytime).
+    var overlayBubbleEnabledState by mutableStateOf(false)
+        private set
+    // v23 — whether the Explore dialog shows its bubble opt-in row. Hidden
+    // by default; the Notifications toggle re-shows it (single-line, no
+    // subtext) so the dialog stays clean while the Settings toggle still
+    // enables the bubble itself.
+    var showBubbleOptInDialogState by mutableStateOf(false)
+        private set
+
+    // v3xx54 — social notifications (a DM or a new community post), default
+    // ON. Read by the app-level watcher and the Notifications page switch.
+    var socialNotificationsState by mutableStateOf(true)
+        private set
+
+    // v8.1 — whether the user has declined the "Display over other apps"
+    // permission (see [isOverlayAskDeclined]). Suppresses the automatic
+    // explore-start prompt; explicit Settings toggles always work and
+    // clear it.
+    var overlayAskDeclinedState by mutableStateOf(false)
+        private set
+
+    // Voice-to-text/dictation (experimental) — opt-in only. This controls
+    // dictation in Sound Bite fields and saved voice-note details; ordinary
+    // microphone recording remains available regardless of this toggle.
+    var voiceToTextEnabledState by mutableStateOf(false)
+
+    /**
+     * v465f — whether the Edge TTS experiment is on (default OFF).
+     *
+     * Read by the reader's Engine row to offer the extra voice, and by nothing
+     * else: no audio is generated, no socket is opened and no endpoint is
+     * contacted until a member both turns this on AND selects the voice.
+     */
+    var edgeVoiceEnabledState by mutableStateOf(false)
+        private set
+
+    /**
+     * v465h — whether read-aloud keeps going when Curio is not on screen.
+     *
+     * Read by the reader when it starts a voice (and mirrored into the service's
+     * notification), never by the driver itself: switching this off does not stop
+     * a session that is already running — it stops the session being *kept alive*,
+     * so the next time the member leaves the app the phone's own rules apply.
+     * Deliberately NOT in the reader's saved look: it is an app preference like
+     * the dictation switch beside it, not a per-book reading choice.
+     */
+    var readAloudBackgroundEnabledState by mutableStateOf(true)
+        private set
+
+    // v125 — the OFFLINE transcription model for pre-recorded sound bites
+    // (Vosk). "" = none downloaded/selected; the value is the model id from
+    // [VoskModels.CATALOG]. Dictation (live OS recognizer) is unaffected —
+    // this only gates the recorded-audio → text flow on the detail page.
+    var offlineModelIdState by mutableStateOf("")
+        private set
+    // Bumped by download/delete so screens reading [VoskModels.isDownloaded]
+    // recompose with the fresh state when they regain focus.
+    var offlineModelVersionState by mutableIntStateOf(0)
+        private set
+
+    /**
+     * Curio pet companion state (v8.5) — gates the pixel pet sprite, its
+     * rule-based dialogue, and the passport/discovery companion layer on
+     * Quests and Home (spec §10). Default ON. Seeded from prefs in
+     * [initThemeMode]; off hides the pet entirely and restores the plain
+     * quests layout.
+     */
+    var petEnabledState by mutableStateOf(true)
+        private set
+    // v8.8 — whether the pet floats freely on every screen (draggable +
+    // wanders). Independent of [petEnabledState]: the pet layer can be on
+    // while the floating companion is off (the pet then stays in its bed).
+    var floatingPetEnabledState by mutableStateOf(true)
+        private set
+    // v256 — whether the pet also floats OUTSIDE the app (overlay window).
+    var petOutsideAppState by mutableStateOf(false)
+        private set
+    // v8.43 — whether the pet's learning brain is on (default ON): the pet
+    // builds a personality from the user's real activity and develops its
+    // own catchphrases. Off = classic rule-based lines only.
+    var petBrainEnabledState by mutableStateOf(true)
+        private set
+    // v489 — whether completed topics return for a recall (default ON). See
+    // [CurioRecall] for the ladder and the rules.
+    var recallEnabledState by mutableStateOf(true)
+        private set
+    // v16 — how talkative the pet is: "talkative" (lines ~1.4x), "cozy"
+    // (default, unchanged), "quiet" (lines ~0.35x — mostly motion).
+    var petChatterState by mutableStateOf("cozy")
+        private set
+    // v16 — how often the pet starts games on its own: "relaxed" (~0.55x),
+    // "normal" (default), "eager" (~1.5x).
+    var petGameFrequencyState by mutableStateOf("normal")
+        private set
+    // v8.16 — whether the Spin deck auto-opens the landed topic's reveal the
+    // moment the wheel settles. v8.21 — DEFAULT ON: the reveal opens by
+    // itself when the deck lands (the tour and pet lines adapt). Turn it
+    // OFF to make the deck land quietly with the front card staying
+    // tappable until the user opens it manually.
+    var autoOpenRevealState by mutableStateOf(true)
+        private set
+
+    // v8.39 — custom reaction lines are an explicit opt-in. The editor can
+    // always be used, but Curie only speaks saved custom lines when enabled.
+    var customReactionLinesState by mutableStateOf(false)
+        private set
+
+    /**
+     * Reactive pinned-topics state — updated by [pinTopic] / [unpinTopic] so
+     * the Topic Reveal pin button and the Topic History "Pinned" section
+     * recompose instantly. Seeded from prefs in [initThemeMode].
+     */
+    var pinnedTopicsState by mutableStateOf<List<PinnedTopic>>(emptyList())
+        private set
+
+    /**
+     * Reactive saved-quotes state — updated by [saveQuote] /
+     * [removeSavedQuote] so the saved-entry bookmark buttons and the Home
+     * screen's "Saved" shelf recompose instantly. Seeded from prefs in
+     * [initThemeMode].
+     */
+    var savedQuotesState by mutableStateOf<List<SavedQuote>>(emptyList())
+        private set
+
+    /**
+     * Reactive topic-sentiment state — keyed "CATEGORY:topicId" → "like" /
+     * "dislike". Updated by [setTopicSentiment] so the Topic Reveal buttons
+     * and the Spin shuffle recompose/pick with the latest votes. Seeded from
+     * prefs in [initThemeMode].
+     */
+    var topicSentimentsState by mutableStateOf<Map<String, String>>(emptyMap())
+        private set
+
+    /**
+     * Reactive hidden-categories state (v7.94) — set via Manage Categories.
+     * [CurioCategories.visible] reads it, so Home/Cabinet/Picker/Spin all
+     * drop hidden lanes instantly and persistently. Seeded from prefs in
+     * [initThemeMode].
+     */
+    var hiddenCategoriesState by mutableStateOf<Set<CategoryId>>(emptySet())
+        private set
+
+    /**
+     * Reactive saved-mixes state for the new category picker — the named
+     * mixes a user creates/saves. Seeded from the old quick presets once
+     * (first use of the new picker). Updated by [addOrReplaceMix] /
+     * [deleteMix]; seeded from prefs in [initThemeMode].
+     */
+    var savedMixesState by mutableStateOf<List<NamedMix>>(emptyList())
+        private set
+
+    /**
+     * Reactive Cabinet collections (v3xx — Cabinet v2 folders): named
+     * collections/folders holding pinned topics + saved entries. Seeded
+     * from prefs in [initThemeMode]; updated by [addOrReplaceCollection]
+     * / [deleteCollection].
+     */
+    var collectionsState by mutableStateOf<List<CurioCollection>>(emptyList())
+        private set
+
+    /**
+     * Classic-picker toggle for the new category picker: OFF = the new
+     * default picker; ON = the old glass-pill picker. Seeded from prefs
+     * in [initThemeMode].
+     */
+    /** Whether the starter named mixes were already written once. */
+    var pickerMixesSeededState by mutableStateOf(false)
+        private set
+
+    /**
+     * v318b — the NAME of the last APPLIED named mix (null when the deck is
+     * a single lane, a surprise, or an unnamed multi-lane selection). The
+     * Spin page's category pill shows this name instead of a generic
+     * "Mixed · N". Seeded from prefs in [initThemeMode].
+     */
+    var lastMixNameState by mutableStateOf<String?>(null)
+        private set
+
+    /**
+     * v320 — the book-cover hub's state: the SELECTED provider (a
+     * BookCoverProvider enum name), the list of book names whose covers
+     * failed the last fetch (survives restarts for "Retry failed"), and the
+     * keyless-fetched Google Books average ratings (book name → rating),
+     * which the reveal shows as star chips on book topics.
+     */
+    var bookFetchEnabledState by mutableStateOf(false)
+        private set
+    // v3xx51 — the MERGED cover-fetch consent (books + albums + series). The
+    // per-category mirrors below stay in lockstep with it so existing readers
+    // need no changes.
+    var coverFetchEnabledState by mutableStateOf(false)
+        private set
+    // v350 — per-category cover-fetch consent mirrors (album + series).
+    var albumFetchEnabledState by mutableStateOf(false)
+        private set
+    var seriesFetchEnabledState by mutableStateOf(false)
+        private set
+    // v356 — iTunes is the DEFAULT cover source (keyless, tried first);
+    // Google Books / Open Library / LibraryThing follow it in the hub.
+    var bookCoverProviderState by mutableStateOf("ITUNES")
+        private set
+    var bookCoverFailedState by mutableStateOf<List<String>>(emptyList())
+        private set
+    // v360 — verified-real covers (see KEY_BOOK_COVER_DONE): "Fetch all
+    // covers" skips these and only runs the not-yet-verified / failed books.
+    var bookCoverDoneState by mutableStateOf<List<String>>(emptyList())
+        private set
+    var bookRatingsState by mutableStateOf<Map<String, Double>>(emptyMap())
+        private set
+    var bookRatingsCountState by mutableStateOf<Map<String, Int>>(emptyMap())
+        private set
+    var bookReadingProgressState by mutableStateOf<Map<String, Int>>(emptyMap())
+        private set
+
+    /**
+     * v3xx — which picker page opens first in the sheet's pager.
+     * 0 = classic picker (default), 1 = new picker. Seeded from prefs in
+     * [initThemeMode].
+     */
+    var pickerDefaultPageState by mutableIntStateOf(0)
+        private set
+
+    /**
+     * v3xx14 — page 0's active mode tab (PickerMode.name: CURIO / KNOWLEDGE /
+     * MIX). Persisted so "Curio and Knowledge stay persistent too". Seeded
+     * from prefs in [initThemeMode].
+     */
+    var pickerPage0ModeState by mutableStateOf("MIX")
+        private set
+
+    /**
+     * v3xx — the user's curated "fun to explore" category ids shown below
+     * the mixes in the new picker. Empty = use the curated default list
+     * (see [defaultSuggestions]). Seeded from prefs in [initThemeMode].
+     */
+    var pickerSuggestionsState by mutableStateOf<List<CategoryId>>(emptyList())
+        private set
+
+    /**
+     * Reactive category ORDER state (v7.94) — set via Manage Categories.
+     * Empty = the default order. [CurioCategories.visible] applies it, so
+     * the Home/Cabinet chip rows and the pickers honor the user's reorder.
+     * Seeded from prefs in [initThemeMode].
+     */
+    var categoryOrderState by mutableStateOf<List<CategoryId>>(emptyList())
+        private set
+
+    /**
+     * Reactive custom-pet-design state (v8.34) — the design's import text,
+     * or null when the pet wears its default look. Updated by
+     * [setPetDesign] / [clearPetDesign] so the pet sprite recomposes
+     * instantly when a design is saved in the designer playground.
+     */
+    var petDesignState by mutableStateOf<String?>(null)
+        private set
+
+    /**
+     * Reactive custom-pet slots (v8.56) — the two user-saved pet designs
+     * (full design text) or null when a slot is empty. Updated by
+     * [setCustomPet] / [clearCustomPet] so the Pet studio's Pets page cards
+     * recompose the moment a pet is saved or removed.
+     */
+    var customPetsState by mutableStateOf<List<String?>>(listOf(null, null))
+    /** Legacy custom flower-bed rows; the current home uses a fixed house scene. */
+    var bedDesignRowsState by mutableStateOf<List<String>?>(null)
+    /** v9.5 — evolution path chosen at level 15 (null = baby, no choice yet). */
+    var evoPathState by mutableStateOf<String?>(null)
+        private set
+    /** v9.6 — experimental per-part size and position controls. */
+    var petPartTransformsState by mutableStateOf(false)
+        private set
+
+    fun initThemeMode(context: Context) {
+        themeModeState = getThemeMode(context)
+        colorThemeState = getColorTheme(context)
+        pastelColorsState = isPastelColorsEnabled(context)
+        pastelCrownDepthState = isPastelCrownDepthEnabled(context)
+        materialThemeState = isMaterialThemeEnabled(context)
+        materialHeroTearsState = isMaterialHeroTearsEnabled(context)
+        heroBlueState = isHeroBlueEnabled(context)
+        heroFollowLaneState = isHeroFollowLaneEnabled(context)
+        darkGlowState = isDarkGlowEnabled(context)
+        glyphBackdropDeepState = isGlyphBackdropDeepEnabled(context)
+        paperCreamCardsState = isPaperCreamCardsEnabled(context)
+        peekGradientState = isPeekGradientEnabled(context)
+        peekHairlineState = isPeekHairlineEnabled(context)
+        peekShadowsState = isPeekShadowsEnabled(context)
+        peekTitlesState = isPeekTitlesEnabled(context)
+        peekTailFadeState = isPeekTailFadeEnabled(context)
+        heroGradientState = isHeroGradientEnabled(context)
+        heroBorderState = isHeroBorderEnabled(context)
+        heroShadowState = isHeroShadowEnabled(context)
+        paperHeaderCutsState = isPaperHeaderCutsEnabled(context)
+        paperHeaderHolesState = isPaperHeaderHolesEnabled(context)
+        paperHoleRingsState = isPaperHoleRingsEnabled(context)
+        paperHoleRingStyleState = getPaperHoleRingStyle(context)
+        paperStatCardsState = isPaperStatCardsEnabled(context)
+        paperStatTearState = isPaperStatTearEnabled(context)
+        heroTearSheetState = isHeroTearSheetEnabled(context)
+        headerStyleState = getHeaderStyle(context)
+        floatingPillHeadersState = isFloatingPillHeadersEnabled(context)
+        navPillButtonsState = isNavPillButtonsEnabled(context)
+        homeTintState = isHomeTintEnabled(context)
+        homeHeroTintState = isHomeHeroTintEnabled(context)
+        homeTintFollowLaneState = isHomeTintFollowLaneEnabled(context)
+        homeTintCategoryIdState = getHomeTintCategory(context)
+        headerDeepState = isHeaderDeepEnabled(context)
+        heroBlendGradientState = isHeroBlendGradientEnabled(context)
+        threeDButtonState = is3DButtonGradientEnabled(context)
+        reminderEnabledState = isReminderEnabled(context)
+        displayNameState = getDisplayName(context)
+        favoriteSongState = getFavoriteSong(context)
+        bookFavoritesState = getBookFavorites(context)
+        seriesFavoritesState = getSeriesFavorites(context)
+        seriesWatchedState = getSeriesWatched(context)
+        likedAtState = getLikedAt(context)
+        albumFavTracksState = getAlbumFavoriteTracks(context)
+        albumFavStripVisibleState = isAlbumFavStripVisible(context)
+        albumFavRowsState = isAlbumFavRows(context)
+        profileAvatarPathState = getProfileAvatarPath(context)
+        profileAvatarBlobState = isProfileAvatarBlob(context)
+        liquidGlassPillsState = isLiquidGlassPillsEnabled(context)
+        liteModeState = isLiteModeEnabled(context)
+        forceGlassEnabled = prefs(context).getBoolean(KEY_FORCE_GLASS, false)
+        glassClassicIndicatorState = isGlassClassicIndicatorEnabled(context)
+        navIndicatorColorState = getNavIndicatorColor(context)
+        navIndicatorOpacityState = getNavIndicatorOpacity(context)
+        glassClarityState = isGlassClarityEnabled(context)
+        glassFrostedState = isGlassFrostedEnabled(context)
+        passportStampState = isPassportStampEnabled(context)
+        readerMarginState = isReaderMarginEnabled(context)
+        timeCapsuleEnabledState = isTimeCapsuleEnabled(context)
+        drawerLinkStyleState = getDrawerLinkStyle(context)
+        cabinetV2EnabledState = isCabinetV2Enabled(context)
+        screenRevealEnabledState = isScreenRevealEnabled(context)
+        pinnedTitleViewState = isPinnedTitleViewEnabled(context)
+        captureStudioState = isCaptureStudioEnabled(context)
+        socialTextEditingState = isSocialTextEditingEnabled(context)
+        mutedConversationsState = mutedConversations(context)
+        cabinetShelvesSeededState = isCabinetShelvesSeeded(context)
+        glassBlurScaleState = getGlassBlurScale(context)
+        glassRefractionScaleState = getGlassRefractionScale(context)
+        glassReflectionScaleState = getGlassReflectionScale(context)
+        glassIndicatorShadowScaleState = getGlassIndicatorShadowScale(context)
+        tintWashEnabledState = isTintWashEnabled(context)
+        shareAutoFitState = isShareAutoFitEnabled(context)
+        entryMetaEnabledState = isEntryMetaEnabled(context)
+        smartSpinLayoutState = isSmartSpinLayoutEnabled(context)
+        smartDensityModeState = getSmartDensityMode(context)
+        exploreSessionsEnabledState = isExploreSessionsEnabled(context)
+        searchEngineState = getSearchEngine(context)
+        musicServiceState = getMusicService(context)
+        recycleBinExpiryDaysState = getRecycleBinExpiryDays(context)
+        overlayBubbleEnabledState = isOverlayBubbleEnabled(context)
+        showBubbleOptInDialogState = isShowBubbleOptInDialog(context)
+        socialNotificationsState = isSocialNotificationsEnabled(context)
+        overlayAskDeclinedState = isOverlayAskDeclined(context)
+        voiceToTextEnabledState = isVoiceToTextEnabled(context)
+        edgeVoiceEnabledState = isEdgeVoiceEnabled(context)
+        readAloudBackgroundEnabledState = isReadAloudBackgroundEnabled(context)
+        offlineModelIdState = getOfflineModelId(context)
+        petEnabledState = isPetEnabled(context)
+        floatingPetEnabledState = isFloatingPetEnabled(context)
+        petOutsideAppState = isPetOutsideAppEnabled(context)
+        petBrainEnabledState = isPetBrainEnabled(context)
+        recallEnabledState = isRecallEnabled(context)
+        petChatterState = getPetChatter(context)
+        petGameFrequencyState = getPetGameFrequency(context)
+        autoOpenRevealState = isAutoOpenReveal(context)
+        customReactionLinesState = isCustomReactionLinesEnabled(context)
+        pinnedTopicsState = getPinnedTopics(context)
+        savedQuotesState = getSavedQuotes(context)
+        topicSentimentsState = getTopicSentiments(context)
+        hiddenCategoriesState = getHiddenCategories(context)
+        categoryOrderState = getCategoryOrder(context)
+        savedMixesState = getSavedMixes(context)
+        collectionsState = getCabinetCollections(context)
+        pickerMixesSeededState = isPickerMixesSeeded(context)
+        lastMixNameState = getLastMixName(context)
+        // v3xx51 — one merged consent feeds all three mirrors (see
+        // [isCoverFetchEnabled], which migrates any legacy per-category on).
+        coverFetchEnabledState = isCoverFetchEnabled(context)
+        bookFetchEnabledState = coverFetchEnabledState
+        albumFetchEnabledState = coverFetchEnabledState
+        seriesFetchEnabledState = coverFetchEnabledState
+        bookCoverProviderState = getBookCoverProvider(context)
+        bookCoverFailedState = getBookCoverFailed(context)
+        bookCoverDoneState = getBookCoverDone(context)
+        bookRatingsState = getBookRatings(context)
+        bookRatingsCountState = getBookRatingsCount(context)
+        bookReadingProgressState = getBookReadingProgress(context)
+        bookChapterLikesState = getBookChapterLikes(context)
+        bookChapterNotesState = getBookChapterNotes(context)
+        bookChapterNoteSpansState = getBookChapterNoteSpans(context)
+        seriesEpisodeLikesState = getSeriesEpisodeLikes(context)
+        bookCustomRatingsState = getBookCustomRatings(context)
+        bookCoverUrlsState = getBookCoverUrls(context)
+        coverSwatchCacheState = getCoverSwatchCache(context)
+        sheetArtUrlsState = getSheetArtUrls(context)
+        communityAdminState = prefs(context).getBoolean(KEY_COMMUNITY_ADMIN, false)
+        communityAdminRepliesState = prefs(context).getBoolean(KEY_COMMUNITY_ADMIN_REPLIES, false)
+        bookRatingVisibleState = isBookRatingVisible(context)
+        pickerDefaultPageState = getPickerDefaultPage(context)
+        pickerPage0ModeState = getPickerPage0Mode(context)
+        pickerSuggestionsState = getPickerSuggestions(context)
+        petDesignState = getPetDesign(context)
+        customPetsState = getCustomPets(context)
+        bedDesignRowsState = getBedDesignRows(context)
+        evoPathState = getEvoPath(context)
+        petPartTransformsState = isPetPartTransformsEnabled(context)
+        updateCheckerEnabledState = isUpdateCheckerEnabled(context)
+        autoBackupEnabledState = isAutoBackupEnabled(context)
+        autoBackupFrequencyDaysState = getAutoBackupFrequencyDays(context)
+        onlineModeEnabledState = isOnlineModeEnabled(context)
+        communityTabEnabledState = isCommunityTabEnabled(context)
+        profileVisibilityState = getProfileVisibility(context)
+        hideActivityState = isActivityHidden(context)
+    presenceModeState = getPresenceMode(context)
+    }
+
+    // ── Theme mode (v81) ────────────────────────────────────────────
+    /** The stored theme mode — "light" (default), "dark", or "system". */
+    fun getThemeMode(context: Context): String =
+        prefs(context).getString(KEY_THEME_MODE, THEME_LIGHT) ?: THEME_LIGHT
+
+    fun setThemeMode(context: Context, mode: String) {
+        prefs(context).edit().putString(KEY_THEME_MODE, mode).apply()
+        themeModeState = mode
+    }
+
+    // ── v461 — HOME'S WRITING ROWS ──────────────────────────────────────────
+
+    /** Whether Home shows the pages row (true unless the member turned it off). */
+    fun getHomePagesRow(context: Context): Boolean =
+        prefs(context).getBoolean(KEY_HOME_PAGES_ROW, true)
+
+    fun setHomePagesRow(context: Context, on: Boolean) {
+        prefs(context).edit().putBoolean(KEY_HOME_PAGES_ROW, on).apply()
+        homePagesRowState = on
+    }
+
+    /** Whether Home shows the shelf row (true unless the member turned it off). */
+    fun getHomeShelfRow(context: Context): Boolean =
+        prefs(context).getBoolean(KEY_HOME_SHELF_ROW, true)
+
+    fun setHomeShelfRow(context: Context, on: Boolean) {
+        prefs(context).edit().putBoolean(KEY_HOME_SHELF_ROW, on).apply()
+        homeShelfRowState = on
+    }
+
+    /**
+     * Seeds both flags from prefs at startup — the twin of [initThemeMode], and
+     * called from the same three places (the activity, a backup restore and the
+     * backup manager's own re-seed), so a restored backup's rows are honoured
+     * without a restart.
+     */
+    fun initHomeRows(context: Context) {
+        homePagesRowState = getHomePagesRow(context)
+        homeShelfRowState = getHomeShelfRow(context)
+        // The pin rides this seeding rather than a call site of its own: it is a
+        // fact about HOME's shelf door, it has to be read at exactly the same
+        // moments (startup, a backup restore), and a fourth seeding call is a
+        // fourth chance to forget one.
+        pinnedBookIdState = getPinnedBookId(context)
+    }
+
+    /** The pinned book's id, or "" — see [KEY_PINNED_BOOK]. */
+    fun getPinnedBookId(context: Context): String =
+        prefs(context).getString(KEY_PINNED_BOOK, "").orEmpty()
+
+    /** Pins [bookId] to Home's shelf door. One pin at a time: pinning replaces. */
+    fun setPinnedBookId(context: Context, bookId: String) {
+        prefs(context).edit().putString(KEY_PINNED_BOOK, bookId).apply()
+        pinnedBookIdState = bookId
+    }
+
+    /** Takes the pin off [bookId] — a no-op if a different book holds it. */
+    fun clearPinnedBook(context: Context, bookId: String) {
+        if (getPinnedBookId(context) != bookId) return
+        setPinnedBookId(context, "")
+    }
+
+    /** Whether the app renders dark right now — resolves "system" via the
+     *  device night flag (non-composable twin of [isCurioDarkTheme]). */
+    fun isDarkTheme(context: Context): Boolean = isDarkMode(context, getThemeMode(context))
+
+    // ── v411 — THE COLOR THEME ────────────────────────────────────────
+    /**
+     * The stored color theme, DERIVED from the legacy switches when no
+     * explicit choice has ever been made — so an existing member keeps the
+     * look they chose (Material, Adaptive Hero, azure or rose) instead of
+     * being reset to a default, and every later read is the stored id.
+     *
+     * v414 — a stored PANTONE id (retired) migrates to Curio rose on read and
+     * is written back, so the stale id can never linger.
+     */
+    fun getColorTheme(context: Context): String {
+        val stored = prefs(context).getString(KEY_COLOR_THEME, null)
+        if (stored != null && stored.startsWith(LEGACY_PANTONE_PREFIX)) {
+            prefs(context).edit().putString(KEY_COLOR_THEME, COLOR_THEME_CURIO).apply()
+            return COLOR_THEME_CURIO
+        }
+        if (stored != null && stored in COLOR_THEMES) return stored
+        return when {
+            isMaterialThemeEnabled(context) -> COLOR_THEME_MATERIAL
+            isHeroFollowLaneEnabled(context) -> COLOR_THEME_LANE
+            isHeroBlueEnabled(context) -> COLOR_THEME_AZURE
+            else -> COLOR_THEME_CURIO
+        }
+    }
+
+    /**
+     * Picks the app's color theme. The legacy switches are written IN STEP
+     * because the rest of the app still reads them (the hero fill, the
+     * category palettes, the card accents) — this does not duplicate state,
+     * it keeps one choice expressed through the three facts those surfaces
+     * already agree on.
+     */
+    fun setColorTheme(context: Context, style: String) {
+        val next = if (style in COLOR_THEMES) style else COLOR_THEME_CURIO
+        prefs(context).edit().putString(KEY_COLOR_THEME, next).apply()
+        val material = next == COLOR_THEME_MATERIAL
+        val lane = next == COLOR_THEME_LANE
+        val azure = next == COLOR_THEME_AZURE
+        prefs(context).edit().putBoolean(KEY_MATERIAL_THEME, material).apply()
+        materialThemeState = material
+        if (material) {
+            prefs(context).edit().putBoolean(KEY_MATERIAL_HERO_TEARS, true).apply()
+            materialHeroTearsState = true
+        }
+        prefs(context).edit().putBoolean(KEY_HERO_FOLLOW_LANE, lane).apply()
+        heroFollowLaneState = lane
+        prefs(context).edit().putBoolean(KEY_HERO_BLUE, azure).apply()
+        heroBlueState = azure
+        colorThemeState = next
+    }
+
+    /** The active named theme's id, or null when the color theme is not one. */
+    fun namedThemeId(): String? =
+        colorThemeState.takeIf { it.startsWith(NAMED_ID_PREFIX) }
+
+    /** Whether a *given* [mode] (not the currently stored one) resolves dark —
+     *  used by the theme-switch reveal to detect a real light/dark change. */
+    fun isDarkMode(context: Context, mode: String): Boolean = when (mode) {
+        THEME_DARK -> true
+        THEME_SYSTEM -> (context.resources.configuration.uiMode and
+            Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES
+        else -> false
+    }
+
+    // ── Pastel color mode ───────────────────────────────────────────
+    /** Whether the pastel color mode is on (default on). */
+    fun isPastelColorsEnabled(context: Context): Boolean =
+        prefs(context).getBoolean(KEY_PASTEL_COLORS_ENABLED, true)
+
+    fun setPastelColorsEnabled(context: Context, enabled: Boolean) {
+        prefs(context).edit().putBoolean(KEY_PASTEL_COLORS_ENABLED, enabled).apply()
+        pastelColorsState = enabled
+    }
+
+    // ── v185 — proper M3 Material theme (opt-in, default OFF) ──────────
+    /** Whether the proper M3 Material color theme is on (default off). */
+    fun isMaterialThemeEnabled(context: Context): Boolean =
+        prefs(context).getBoolean(KEY_MATERIAL_THEME, false)
+
+    fun setMaterialThemeEnabled(context: Context, enabled: Boolean) {
+        prefs(context).edit().putBoolean(KEY_MATERIAL_THEME, enabled).apply()
+        materialThemeState = enabled
+        // v270 — first-time ON co-enables "Material hero tears": the theme
+        // is meant to be seen across the torn banners, and a fresh Material
+        // user shouldn't have to find the second toggle. Turning tears off
+        // afterwards still sticks (only flipping the THEME re-arms it).
+        if (enabled) {
+            prefs(context).edit().putBoolean(KEY_MATERIAL_HERO_TEARS, true).apply()
+            materialHeroTearsState = true
+        }
+    }
+
+    /** Whether the torn heroes follow the Material theme (v223, default off). */
+    fun isMaterialHeroTearsEnabled(context: Context): Boolean =
+        prefs(context).getBoolean(KEY_MATERIAL_HERO_TEARS, false)
+
+    fun setMaterialHeroTearsEnabled(context: Context, enabled: Boolean) {
+        prefs(context).edit().putBoolean(KEY_MATERIAL_HERO_TEARS, enabled).apply()
+        materialHeroTearsState = enabled
+    }
+
+    // ── Pastel crown depth (v7.12 experimental) ───────────────────────
+    /** Whether pastel card gradients get a subtle 5% black deepen at the top (default on). */
+    fun isPastelCrownDepthEnabled(context: Context): Boolean =
+        prefs(context).getBoolean(KEY_PASTEL_CROWN_DEPTH, true)
+
+    fun setPastelCrownDepthEnabled(context: Context, enabled: Boolean) {
+        prefs(context).edit().putBoolean(KEY_PASTEL_CROWN_DEPTH, enabled).apply()
+        pastelCrownDepthState = enabled
+    }
+
+    // ── Sky-azure hero (v27l) ─────────────────────────────────────────
+    /** Whether the shared torn hero wears the airy pastel azure (v42: default ON). */
+    fun isHeroBlueEnabled(context: Context): Boolean =
+        prefs(context).getBoolean(KEY_HERO_BLUE, true)
+
+    fun setHeroBlueEnabled(context: Context, enabled: Boolean) {
+        prefs(context).edit().putBoolean(KEY_HERO_BLUE, enabled).apply()
+        heroBlueState = enabled
+    }
+
+    // ── Hero follows the Spin lane (v30) ──────────────────────────────
+    /** Whether the shared hero + page background follow the Spin lane's
+     *  category (Appearance toggle, default off). */
+    fun isHeroFollowLaneEnabled(context: Context): Boolean =
+        prefs(context).getBoolean(KEY_HERO_FOLLOW_LANE, false)
+
+    fun setHeroFollowLaneEnabled(context: Context, enabled: Boolean) {
+        prefs(context).edit().putBoolean(KEY_HERO_FOLLOW_LANE, enabled).apply()
+        heroFollowLaneState = enabled
+    }
+
+    // ── Dark-mode elevation (v28) ────────────────────────────────────
+    /** Whether dark mode draws the soft light glow shadow (default off). */
+    fun isDarkGlowEnabled(context: Context): Boolean =
+        prefs(context).getBoolean(KEY_DARK_GLOW, false)
+
+    fun setDarkGlowEnabled(context: Context, enabled: Boolean) {
+        prefs(context).edit().putBoolean(KEY_DARK_GLOW, enabled).apply()
+        darkGlowState = enabled
+    }
+
+    // ── Background glyph backdrop depth (v407) ───────────────────────
+    /** Whether the page glyph backdrop wears the DEEP (pre-v407) alphas
+     *  instead of the very subtle default. */
+    fun isGlyphBackdropDeepEnabled(context: Context): Boolean =
+        prefs(context).getBoolean(KEY_GLYPH_BACKDROP_DEEP, false)
+
+    fun setGlyphBackdropDeepEnabled(context: Context, enabled: Boolean) {
+        prefs(context).edit().putBoolean(KEY_GLYPH_BACKDROP_DEEP, enabled).apply()
+        glyphBackdropDeepState = enabled
+    }
+
+    // ── Paper: which surface leads, the page or the cards (v409) ───────
+    /** Whether light mode wears a WHITE page with CREAM cards (the shipped
+     *  default) instead of the cream page with white cards. */
+    fun isPaperCreamCardsEnabled(context: Context): Boolean =
+        prefs(context).getBoolean(KEY_PAPER_CREAM_CARDS, true)
+
+    fun setPaperCreamCardsEnabled(context: Context, enabled: Boolean) {
+        prefs(context).edit().putBoolean(KEY_PAPER_CREAM_CARDS, enabled).apply()
+        paperCreamCardsState = enabled
+    }
+
+    // ── Promo/demo-content mode (v7.107 hidden) ───────────────────────
+    /** Whether the hidden promo demo-content mode is on (default off). */
+    // ── Peek-deck redesign (v7.7 experimental) ────────────────────────
+    /** Whether the top-lit gradient peek-card fill is on (v223 — concluded ON, toggle removed). */
+    fun isPeekGradientEnabled(context: Context): Boolean =
+        prefs(context).getBoolean(KEY_PEEK_GRADIENT, true)
+
+    fun setPeekGradientEnabled(context: Context, enabled: Boolean) {
+        prefs(context).edit().putBoolean(KEY_PEEK_GRADIENT, enabled).apply()
+        peekGradientState = enabled
+    }
+
+    /** Whether the category-tinted peek-card hairline is on (v223 — concluded ON, toggle removed). */
+    fun isPeekHairlineEnabled(context: Context): Boolean =
+        prefs(context).getBoolean(KEY_PEEK_HAIRLINE, true)
+
+    fun setPeekHairlineEnabled(context: Context, enabled: Boolean) {
+        prefs(context).edit().putBoolean(KEY_PEEK_HAIRLINE, enabled).apply()
+        peekHairlineState = enabled
+    }
+
+    /** Whether soft peek-card shadows are on (default off). */
+    fun isPeekShadowsEnabled(context: Context): Boolean =
+        prefs(context).getBoolean(KEY_PEEK_SHADOWS, false)
+
+    fun setPeekShadowsEnabled(context: Context, enabled: Boolean) {
+        prefs(context).edit().putBoolean(KEY_PEEK_SHADOWS, enabled).apply()
+        peekShadowsState = enabled
+    }
+
+    /** Whether roomier two-line near-card titles are on (v223 — concluded ON, toggle removed). */
+    fun isPeekTitlesEnabled(context: Context): Boolean =
+        prefs(context).getBoolean(KEY_PEEK_TITLES, true)
+
+    fun setPeekTitlesEnabled(context: Context, enabled: Boolean) {
+        prefs(context).edit().putBoolean(KEY_PEEK_TITLES, enabled).apply()
+        peekTitlesState = enabled
+    }
+
+    /** Whether the newer travel-then-tail-fade peek motion is on (default off). */
+    fun isPeekTailFadeEnabled(context: Context): Boolean =
+        prefs(context).getBoolean(KEY_PEEK_TAIL_FADE, false)
+
+    fun setPeekTailFadeEnabled(context: Context, enabled: Boolean) {
+        prefs(context).edit().putBoolean(KEY_PEEK_TAIL_FADE, enabled).apply()
+        peekTailFadeState = enabled
+    }
+
+    // ── Main card (hero ticket) redesign (v7.13 experimental) ──────────
+    /** Whether the enhanced hero-card gradient fill is on (v15 — default on). */
+    fun isHeroGradientEnabled(context: Context): Boolean =
+        prefs(context).getBoolean(KEY_HERO_GRADIENT, true)
+
+    // ── Pet chatter + game frequency (v16) ─────────────────────────────
+    /** Talkative / cozy / quiet — how often the pet speaks lines. */
+    fun getPetChatter(context: Context): String =
+        prefs(context).getString(KEY_PET_CHATTER, "cozy") ?: "cozy"
+
+    fun setPetChatter(context: Context, mode: String) {
+        prefs(context).edit().putString(KEY_PET_CHATTER, mode).apply()
+        petChatterState = mode
+    }
+
+    /** Relaxed / normal / eager — how often the pet starts games. */
+    fun getPetGameFrequency(context: Context): String =
+        prefs(context).getString(KEY_PET_GAME_FREQUENCY, "normal") ?: "normal"
+
+    fun setPetGameFrequency(context: Context, mode: String) {
+        prefs(context).edit().putString(KEY_PET_GAME_FREQUENCY, mode).apply()
+        petGameFrequencyState = mode
+    }
+
+    // ── Pet birthday (v16) — first-launch epoch day, set once ──────────
+    /** The epoch day the app first ran — the pet's "hatch day". */
+    fun petBirthdayEpochDay(context: Context): Long {
+        val p = prefs(context)
+        val existing = p.getLong(KEY_PET_BIRTHDAY, 0L)
+        if (existing > 0L) return existing
+        val today = java.util.Calendar.getInstance().timeInMillis / 86_400_000L
+        p.edit().putLong(KEY_PET_BIRTHDAY, today).apply()
+        return today
+    }
+
+    // ── Weekly-save memory (v16) — "you saved 3 songs this week" ───────
+    /** Records a save in [categoryName]; counts roll within a 7-day window. */
+    fun noteWeeklySave(context: Context, categoryName: String) {
+        val p = prefs(context)
+        val window = p.getLong(KEY_SAVES_WEEK_START, 0L)
+        val today = java.util.Calendar.getInstance().timeInMillis / 86_400_000L
+        if (window == 0L || today - window >= 7L) {
+            p.edit()
+                .putLong(KEY_SAVES_WEEK_START, today)
+                .putString(KEY_SAVES_WEEK_COUNTS, "")
+                .apply()
+        }
+        val raw = p.getString(KEY_SAVES_WEEK_COUNTS, "") ?: ""
+        val counts = raw.split('|').filter { it.isNotEmpty() }.associate {
+            val i = it.indexOf('=')
+            if (i > 0) it.substring(0, i) to (it.substring(i + 1).toIntOrNull() ?: 0) else it to 1
+        }.toMutableMap()
+        counts[categoryName] = (counts[categoryName] ?: 0) + 1
+        p.edit().putString(
+            KEY_SAVES_WEEK_COUNTS,
+            counts.entries.joinToString("|") { "${it.key}=${it.value}" }
+        ).apply()
+    }
+
+    /** The top lane saved this week (name → count), for pet memory lines. */
+    fun weeklySaveSummary(context: Context): List<Pair<String, Int>> {
+        val p = prefs(context)
+        val window = p.getLong(KEY_SAVES_WEEK_START, 0L)
+        val today = java.util.Calendar.getInstance().timeInMillis / 86_400_000L
+        if (window == 0L || today - window >= 7L) return emptyList()
+        val raw = p.getString(KEY_SAVES_WEEK_COUNTS, "") ?: ""
+        return raw.split('|').filter { it.isNotEmpty() }.mapNotNull { part ->
+            val i = part.indexOf('=')
+            if (i > 0) part.substring(0, i) to (part.substring(i + 1).toIntOrNull() ?: 0) else null
+        }.sortedByDescending { it.second }.take(1)
+    }
+
+    fun setHeroGradientEnabled(context: Context, enabled: Boolean) {
+        prefs(context).edit().putBoolean(KEY_HERO_GRADIENT, enabled).apply()
+        heroGradientState = enabled
+    }
+
+    /** Whether the accent-tinted hero-card border is on (v10 — default true, promoted from experiment). */
+    fun isHeroBorderEnabled(context: Context): Boolean =
+        prefs(context).getBoolean(KEY_HERO_BORDER, true)
+
+    fun setHeroBorderEnabled(context: Context, enabled: Boolean) {
+        prefs(context).edit().putBoolean(KEY_HERO_BORDER, enabled).apply()
+        heroBorderState = enabled
+    }
+
+    /** Whether the soft hero-card shadow is on — v223: the experiment
+     *  CONCLUDED ON (the One UI tinted shadow is the shipped default); the
+     *  Experiments toggle is removed and the read is hardcoded true. */
+    fun isHeroShadowEnabled(context: Context): Boolean =
+        prefs(context).getBoolean(KEY_HERO_SHADOW, true)
+
+    fun setHeroShadowEnabled(context: Context, enabled: Boolean) {
+        prefs(context).edit().putBoolean(KEY_HERO_SHADOW, enabled).apply()
+        heroShadowState = enabled
+    }
+
+    // ── Paper & header experiments (v27) ────────────────────────────────
+    private const val KEY_HEADER_STYLE = "header_style"   // "TORN" | "GLASS"
+    // v468 — the floating-pill header (see [floatingPillHeadersState]).
+    private const val KEY_FLOATING_PILL_HEADERS = "floating_pill_headers"
+    private const val KEY_PAPER_HEADER_CUTS = "paper_header_cuts"
+    private const val KEY_PAPER_HEADER_HOLES = "paper_header_holes"
+    private const val KEY_PAPER_HOLE_RINGS = "paper_hole_rings"
+    private const val KEY_PAPER_HOLE_RING_STYLE = "paper_hole_ring_style"
+    private const val KEY_PAPER_STAT_CARDS = "paper_stat_cards"
+    private const val KEY_HERO_TEAR_SHEET = "hero_tear_sheet"
+    private const val KEY_HOME_TINT = "home_tint"
+    private const val KEY_HOME_HERO_TINT = "home_hero_tint"
+    private const val KEY_HOME_TINT_FOLLOW_LANE = "home_tint_follow_lane"
+    private const val KEY_HOME_TINT_CATEGORY = "home_tint_category"
+    private const val KEY_PAPER_STAT_TEAR = "paper_stat_tear"
+    private const val KEY_HEADER_DEEP = "header_deep"
+    private const val KEY_NAV_PILL_BUTTONS = "nav_pill_buttons"
+    private const val KEY_CABINET_V2 = "cabinet_v2_experiment"
+    private const val KEY_SCREEN_REVEAL = "screen_reveal_transitions"
+    private const val KEY_PINNED_TITLE_VIEW = "pinned_title_view_experiment"
+    private const val KEY_CAPTURE_STUDIO = "capture_studio_v1"
+  private const val KEY_SOCIAL_TEXT_EDITING = "social_text_editing_enabled"
+  private const val KEY_MUTED_CONVERSATIONS = "social_muted_conversations"
+    private const val KEY_CABINET_SHELVES_SEEDED = "cabinet_shelves_seeded_v2"
+    private const val KEY_LIQUID_GLASS_PILLS = "liquid_glass_pills"
+    private const val KEY_LITE_MODE = "lite_mode_v1"
+    private const val KEY_FORCE_GLASS = "force_glass_override"
+    private const val KEY_GLASS_LAB_WALLPAPER = "glass_lab_wallpaper"
+    private const val KEY_GLASS_CLASSIC_INDICATOR = "glass_classic_indicator"
+    private const val KEY_NAV_INDICATOR_COLOR = "nav_indicator_color"
+    private const val KEY_NAV_INDICATOR_OPACITY = "nav_indicator_opacity"
+    private const val KEY_GLASS_CLARITY = "glass_clear_style"
+    // v482 — the FROSTED (smudged) look: near-opaque whitish frost instead of
+    // clear refraction. Default ON (the member's ask); the toggle turns it off
+    // and returns the old clear glass.
+    private const val KEY_GLASS_FROSTED = "glass_frosted_smudge"
+    private const val KEY_PASSPORT_STAMP = "passport_stamp_v1"
+    private const val KEY_READER_MARGIN = "reader_margin_v1"
+    private const val KEY_TIME_CAPSULE_ENABLED = "time_capsule_v1"
+    // v483 — the drawer sky's connection style (0 threads / 1 bones / 2 arcs).
+    private const val KEY_DRAWER_LINK_STYLE = "drawer_link_style_v1"
+    private const val KEY_GLASS_BLUR_SCALE = "glass_blur_scale"
+    private const val KEY_GLASS_REFRACTION_SCALE = "glass_refraction_scale"
+    private const val KEY_GLASS_REFLECTION_SCALE = "glass_reflection_scale"
+    private const val KEY_GLASS_INDICATOR_SHADOW_SCALE = "glass_indicator_shadow_scale"
+    // v292h — CRASH RECOVERY: tracks consecutive native crashes that
+
+    /** Whether the header corner cut-lines + top-right ticks accent is on (experimental, default off). */
+    fun isPaperHeaderCutsEnabled(context: Context): Boolean =
+        prefs(context).getBoolean(KEY_PAPER_HEADER_CUTS, false)
+
+    fun setPaperHeaderCutsEnabled(context: Context, enabled: Boolean) {
+        prefs(context).edit().putBoolean(KEY_PAPER_HEADER_CUTS, enabled).apply()
+        paperHeaderCutsState = enabled
+    }
+
+    /** Whether the stamped pin-hole column down the header's left edge is on (experimental, default off). */
+    fun isPaperHeaderHolesEnabled(context: Context): Boolean =
+        prefs(context).getBoolean(KEY_PAPER_HEADER_HOLES, false)
+
+    fun setPaperHeaderHolesEnabled(context: Context, enabled: Boolean) {
+        prefs(context).edit().putBoolean(KEY_PAPER_HEADER_HOLES, enabled).apply()
+        paperHeaderHolesState = enabled
+    }
+
+    /** Whether the pin holes wear 3D metal rings (experimental, default off). */
+    fun isPaperHoleRingsEnabled(context: Context): Boolean =
+        prefs(context).getBoolean(KEY_PAPER_HOLE_RINGS, false)
+
+    fun setPaperHoleRingsEnabled(context: Context, enabled: Boolean) {
+        prefs(context).edit().putBoolean(KEY_PAPER_HOLE_RINGS, enabled).apply()
+        paperHoleRingsState = enabled
+    }
+
+    /** Which 3D ring style the pin holes wear: "coil" | "split" | "oblique" (default "coil"). */
+    fun getPaperHoleRingStyle(context: Context): String =
+        prefs(context).getString(KEY_PAPER_HOLE_RING_STYLE, "coil")?.takeIf { it in setOf("coil", "split", "oblique") }
+            ?: "coil"
+
+    fun setPaperHoleRingStyle(context: Context, style: String) {
+        prefs(context).edit().putString(KEY_PAPER_HOLE_RING_STYLE, style).apply()
+        paperHoleRingStyleState = style
+    }
+
+    /** Whether Home's background + bottom nav wear the category tint (experimental, default off). */
+    fun isHomeTintEnabled(context: Context): Boolean =
+        prefs(context).getBoolean(KEY_HOME_TINT, false)
+
+    fun setHomeTintEnabled(context: Context, enabled: Boolean) {
+        prefs(context).edit().putBoolean(KEY_HOME_TINT, enabled).apply()
+        homeTintState = enabled
+    }
+
+    /** Whether the Spin Categories/Filter buttons wear the nav-pill look
+     *  (v223 — concluded ON, toggle removed; default true). */
+    fun isNavPillButtonsEnabled(context: Context): Boolean =
+        prefs(context).getBoolean(KEY_NAV_PILL_BUTTONS, true)
+
+    fun setNavPillButtonsEnabled(context: Context, enabled: Boolean) {
+        prefs(context).edit().putBoolean(KEY_NAV_PILL_BUTTONS, enabled).apply()
+        navPillButtonsState = enabled
+    }
+
+    /** Whether the Home quest hero ALSO wears the tint (experimental, default off). */
+    fun isHomeHeroTintEnabled(context: Context): Boolean =
+        prefs(context).getBoolean(KEY_HOME_HERO_TINT, false)
+
+    fun setHomeHeroTintEnabled(context: Context, enabled: Boolean) {
+        prefs(context).edit().putBoolean(KEY_HOME_HERO_TINT, enabled).apply()
+        homeHeroTintState = enabled
+    }
+
+    /** Whether the Home tint follows the category picked on Spin (experimental, default off). */
+    fun isHomeTintFollowLaneEnabled(context: Context): Boolean =
+        prefs(context).getBoolean(KEY_HOME_TINT_FOLLOW_LANE, false)
+
+    fun setHomeTintFollowLaneEnabled(context: Context, enabled: Boolean) {
+        prefs(context).edit().putBoolean(KEY_HOME_TINT_FOLLOW_LANE, enabled).apply()
+        homeTintFollowLaneState = enabled
+    }
+
+    /** The manually picked category for the Home tint (default wildcard). */
+    fun getHomeTintCategory(context: Context): String =
+        prefs(context).getString(KEY_HOME_TINT_CATEGORY, CategoryId.WILDCARD.name)
+            ?: CategoryId.WILDCARD.name
+
+    fun setHomeTintCategory(context: Context, id: CategoryId) {
+        prefs(context).edit().putString(KEY_HOME_TINT_CATEGORY, id.name).apply()
+        homeTintCategoryIdState = id.name
+    }
+
+    /** Whether the stat panes + Profile quests wear a solid paper card (experimental, v97: default ON). */
+    fun isPaperStatCardsEnabled(context: Context): Boolean =
+        prefs(context).getBoolean(KEY_PAPER_STAT_CARDS, true)
+
+    fun setPaperStatCardsEnabled(context: Context, enabled: Boolean) {
+        prefs(context).edit().putBoolean(KEY_PAPER_STAT_CARDS, enabled).apply()
+        paperStatCardsState = enabled
+    }
+
+    /** Whether Cabinet v2 (the collections view) is on — the default now. */
+    fun isCabinetV2Enabled(context: Context): Boolean =
+        prefs(context).getBoolean(KEY_CABINET_V2, true)
+
+    fun setCabinetV2Enabled(context: Context, enabled: Boolean) {
+        prefs(context).edit().putBoolean(KEY_CABINET_V2, enabled).apply()
+        cabinetV2EnabledState = enabled
+    }
+
+    /** Whether the screen-reveal transition experiment is on (default OFF;
+     *  see the state comment above). */
+    fun isScreenRevealEnabled(context: Context): Boolean =
+        prefs(context).getBoolean(KEY_SCREEN_REVEAL, false)
+
+    fun setScreenRevealEnabled(context: Context, enabled: Boolean) {
+        prefs(context).edit().putBoolean(KEY_SCREEN_REVEAL, enabled).apply()
+        screenRevealEnabledState = enabled
+    }
+
+    /** Whether the pinned title view is on. v496 — default ON, the v406 rule: an
+     *  install that has never touched the switch gets it, and a stored choice
+     *  (including an OFF somebody set while it was opt-in) still wins. */
+    fun isPinnedTitleViewEnabled(context: Context): Boolean =
+        prefs(context).getBoolean(KEY_PINNED_TITLE_VIEW, true)
+
+    fun setPinnedTitleViewEnabled(context: Context, enabled: Boolean) {
+        prefs(context).edit().putBoolean(KEY_PINNED_TITLE_VIEW, enabled).apply()
+        pinnedTitleViewState = enabled
+    }
+
+    /** Whether the Capture studio experiment is on (default OFF; see the
+     *  state comment above). */
+    /**
+     * v406 — THE TAKE STUDIO IS ON BY DEFAULT.
+     *
+     * It shipped opt-in, so a fresh install had the Save your take page without
+     * the studio that the page is about. The switch stays (Settings ▸
+     * Experiments), so anyone who wants it off still can; the default is simply
+     * the feature.
+     */
+    fun isCaptureStudioEnabled(context: Context): Boolean =
+        prefs(context).getBoolean(KEY_CAPTURE_STUDIO, true)
+
+  fun setCaptureStudioEnabled(context: Context, enabled: Boolean) {
+  prefs(context).edit().putBoolean(KEY_CAPTURE_STUDIO, enabled).apply()
+  captureStudioState = enabled
+  }
+
+    /** Whether edit controls show for your own direct messages and comments.
+     *  v386 — default ON: the toggle below still turns it off, but a fresh
+     *  install (and every install that never touched the switch) gets it. */
+    fun isSocialTextEditingEnabled(context: Context): Boolean =
+        prefs(context).getBoolean(KEY_SOCIAL_TEXT_EDITING, true)
+
+    fun setSocialTextEditingEnabled(context: Context, enabled: Boolean) {
+        prefs(context).edit().putBoolean(KEY_SOCIAL_TEXT_EDITING, enabled).apply()
+        socialTextEditingState = enabled
+    }
+
+    /**
+     * v389 — WHOSE MESSAGE NOTIFICATIONS ARE SILENCED, on this device only.
+     *
+     * A mute is per CONVERSATION, not a blanket switch: it comes from the
+     * notification's own Mute action and from the thread's bell, and it is
+     * read by the arrival watcher, which still counts a muted conversation's
+     * unread (so unmuting never fires a backlog) and simply never announces it.
+     */
+    fun mutedConversations(context: Context): Set<String> =
+        prefs(context).getStringSet(KEY_MUTED_CONVERSATIONS, emptySet()).orEmpty()
+
+    fun isConversationMuted(context: Context, userId: String): Boolean =
+        userId in mutedConversations(context)
+
+    fun setConversationMuted(context: Context, userId: String, muted: Boolean) {
+        val current = mutedConversations(context).toMutableSet()
+        if (muted) current.add(userId) else current.remove(userId)
+        // A COPY is written back: the set SharedPreferences hands out must not
+        // be mutated in place (the value in memory would change silently).
+        prefs(context).edit().putStringSet(KEY_MUTED_CONVERSATIONS, current).apply()
+        mutedConversationsState = current
+    }
+
+    /** Signing out forgets whose notifications were silenced. */
+    fun clearMutedConversations(context: Context) {
+        prefs(context).edit().remove(KEY_MUTED_CONVERSATIONS).apply()
+        mutedConversationsState = emptySet()
+    }
+
+
+    // v3xx — the "Subtle pill glow" experiment concluded: subtle is the
+    // always-on default, toggle + plumbing removed.
+
+    /** Whether the stat paper card wears torn paper edges (extended tear on top; experimental, default off). */
+    fun isPaperStatTearEnabled(context: Context): Boolean =
+        prefs(context).getBoolean(KEY_PAPER_STAT_TEAR, false)
+
+    fun setPaperStatTearEnabled(context: Context, enabled: Boolean) {
+        prefs(context).edit().putBoolean(KEY_PAPER_STAT_TEAR, enabled).apply()
+        paperStatTearState = enabled
+    }
+
+    /**
+     * v108 — whether the torn heroes wear their white paper UNDER-SHEET
+     * (the layered lip below the hero's own bottom tear). Default OFF: the
+     * hero tears straight into the page. Turning it on restores the extra
+     * paper layer for comparison (Settings → Experiments → Paper & headers).
+     */
+    /** v3xx — the app-wide header style (torn banner default / glass toolbar). */
+    fun getHeaderStyle(context: Context): HeaderStyle =
+        runCatching { HeaderStyle.valueOf(prefs(context).getString(KEY_HEADER_STYLE, null) ?: "TORN") }
+            .getOrDefault(HeaderStyle.TORN)
+
+    fun setHeaderStyle(context: Context, style: HeaderStyle) {
+        prefs(context).edit().putString(KEY_HEADER_STYLE, style.name).apply()
+        headerStyleState = style
+    }
+
+    /** v468 — the floating-pill header (see [floatingPillHeadersState]). */
+    fun isFloatingPillHeadersEnabled(context: Context): Boolean =
+        prefs(context).getBoolean(KEY_FLOATING_PILL_HEADERS, false)
+
+    fun setFloatingPillHeadersEnabled(context: Context, enabled: Boolean) {
+        prefs(context).edit().putBoolean(KEY_FLOATING_PILL_HEADERS, enabled).apply()
+        floatingPillHeadersState = enabled
+    }
+
+    fun isHeroTearSheetEnabled(context: Context): Boolean =
+        prefs(context).getBoolean(KEY_HERO_TEAR_SHEET, false)
+
+    fun setHeroTearSheetEnabled(context: Context, enabled: Boolean) {
+        prefs(context).edit().putBoolean(KEY_HERO_TEAR_SHEET, enabled).apply()
+        heroTearSheetState = enabled
+    }
+
+    /** Whether the torn-hero headers wear a slightly darker category accent (default ON). */
+    fun isHeaderDeepEnabled(context: Context): Boolean =
+        prefs(context).getBoolean(KEY_HEADER_DEEP, true)
+
+    fun setHeaderDeepEnabled(context: Context, enabled: Boolean) {
+        prefs(context).edit().putBoolean(KEY_HEADER_DEEP, enabled).apply()
+        headerDeepState = enabled
+    }
+
+    // ── Dual-accent blend gradient (v10 toggle) ────────────────────────
+    /** Whether the hero card wears the dual-accent blend gradient (default OFF). */
+    fun isHeroBlendGradientEnabled(context: Context): Boolean =
+        prefs(context).getBoolean(KEY_HERO_BLEND_GRADIENT, false)
+
+    fun setHeroBlendGradientEnabled(context: Context, enabled: Boolean) {
+        prefs(context).edit().putBoolean(KEY_HERO_BLEND_GRADIENT, enabled).apply()
+        heroBlendGradientState = enabled
+    }
+
+    // ── 3D button gradient & shadow (v7.11 experimental) ───────────────
+    /** Whether the Spin shuffle button wears a 3D radial gradient + shadow (default on). */
+    fun is3DButtonGradientEnabled(context: Context): Boolean =
+        prefs(context).getBoolean(KEY_3D_BUTTON_GRADIENT, true)
+
+    fun set3DButtonGradientEnabled(context: Context, enabled: Boolean) {
+        prefs(context).edit().putBoolean(KEY_3D_BUTTON_GRADIENT, enabled).apply()
+        threeDButtonState = enabled
+    }
+
+    // ── Liquid-glass navigation pills (experiment, default OFF) ──────
+    fun isLiquidGlassPillsEnabled(context: Context): Boolean =
+        prefs(context).getBoolean(KEY_LIQUID_GLASS_PILLS, false)
+
+    fun setLiquidGlassPillsEnabled(context: Context, enabled: Boolean) {
+        prefs(context).edit().putBoolean(KEY_LIQUID_GLASS_PILLS, enabled).apply()
+        liquidGlassPillsState = enabled
+    }
+
+    // ── Lite mode (v454, default OFF) ───────────────────────────────
+    /** Whether the cheaper no-glass, still-motion profile is on. */
+    fun isLiteModeEnabled(context: Context): Boolean =
+        prefs(context).getBoolean(KEY_LITE_MODE, false)
+
+    fun setLiteModeEnabled(context: Context, enabled: Boolean) {
+        prefs(context).edit().putBoolean(KEY_LITE_MODE, enabled).apply()
+        liteModeState = enabled
+    }
+
+    // v293 — Force-override: bypass device capability checks for liquid glass.
+    var forceGlassEnabled by mutableStateOf(true)
+
+    fun initForceGlass(context: Context) {
+        forceGlassEnabled = prefs(context).getBoolean(KEY_FORCE_GLASS, false)
+    }
+
+    fun setForceGlassEnabled(context: Context, enabled: Boolean) {
+        prefs(context).edit().putBoolean(KEY_FORCE_GLASS, enabled).apply()
+        forceGlassEnabled = enabled
+    }
+
+    // ── Classic active indicator (experiment, default OFF) ───────────
+    // ── Glass widget lab wallpaper (v271): persisted picked/auto image ──
+    fun getGlassLabWallpaperUri(context: Context): String =
+        prefs(context).getString(KEY_GLASS_LAB_WALLPAPER, "") ?: ""
+
+    fun setGlassLabWallpaperUri(context: Context, uri: String) {
+        prefs(context).edit().putString(KEY_GLASS_LAB_WALLPAPER, uri).apply()
+    }
+
+    // Legacy glass blur (experiment, default OFF): an app-side blur engine
+    // for pre-Android-12 devices (see the state field above).
+    fun isGlassClassicIndicatorEnabled(context: Context): Boolean =
+        prefs(context).getBoolean(KEY_GLASS_CLASSIC_INDICATOR, false)
+
+    fun setGlassClassicIndicatorEnabled(context: Context, enabled: Boolean) {
+        prefs(context).edit().putBoolean(KEY_GLASS_CLASSIC_INDICATOR, enabled).apply()
+        glassClassicIndicatorState = enabled
+    }
+
+    // ── Clear-glass style (experiment, default OFF) ──────────────────
+    fun isGlassClarityEnabled(context: Context): Boolean =
+        prefs(context).getBoolean(KEY_GLASS_CLARITY, false)
+
+    fun setGlassClarityEnabled(context: Context, enabled: Boolean) {
+        prefs(context).edit().putBoolean(KEY_GLASS_CLARITY, enabled).apply()
+        glassClarityState = enabled
+    }
+
+    // ── Frosted (smudged) glass (v482, default ON) ───────────────────
+    fun isGlassFrostedEnabled(context: Context): Boolean =
+        prefs(context).getBoolean(KEY_GLASS_FROSTED, true)
+
+    fun setGlassFrostedEnabled(context: Context, enabled: Boolean) {
+        prefs(context).edit().putBoolean(KEY_GLASS_FROSTED, enabled).apply()
+        glassFrostedState = enabled
+    }
+
+    // ── The passport's pressed stamp (v491, default ON) ──────────────
+    fun isPassportStampEnabled(context: Context): Boolean =
+        prefs(context).getBoolean(KEY_PASSPORT_STAMP, true)
+
+    fun setPassportStampEnabled(context: Context, enabled: Boolean) {
+        prefs(context).edit().putBoolean(KEY_PASSPORT_STAMP, enabled).apply()
+        passportStampState = enabled
+    }
+
+    // ── The reader's pencil margin (v492, default ON) ────────────────
+    fun isReaderMarginEnabled(context: Context): Boolean =
+        prefs(context).getBoolean(KEY_READER_MARGIN, true)
+
+    fun setReaderMarginEnabled(context: Context, enabled: Boolean) {
+        prefs(context).edit().putBoolean(KEY_READER_MARGIN, enabled).apply()
+        readerMarginState = enabled
+    }
+
+    // ── The time capsule (v493, default ON) ───────────────────────────
+    fun isTimeCapsuleEnabled(context: Context): Boolean =
+        prefs(context).getBoolean(KEY_TIME_CAPSULE_ENABLED, true)
+
+    fun setTimeCapsuleEnabled(context: Context, enabled: Boolean) {
+        prefs(context).edit().putBoolean(KEY_TIME_CAPSULE_ENABLED, enabled).apply()
+        timeCapsuleEnabledState = enabled
+    }
+
+    // ── The drawer sky's connection style (v483) ─────────────────────
+    fun getDrawerLinkStyle(context: Context): Int =
+        prefs(context).getInt(KEY_DRAWER_LINK_STYLE, 0).coerceIn(0, 2)
+
+    fun setDrawerLinkStyle(context: Context, style: Int) {
+        val fixed = style.coerceIn(0, 2)
+        prefs(context).edit().putInt(KEY_DRAWER_LINK_STYLE, fixed).apply()
+        drawerLinkStyleState = fixed
+    }
+
+    // ── Liquid glass tuning (Appearance; stored as percent ints) ──────
+    private fun readScale(context: Context, key: String, defaultPercent: Int = 100): Float =
+        (prefs(context).getInt(key, defaultPercent) / 100f).coerceIn(0f, 2f)
+
+    // ── Nav indicator color (Appearance; v292) ──────────────────────
+    fun getNavIndicatorColor(context: Context): String =
+        prefs(context).getString(KEY_NAV_INDICATOR_COLOR, NAV_INDICATOR_AUTO)
+            ?: NAV_INDICATOR_AUTO
+
+    fun setNavIndicatorColor(context: Context, value: String) {
+        prefs(context).edit().putString(KEY_NAV_INDICATOR_COLOR, value).apply()
+        navIndicatorColorState = value
+    }
+
+    fun getNavIndicatorOpacity(context: Context): Float =
+        prefs(context).getFloat(KEY_NAV_INDICATOR_OPACITY, NAV_INDICATOR_OPACITY_DEFAULT)
+            .coerceIn(0f, 1f)
+
+    fun setNavIndicatorOpacity(context: Context, value: Float) {
+        prefs(context).edit().putFloat(KEY_NAV_INDICATOR_OPACITY, value.coerceIn(0f, 1f)).apply()
+        navIndicatorOpacityState = value.coerceIn(0f, 1f)
+    }
+
+    fun getGlassBlurScale(context: Context): Float = readScale(context, KEY_GLASS_BLUR_SCALE, defaultPercent = 25)
+    fun setGlassBlurScale(context: Context, value: Float) {
+        prefs(context).edit().putInt(KEY_GLASS_BLUR_SCALE, (value * 100).toInt()).apply()
+        glassBlurScaleState = value.coerceIn(0f, 2f)
+    }
+
+    fun getGlassRefractionScale(context: Context): Float = readScale(context, KEY_GLASS_REFRACTION_SCALE)
+    fun setGlassRefractionScale(context: Context, value: Float) {
+        prefs(context).edit().putInt(KEY_GLASS_REFRACTION_SCALE, (value * 100).toInt()).apply()
+        glassRefractionScaleState = value.coerceIn(0f, 2f)
+    }
+
+    fun getGlassReflectionScale(context: Context): Float = readScale(context, KEY_GLASS_REFLECTION_SCALE)
+    fun setGlassReflectionScale(context: Context, value: Float) {
+        prefs(context).edit().putInt(KEY_GLASS_REFLECTION_SCALE, (value * 100).toInt()).apply()
+        glassReflectionScaleState = value.coerceIn(0f, 2f)
+    }
+
+    fun getGlassIndicatorShadowScale(context: Context): Float = readScale(context, KEY_GLASS_INDICATOR_SHADOW_SCALE)
+    fun setGlassIndicatorShadowScale(context: Context, value: Float) {
+        prefs(context).edit().putInt(KEY_GLASS_INDICATOR_SHADOW_SCALE, (value * 100).toInt()).apply()
+        glassIndicatorShadowScaleState = value.coerceIn(0f, 2f)
+    }
+
+    // ── Share-card smart auto-fit ─────────────────────────────────────
+    /** Whether the share-card editor's smart auto-fit is on (default ON). */
+    fun isShareAutoFitEnabled(context: Context): Boolean =
+        prefs(context).getBoolean(KEY_SHARE_AUTO_FIT, true)
+
+    fun setShareAutoFitEnabled(context: Context, enabled: Boolean) {
+        prefs(context).edit().putBoolean(KEY_SHARE_AUTO_FIT, enabled).apply()
+        shareAutoFitState = enabled
+    }
+
+    // ── Category tint wash ────────────────────────────────────────────
+    /**
+     * Whether category-tinted page backgrounds are enabled (default OFF).
+     *
+     * v508 — a member who never touched the switch reads the plain theme
+     * background on every category-aware page; the wash is opt-in in
+     * Settings → Appearance → **Category tint**. The key is untouched, so an
+     * explicit choice (on or off) survives exactly as it was stored.
+     */
+    fun isTintWashEnabled(context: Context): Boolean =
+        prefs(context).getBoolean(KEY_TINT_WASH_ENABLED, false)
+
+    /**
+     * Whether category-tinted backgrounds are on. v78 — the theme-style
+     * gate is gone (AMOLED/Material styles removed); the raw user toggle
+     * is the only condition now.
+     */
+    fun tintWashEffective(): Boolean =
+        tintWashEnabledState
+
+    fun setTintWashEnabled(context: Context, enabled: Boolean) {
+        prefs(context).edit().putBoolean(KEY_TINT_WASH_ENABLED, enabled).apply()
+        tintWashEnabledState = enabled
+    }
+
+    fun isEntryMetaEnabled(context: Context): Boolean =
+        prefs(context).getBoolean(KEY_ENTRY_META_ENABLED, true)
+
+    fun setEntryMetaEnabled(context: Context, enabled: Boolean) {
+        prefs(context).edit().putBoolean(KEY_ENTRY_META_ENABLED, enabled).apply()
+        entryMetaEnabledState = enabled
+    }
+
+    fun isSmartSpinLayoutEnabled(context: Context): Boolean =
+        prefs(context).getBoolean(KEY_SMART_SPIN_LAYOUT, false)
+
+    fun setSmartSpinLayoutEnabled(context: Context, enabled: Boolean) {
+        prefs(context).edit().putBoolean(KEY_SMART_SPIN_LAYOUT, enabled).apply()
+        smartSpinLayoutState = enabled
+    }
+
+    /**
+     * The Spin density strength — see [SmartDensityMode].
+     *
+     * v7.4 — migrates the pre-v7.4 boolean switch on first read: true →
+     * COMPACT, false → OFF. The legacy key is removed after migration so
+     * the mode key becomes the single source of truth.
+     */
+    fun getSmartDensityMode(context: Context): SmartDensityMode {
+        val prefs = prefs(context)
+        val stored = prefs.getString(KEY_SMART_DENSITY_MODE, null)
+        if (stored != null) {
+            return runCatching { SmartDensityMode.valueOf(stored) }
+                .getOrDefault(SmartDensityMode.OFF)
+        }
+        // v7.35 — the pre-picker legacy key defaults to OFF now, so a fresh
+        // install (no stored mode) ships with density sizing off instead of
+        // the old always-compact COMPACT. Users who explicitly picked a
+        // mode keep their stored choice.
+        val legacy = prefs.getBoolean(KEY_LEGACY_SMART_DENSITY_LAYOUT, false)
+        val migrated = if (legacy) SmartDensityMode.COMPACT else SmartDensityMode.OFF
+        prefs.edit()
+            .putString(KEY_SMART_DENSITY_MODE, migrated.name)
+            .remove(KEY_LEGACY_SMART_DENSITY_LAYOUT)
+            .apply()
+        return migrated
+    }
+
+    fun setSmartDensityMode(context: Context, mode: SmartDensityMode) {
+        prefs(context).edit().putString(KEY_SMART_DENSITY_MODE, mode.name).apply()
+        smartDensityModeState = mode
+    }
+
+    /**
+     * v19 — the user's chosen explore search engine id, defaulting to
+     * Google so existing behavior is unchanged until they switch.
+     */
+    fun getSearchEngine(context: Context): String =
+        prefs(context).getString(KEY_SEARCH_ENGINE, null) ?: SearchEngine.GOOGLE.id
+
+    fun setSearchEngine(context: Context, engine: SearchEngine) {
+        prefs(context).edit().putString(KEY_SEARCH_ENGINE, engine.id).apply()
+        searchEngineState = engine.id
+    }
+
+    /**
+     * v27s — the user's chosen music service id for the "Watch in" explore
+     * action, defaulting to YouTube Music so existing behavior is unchanged
+     * until they switch.
+     */
+    fun getMusicService(context: Context): String =
+        prefs(context).getString(KEY_MUSIC_SERVICE, null) ?: MusicService.YOUTUBE.id
+
+    fun setMusicService(context: Context, service: MusicService) {
+        prefs(context).edit().putString(KEY_MUSIC_SERVICE, service.id).apply()
+        musicServiceState = service.id
+    }
+
+    /** v27 — recycle-bin retention window in days (0 = keep forever). */
+    fun getRecycleBinExpiryDays(context: Context): Int =
+        prefs(context).getInt(KEY_RECYCLE_BIN_EXPIRY_DAYS, DEFAULT_RECYCLE_BIN_EXPIRY_DAYS)
+
+    fun setRecycleBinExpiryDays(context: Context, days: Int) {
+        prefs(context).edit().putInt(KEY_RECYCLE_BIN_EXPIRY_DAYS, days).apply()
+        recycleBinExpiryDaysState = days
+    }
+
+    /** Whether the explore-session flow (timer/reminder/done prompt) is on. */
+    fun isExploreSessionsEnabled(context: Context): Boolean =
+        prefs(context).getBoolean(KEY_EXPLORE_SESSIONS_ENABLED, true)
+
+    fun setExploreSessionsEnabled(context: Context, enabled: Boolean) {
+        prefs(context).edit().putBoolean(KEY_EXPLORE_SESSIONS_ENABLED, enabled).apply()
+        exploreSessionsEnabledState = enabled
+        if (!enabled) {
+            // Turning the feature off mid-session: tear the live session
+            // down so the timer, reminder and done-prompt all stop.
+            ExploreSessionStore.clearSession(context)
+            ExploreSessionStore.clearQueued(context)
+            ExploreReminderScheduler.cancel(context)
+            com.curio.app.infrastructure.ExploreSessionService.stop(context)
+        }
+    }
+
+    /**
+     * v3xx — the "Live explore notification" experiment concluded: the
+     * persistent live explore notification is ALWAYS on (no toggle). It
+     * shows whenever explore sessions run and the permission is granted;
+     * the end reminder + bubble stay as they are.
+     */
+    fun isLiveNotificationsEnabled(context: Context): Boolean = true
+
+    /**
+     * v23 — whether the Explore now dialog shows its "Show the explore
+     * bubble" opt-in row. Default OFF (hidden); the Notifications toggle
+     * re-shows it as a single-line choice inside the dialog.
+     */
+    fun isShowBubbleOptInDialog(context: Context): Boolean =
+        prefs(context).getBoolean(KEY_SHOW_BUBBLE_OPT_IN_DIALOG, false)
+
+    fun setShowBubbleOptInDialog(context: Context, enabled: Boolean) {
+        prefs(context).edit().putBoolean(KEY_SHOW_BUBBLE_OPT_IN_DIALOG, enabled).apply()
+        showBubbleOptInDialogState = enabled
+    }
+
+    /**
+     * v3xx54 — whether Curio notifies for a friend's message and for new
+     * community posts. Default ON; turning it off leaves sync, unread badges
+     * and the wall exactly as they are, it only stops the notifications.
+     */
+    fun isSocialNotificationsEnabled(context: Context): Boolean =
+        prefs(context).getBoolean(KEY_SOCIAL_NOTIFICATIONS, true)
+
+    fun setSocialNotifications(context: Context, enabled: Boolean) {
+        prefs(context).edit().putBoolean(KEY_SOCIAL_NOTIFICATIONS, enabled).apply()
+        socialNotificationsState = enabled
+    }
+
+    /**
+     * Whether the floating explore bubble is on. v22 — default OFF: the
+     * bubble is opt-in (the explore dialog's "Show the explore bubble"
+     * switch, or the Settings toggle). Off = the timer lives only in the
+     * notification (when live notifications are on).
+     */
+    fun isOverlayBubbleEnabled(context: Context): Boolean =
+        prefs(context).getBoolean(KEY_OVERLAY_BUBBLE_ENABLED, false)
+
+    fun setOverlayBubbleEnabled(context: Context, enabled: Boolean) {
+        prefs(context).edit().putBoolean(KEY_OVERLAY_BUBBLE_ENABLED, enabled).apply()
+        overlayBubbleEnabledState = enabled
+        val session = ExploreSessionStore.getActiveSession(context) ?: return
+        if (enabled) {
+            // Flipped ON mid-session: bring the bubble back (permission must
+            // be granted — callers gate on it; the render decides).
+            if (overlayActuallyUsable(context)) {
+                com.curio.app.infrastructure.ExploreSessionService.start(context, session)
+            }
+        } else {
+            // Flipped OFF mid-session: drop the bubble. Keep the service
+            // alive when live notifications still want it, else stop it.
+            if (isLiveNotificationsEnabled(context)) {
+                com.curio.app.infrastructure.ExploreSessionService.sync(context)
+            } else {
+                com.curio.app.infrastructure.ExploreSessionService.stop(context)
+            }
+        }
+    }
+
+    /**
+     * Whether AUTOMATIC "Display over other apps" prompts are suppressed
+     * (v8.1) — true once the user declines the permission (dismisses the
+     * explore-start prompt or returns from system settings without
+     * granting). The explore flow then proceeds without the bubble, and the
+     * only way back in is the explicit Settings toggle, which always opens
+     * the system page and clears this flag.
+     */
+    fun isOverlayAskDeclined(context: Context): Boolean =
+        prefs(context).getBoolean(KEY_OVERLAY_ASK_DECLINED, false)
+
+    fun setOverlayAskDeclined(context: Context, declined: Boolean) {
+        prefs(context).edit().putBoolean(KEY_OVERLAY_ASK_DECLINED, declined).apply()
+        overlayAskDeclinedState = declined
+    }
+
+    /** Whether experimental voice-to-text is enabled (default OFF). */
+    fun isVoiceToTextEnabled(context: Context): Boolean =
+        prefs(context).getBoolean(KEY_VOICE_TO_TEXT_ENABLED, false)
+
+    fun setVoiceToTextEnabled(context: Context, enabled: Boolean) {
+        prefs(context).edit().putBoolean(KEY_VOICE_TO_TEXT_ENABLED, enabled).apply()
+        voiceToTextEnabledState = enabled
+    }
+
+    /** v465f — whether the Edge TTS read-aloud experiment is on (default OFF). */
+    /** v465h — whether read aloud may keep reading with Curio off screen. */
+    fun isReadAloudBackgroundEnabled(context: Context): Boolean =
+        prefs(context).getBoolean(KEY_READ_ALOUD_BACKGROUND, true)
+
+    fun setReadAloudBackgroundEnabled(context: Context, enabled: Boolean) {
+        prefs(context).edit().putBoolean(KEY_READ_ALOUD_BACKGROUND, enabled).apply()
+        readAloudBackgroundEnabledState = enabled
+        // ⚠️ NOTHING HERE REACHES INTO THE SERVICE. The running notification has to
+        // be taken down when this is switched off, but the DATA LAYER is the wrong
+        // hand to do it — the same layering rule the Edge-voice setter above states
+        // for `ReaderLook`. The SETTING'S OWN ROW asks the service to re-render
+        // (the pattern the pet-overlay switch already uses), and the service
+        // re-reads this key on every render, so a live session is stood down there
+        // rather than from here.
+    }
+
+    fun isEdgeVoiceEnabled(context: Context): Boolean =
+        prefs(context).getBoolean(KEY_EDGE_VOICE_ENABLED, false)
+
+    fun setEdgeVoiceEnabled(context: Context, enabled: Boolean) {
+        prefs(context).edit().putBoolean(KEY_EDGE_VOICE_ENABLED, enabled).apply()
+        edgeVoiceEnabledState = enabled
+        // NOTE — nothing is cleared from the reader's stored voice here, and that
+        // is deliberate on two counts. (1) LAYERING: this is the data layer, and
+        // `ReaderLook` belongs to the reader's screen; reaching into it from here
+        // to tidy one field is a dependency the data layer should not have.
+        // (2) BEHAVIOUR: the reader already refuses a voice it cannot honour and
+        // falls back to the phone's own (see `sayAloud`), which checks THIS flag
+        // before it will use the Edge voice. So switching the experiment off takes
+        // effect immediately, and switching it back on restores the member's
+        // choice instead of having silently discarded it.
+    }
+
+    // ── Offline transcription model (v125) ─────────────────────────────
+    /** The selected offline model id ("" = none). */
+    fun getOfflineModelId(context: Context): String =
+        prefs(context).getString(KEY_OFFLINE_MODEL, "").orEmpty()
+
+    fun setOfflineModelId(context: Context, id: String) {
+        prefs(context).edit().putString(KEY_OFFLINE_MODEL, id).apply()
+        offlineModelIdState = id
+    }
+
+    /** Forces screens that read [VoskModels.isDownloaded] to re-check. */
+    fun bumpOfflineModelVersion() {
+        offlineModelVersionState++
+    }
+
+    /**
+     * Whether the explore foreground service should run: live notifications
+     * ON, OR the floating bubble is enabled AND the "Display over other
+     * apps" permission is actually usable (the overlay is what needs the
+     * service when live notifications are off). [overlayActuallyUsable]
+     * — not raw [Settings.canDrawOverlays] — so an Android 15+ pending
+     * grant never starts a service that has nothing it can show.
+     */
+    fun exploreServiceShouldRun(context: Context): Boolean =
+        isExploreSessionsEnabled(context) && (
+            isLiveNotificationsEnabled(context) ||
+                (isOverlayBubbleEnabled(context) && overlayActuallyUsable(context))
+            )
+
+    /**
+     * Whether the "Display over other apps" overlay is ACTUALLY usable right
+     * now. [Settings.canDrawOverlays] alone can lie on Android 15+ (v7.35):
+     * a FIRST-TIME grant — which includes a grant right after clearing app
+     * data or reinstalling — can sit in the system's PENDING state, where
+     * canDrawOverlays() returns true but overlay windows are silently not
+     * shown. The AppOps mode is the source of truth in that state (it stays
+     * MODE_IGNORED until the permission settles), so treat it as not
+     * granted and let the permission prompts re-ask — toggling the special
+     * access off/on in the system page resolves the pending state.
+     */
+    @Suppress("DEPRECATION") // AppOps has no stable non-deprecated public check API across API levels
+    fun overlayActuallyUsable(context: Context): Boolean {
+        if (!Settings.canDrawOverlays(context)) return false
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) return true
+        val appOps = context.getSystemService(AppOpsManager::class.java) ?: return true
+        return runCatching {
+            appOps.unsafeCheckOpNoThrow(
+                AppOpsManager.OPSTR_SYSTEM_ALERT_WINDOW,
+                Process.myUid(),
+                context.packageName
+            ) == AppOpsManager.MODE_ALLOWED
+        }.getOrDefault(true)
+    }
+
+
+    // ── Pinned topics (Topic Reveal → "Pin for later") ─────────────────
+    /**
+     * Returns all pinned topics, newest first. Persisted as a JSON array so
+     * topic names with delimiters survive round-trips.
+     */
+    fun getPinnedTopics(context: Context): List<PinnedTopic> {
+        val raw = prefs(context).getString(KEY_PINNED_TOPICS, null) ?: return emptyList()
+        return try {
+            val arr = JSONArray(raw)
+            List(arr.length()) { i ->
+                val obj = arr.getJSONObject(i)
+                val id = obj.optString("categoryId")
+                val cat = CategoryId.values().firstOrNull { it.name == id } ?: return@List null
+                PinnedTopic(
+                    categoryId = cat,
+                    topicName = obj.optString("topicName"),
+                    pinnedAtMillis = obj.optLong("pinnedAtMillis", System.currentTimeMillis())
+                )
+            }.filterNotNull()
+        } catch (_: Exception) {
+            emptyList()
+        }
+    }
+
+    fun isTopicPinned(context: Context, categoryId: CategoryId, topicName: String): Boolean =
+        getPinnedTopics(context).any {
+            it.categoryId == categoryId && it.topicName == topicName
+        }
+
+    /** Pins a topic (newest first, deduped). No-op when already pinned. */
+    fun pinTopic(context: Context, categoryId: CategoryId, topicName: String) {
+        if (topicName.isBlank()) return
+        val current = getPinnedTopics(context)
+        if (current.any { it.categoryId == categoryId && it.topicName == topicName }) return
+        val updated = listOf(PinnedTopic(categoryId, topicName, System.currentTimeMillis())) + current
+        savePinnedTopics(context, updated)
+        CurioQuests.onTopicPinned(context)
+    }
+
+    fun unpinTopic(context: Context, categoryId: CategoryId, topicName: String) {
+        val updated = getPinnedTopics(context).filterNot {
+            it.categoryId == categoryId && it.topicName == topicName
+        }
+        savePinnedTopics(context, updated)
+    }
+
+    private fun savePinnedTopics(context: Context, topics: List<PinnedTopic>) {
+        val arr = JSONArray()
+        topics.forEach {
+            arr.put(
+                JSONObject()
+                    .put("categoryId", it.categoryId.name)
+                    .put("topicName", it.topicName)
+                    .put("pinnedAtMillis", it.pinnedAtMillis)
+            )
+        }
+        prefs(context).edit().putString(KEY_PINNED_TOPICS, arr.toString()).apply()
+        pinnedTopicsState = topics
+    }
+
+    // ── Saved quotes (saved entry → bookmark icon on quote cards) ───────
+    /**
+     * Returns all bookmarked quotes, newest first. Persisted as a JSON
+     * array (same pattern as [PinnedTopic]) so quote text with any
+     * characters survives round-trips.
+     */
+    fun getSavedQuotes(context: Context): List<SavedQuote> {
+        val raw = prefs(context).getString(KEY_SAVED_QUOTES, null) ?: return emptyList()
+        return try {
+            val arr = JSONArray(raw)
+            List(arr.length()) { i ->
+                val obj = arr.getJSONObject(i)
+                val id = obj.optString("categoryId")
+                val cat = CategoryId.values().firstOrNull { it.name == id } ?: return@List null
+                SavedQuote(
+                    entryId = obj.optString("entryId"),
+                    topicName = obj.optString("topicName"),
+                    categoryId = cat,
+                    quoteText = obj.optString("quoteText"),
+                    savedAtMillis = obj.optLong("savedAtMillis", System.currentTimeMillis())
+                )
+            }.filterNotNull()
+        } catch (_: Exception) {
+            emptyList()
+        }
+    }
+
+    /**
+     * Bookmarks a quote (newest first, deduped by entry + quote text).
+     * No-op when already saved. (The saved/unsaved check in the UI reads
+     * the reactive [savedQuotesState] directly, not prefs.)
+     */
+    fun saveQuote(context: Context, entryId: String, topicName: String, categoryId: CategoryId, quoteText: String) {
+        if (entryId.isBlank() || quoteText.isBlank()) return
+        val current = getSavedQuotes(context)
+        if (current.any { it.entryId == entryId && it.quoteText == quoteText }) return
+        val updated = listOf(
+            SavedQuote(entryId, topicName, categoryId, quoteText, System.currentTimeMillis())
+        ) + current
+        saveSavedQuotes(context, updated)
+        CurioQuests.onQuoteSaved(context)
+    }
+
+    fun removeSavedQuote(context: Context, entryId: String, quoteText: String) {
+        val updated = getSavedQuotes(context).filterNot {
+            it.entryId == entryId && it.quoteText == quoteText
+        }
+        saveSavedQuotes(context, updated)
+    }
+
+    private fun saveSavedQuotes(context: Context, quotes: List<SavedQuote>) {
+        val arr = JSONArray()
+        quotes.forEach {
+            arr.put(
+                JSONObject()
+                    .put("entryId", it.entryId)
+                    .put("topicName", it.topicName)
+                    .put("categoryId", it.categoryId.name)
+                    .put("quoteText", it.quoteText)
+                    .put("savedAtMillis", it.savedAtMillis)
+            )
+        }
+        prefs(context).edit().putString(KEY_SAVED_QUOTES, arr.toString()).apply()
+        savedQuotesState = quotes
+    }
+
+    // ── Topic sentiment (Topic Reveal → like/dislike feeds the shuffle) ──
+    /**
+     * Returns all topic sentiments keyed "CATEGORY:topicId" → "like" /
+     * "dislike". Persisted as a JSON object so any topic id survives.
+     */
+    fun getTopicSentiments(context: Context): Map<String, String> {
+        val raw = prefs(context).getString(KEY_TOPIC_SENTIMENTS, null) ?: return emptyMap()
+        return try {
+            val obj = JSONObject(raw)
+            buildMap { obj.keys().forEach { key -> put(key, obj.optString(key)) } }
+        } catch (_: Exception) {
+            emptyMap()
+        }
+    }
+
+    /** Reactive sentiment for a topic — null / [SENTIMENT_LIKE] / [SENTIMENT_DISLIKE]. */
+    fun topicSentiment(categoryId: CategoryId, topicId: String): String? =
+        topicSentimentsState["${categoryId.name}:$topicId"]
+
+    /** Sets or clears a topic's sentiment ([SENTIMENT_NONE] removes it). */
+    fun setTopicSentiment(context: Context, categoryId: CategoryId, topicId: String, sentiment: String) {
+        if (topicId.isBlank()) return
+        val key = "${categoryId.name}:$topicId"
+        val updated = getTopicSentiments(context).toMutableMap()
+        if (sentiment == SENTIMENT_NONE) updated.remove(key) else updated[key] = sentiment
+        saveTopicSentiments(context, updated)
+        // Feed the quests system — like/dislike votes power the daily + badges.
+        when (sentiment) {
+            SENTIMENT_LIKE -> CurioQuests.onTopicLiked(context)
+            SENTIMENT_DISLIKE -> CurioQuests.onTopicDisliked(context)
+        }
+    }
+
+    private fun saveTopicSentiments(context: Context, sentiments: Map<String, String>) {
+        val obj = JSONObject()
+        sentiments.forEach { (k, v) -> obj.put(k, v) }
+        prefs(context).edit().putString(KEY_TOPIC_SENTIMENTS, obj.toString()).apply()
+        topicSentimentsState = sentiments
+    }
+
+    /**
+     * Net like-minus-dislike count per CATEGORY name — drives the shuffle's
+     * category factor (a category with more likes shows more, more dislikes
+     * shows less, never zero). Computed from the reactive state.
+     */
+    fun categoryAffinityMap(): Map<String, Int> {
+        val acc = mutableMapOf<String, Int>()
+        topicSentimentsState.forEach { (key, sentiment) ->
+            val catName = key.substringBefore(':')
+            val delta = when (sentiment) {
+                SENTIMENT_LIKE -> 1
+                SENTIMENT_DISLIKE -> -1
+                else -> 0
+            }
+            if (delta != 0) acc[catName] = (acc[catName] ?: 0) + delta
+        }
+        return acc
+    }
+
+    // ── Manage Categories (v7.94) — hidden set + custom order ──────────
+    /** Whether [id] is hidden by the user (Manage Categories). */
+    fun isCategoryHidden(id: CategoryId): Boolean = id in hiddenCategoriesState
+
+    /**
+     * The user's hidden category set, persisted as comma-joined names.
+     * Unknown names are dropped defensively on read.
+     */
+    fun getHiddenCategories(context: Context): Set<CategoryId> {
+        val raw = prefs(context).getString(KEY_HIDDEN_CATEGORIES, null) ?: return emptySet()
+        return raw.split(",").mapNotNull { name ->
+            CategoryId.values().firstOrNull { it.name == name }
+        }.toSet()
+    }
+
+    /** Hides or un-hides [id]; updates the reactive state instantly. */
+    fun setCategoryHidden(context: Context, id: CategoryId, hidden: Boolean) {
+        val updated = if (hidden) hiddenCategoriesState + id else hiddenCategoriesState - id
+        prefs(context).edit()
+            .putString(KEY_HIDDEN_CATEGORIES, updated.joinToString(",") { it.name })
+            .apply()
+        hiddenCategoriesState = updated
+    }
+
+    /** The user's custom category order (empty = default). */
+    fun getCategoryOrder(context: Context): List<CategoryId> {
+        val raw = prefs(context).getString(KEY_CATEGORY_ORDER, null) ?: return emptyList()
+        return raw.split(",").mapNotNull { name ->
+            CategoryId.values().firstOrNull { it.name == name }
+        }
+    }
+
+    /** Persists a full custom order; empty restores the default order. */
+    fun setCategoryOrder(context: Context, order: List<CategoryId>) {
+        val valid = order.distinct().filter { it in CategoryId.values().asList() }
+        prefs(context).edit()
+            .putString(KEY_CATEGORY_ORDER, valid.joinToString(",") { it.name })
+            .apply()
+        categoryOrderState = valid
+    }
+
+    // ── Curio pet companion (v8.5) ───────────────────────────────────
+    /** Whether the Curio pet companion layer is on (default ON). */
+    fun isPetEnabled(context: Context): Boolean =
+        prefs(context).getBoolean(KEY_PET_ENABLED, true)
+
+    fun setPetEnabled(context: Context, enabled: Boolean) {
+        prefs(context).edit().putBoolean(KEY_PET_ENABLED, enabled).apply()
+        petEnabledState = enabled
+    }
+
+    // v8.8 — floating pet toggle (default ON; see the Appearance settings).
+    fun isFloatingPetEnabled(context: Context): Boolean =
+        prefs(context).getBoolean(KEY_FLOATING_PET_ENABLED, true)
+
+    fun setFloatingPetEnabled(context: Context, enabled: Boolean) {
+        prefs(context).edit().putBoolean(KEY_FLOATING_PET_ENABLED, enabled).apply()
+        floatingPetEnabledState = enabled
+    }
+
+    // v256 — the outside-the-app companion toggle (default OFF: it needs
+    // the system "Display over other apps" permission, so it's an explicit
+    // opt-in from the Pet Designer's Settings page).
+    fun isPetOutsideAppEnabled(context: Context): Boolean =
+        prefs(context).getBoolean(KEY_PET_OUTSIDE_APP, false)
+
+    fun setPetOutsideAppEnabled(context: Context, enabled: Boolean) {
+        prefs(context).edit().putBoolean(KEY_PET_OUTSIDE_APP, enabled).apply()
+        petOutsideAppState = enabled
+    }
+
+    // v8.43 — the pet's learning brain toggle (default ON; Appearance).
+    fun isPetBrainEnabled(context: Context): Boolean =
+        prefs(context).getBoolean(KEY_PET_BRAIN_ENABLED, true)
+
+    fun setPetBrainEnabled(context: Context, enabled: Boolean) {
+        prefs(context).edit().putBoolean(KEY_PET_BRAIN_ENABLED, enabled).apply()
+        petBrainEnabledState = enabled
+    }
+
+    // v489 — the Return toggle (default ON; Experiments → Memory). Turning it off
+    // does not forget the ladder: the record stays in `curio_recall` and comes
+    // back if the member turns it on again.
+    fun isRecallEnabled(context: Context): Boolean =
+        prefs(context).getBoolean(KEY_RECALL_ENABLED, true)
+
+    fun setRecallEnabled(context: Context, enabled: Boolean) {
+        prefs(context).edit().putBoolean(KEY_RECALL_ENABLED, enabled).apply()
+        recallEnabledState = enabled
+    }
+
+    // ── Pet designer recent colors (v8.47 color picker) ────────────────
+    /** Recently-applied palette colors, most recent first (max 12). */
+    fun getPetRecentColors(context: Context): List<String> {
+        val raw = prefs(context).getString(KEY_PET_RECENT_COLORS, null) ?: return emptyList()
+        return try {
+            val arr = JSONArray(raw)
+            List(arr.length()) { arr.getString(it) }.filter { it.length == 6 }
+        } catch (_: Exception) {
+            emptyList()
+        }
+    }
+
+    fun setPetRecentColors(context: Context, colors: List<String>) {
+        val arr = JSONArray()
+        colors.take(12).forEach { arr.put(it) }
+        prefs(context).edit().putString(KEY_PET_RECENT_COLORS, arr.toString()).apply()
+    }
+
+    // v8.16 — auto-open the landed topic's reveal after a spin. v8.21 —
+    // default ON (the reveal opens as soon as the deck settles).
+    fun isAutoOpenReveal(context: Context): Boolean =
+        prefs(context).getBoolean(KEY_AUTO_OPEN_REVEAL, true)
+
+    fun setAutoOpenReveal(context: Context, enabled: Boolean) {
+        autoOpenRevealState = enabled
+        prefs(context).edit().putBoolean(KEY_AUTO_OPEN_REVEAL, enabled).apply()
+    }
+
+    /** Whether Curie may speak the custom reaction lines saved in the Pet designer. */
+    fun isCustomReactionLinesEnabled(context: Context): Boolean =
+        prefs(context).getBoolean(KEY_CUSTOM_REACTION_LINES, false)
+
+    fun setCustomReactionLinesEnabled(context: Context, enabled: Boolean) {
+        prefs(context).edit().putBoolean(KEY_CUSTOM_REACTION_LINES, enabled).apply()
+        customReactionLinesState = enabled
+    }
+
+    // ── v440 — THE JOURNAL'S DAILY GOAL ────────────────────────────
+    //
+    // The member's own pick from the settings list (*"Word count goal with a
+    // daily reminder"*). The goal is a number of WORDS FOR A DAY, and **0 means
+    // no goal** — the honest default for a journal nobody has asked anything of,
+    // exactly as a page's colour defaults to the theme (see `accentArgb`).
+    //
+    // It is a preference rather than a column on a page because it is a fact
+    // about the WRITER, not about one day: the pages it judges are stored exactly
+    // as they always were, and "N of your M words today" is computed when a
+    // surface asks (see the journals list). Nothing here is a migration.
+    fun getJournalGoal(context: Context): Int =
+        prefs(context).getInt(KEY_JOURNAL_GOAL, 0).coerceIn(0, 10_000)
+
+    fun setJournalGoal(context: Context, words: Int) {
+        prefs(context).edit().putInt(KEY_JOURNAL_GOAL, words.coerceIn(0, 10_000)).apply()
+    }
+
+    /**
+     * Whether the goal gets its own daily nudge.
+     *
+     * Arm the alarm WITH the preference, never one without the other: an enabled
+     * nudge with no alarm behind it is a setting that silently does nothing (the
+     * same rule the shuffle reminder follows), and a disarmed nudge leaves the
+     * goal in the app where it belongs.
+     */
+    fun isJournalGoalReminderEnabled(context: Context): Boolean =
+        prefs(context).getBoolean(KEY_JOURNAL_GOAL_REMINDER, false) &&
+            getJournalGoal(context) > 0
+
+    fun setJournalGoalReminderEnabled(context: Context, enabled: Boolean) {
+        prefs(context).edit().putBoolean(KEY_JOURNAL_GOAL_REMINDER, enabled).apply()
+        if (enabled && getJournalGoal(context) > 0) {
+            JournalGoalReminderScheduler.schedule(context, JOURNAL_GOAL_HOUR, JOURNAL_GOAL_MINUTE)
+        } else {
+            JournalGoalReminderScheduler.cancel(context)
+        }
+    }
+
+    /**
+     * When the goal's nudge arrives.
+     *
+     * An evening hour, because a writing goal is judged at the end of a day: the
+     * nudge is for the member who has not written yet, and one that arrives at
+     * nine in the morning is for a member who has all day to ignore it.
+     */
+    fun getJournalGoalTime(): Pair<Int, Int> = JOURNAL_GOAL_HOUR to JOURNAL_GOAL_MINUTE
+
+    // ── v440 — WHERE A JOURNAL DOOR LANDS ───────────────────────────
+    //
+    // The member's own pick (*"'First page of the day' preference (today's page vs
+    // the last one you opened)"*). A journal is a habit with two honest reading
+    // positions — the day in hand, or the page you left half-written — and which
+    // one a member wants depends on whether they write every day or return to the
+    // same piece. **The default is TODAY**: that is what the door has always done
+    // (a fresh page dated today), so nobody's habit changes under them.
+    fun isJournalOpenToday(context: Context): Boolean =
+        prefs(context).getBoolean(KEY_JOURNAL_OPEN_TODAY, true)
+
+    fun setJournalOpenToday(context: Context, today: Boolean) {
+        prefs(context).edit().putBoolean(KEY_JOURNAL_OPEN_TODAY, today).apply()
+    }
+
+    /**
+     * The last journal page opened, for the other half of the choice above.
+     *
+     * Written by the editor as a page loads — never by a page being CREATED, which
+     * has no id until it is saved and would leave the door pointing at a page that
+     * was never written. An id that no longer exists (the page was binned) is the
+     * door's problem, not this store's: it falls back to today's page.
+     */
+    fun getLastJournalId(context: Context): String =
+        prefs(context).getString(KEY_LAST_JOURNAL_ID, "").orEmpty()
+
+    fun setLastJournalId(context: Context, id: String) {
+        if (id.isNotBlank()) {
+            prefs(context).edit().putString(KEY_LAST_JOURNAL_ID, id).apply()
+        }
+    }
+
+    // ── Daily reminder ───────────────────────────────────────────────
+    fun isReminderEnabled(context: Context): Boolean =
+        prefs(context).getBoolean(KEY_REMINDER_ENABLED, false)
+
+    fun setReminderEnabled(context: Context, enabled: Boolean) {
+        reminderEnabledState = enabled
+        prefs(context).edit().putBoolean(KEY_REMINDER_ENABLED, enabled).apply()
+        if (enabled) {
+            DailyReminderScheduler.schedule(
+                context,
+                getReminderHour(context),
+                getReminderMinute(context)
+            )
+        } else {
+            DailyReminderScheduler.cancel(context)
+        }
+    }
+
+    fun getReminderHour(context: Context): Int =
+        prefs(context).getInt(KEY_REMINDER_HOUR, 18)   // default 6 PM
+
+    /** v3xx51 — the reminder's minute (0 by default = the preset hours). */
+    fun getReminderMinute(context: Context): Int =
+        prefs(context).getInt(KEY_REMINDER_MINUTE, 0).coerceIn(0, 59)
+
+    /** Preset hour pick — snaps back to the top of the hour. */
+    fun setReminderHour(context: Context, hour: Int) = setReminderTime(context, hour, 0)
+
+    /**
+     * v3xx51 — the EXACT reminder time from the clock picker (hour + minute).
+     * Writes both keys and re-arms the alarm in one go.
+     */
+    fun setReminderTime(context: Context, hour: Int, minute: Int) {
+        val safeHour = hour.coerceIn(0, 23)
+        val safeMinute = minute.coerceIn(0, 59)
+        prefs(context).edit()
+            .putInt(KEY_REMINDER_HOUR, safeHour)
+            .putInt(KEY_REMINDER_MINUTE, safeMinute)
+            .apply()
+        if (isReminderEnabled(context)) {
+            DailyReminderScheduler.schedule(context, safeHour, safeMinute)
+        }
+    }
+
+    // ── Last-used Spin category — persisted so the Spin tab opens where the
+    //    the user left off, even across app launches (v5.5). Falls back
+    //    to WILDCARD when unset or when a stored name no longer exists.
+    fun getLastSpinCategory(context: Context): CategoryId {
+        val name = prefs(context).getString(KEY_LAST_SPIN_CATEGORY, null)
+        return name?.let { n ->
+            CategoryId.values().firstOrNull { it.name == n }
+        } ?: CategoryId.WILDCARD
+    }
+
+    fun setLastSpinCategory(context: Context, id: CategoryId) =
+        prefs(context).edit().putString(KEY_LAST_SPIN_CATEGORY, id.name).apply()
+
+    /**
+     * Full last-used Spin category SET (single or mixed multi-select) —
+     * persisted so the Shuffle tab reopens the same deck after back
+     * navigation, tab switches and app restarts. The single-category key
+     * is kept in sync with the first entry for backwards compat with
+     * [getLastSpinCategory].
+     */
+    fun getLastSpinCategories(context: Context): List<CategoryId> {
+        val raw = prefs(context).getString(KEY_LAST_SPIN_CATEGORIES, null)
+        val ids = raw
+            ?.split(",")
+            ?.map { it.trim() }
+            ?.filter { it.isNotEmpty() }
+            ?.mapNotNull { name -> CategoryId.values().firstOrNull { it.name == name } }
+            .orEmpty()
+        return if (ids.isNotEmpty()) ids else listOf(getLastSpinCategory(context))
+    }
+
+    fun setLastSpinCategories(context: Context, ids: List<CategoryId>) {
+        val names = ids.map { it.name }.distinct()
+        if (names.isEmpty()) return
+        prefs(context).edit().putString(KEY_LAST_SPIN_CATEGORIES, names.joinToString(",")).apply()
+        setLastSpinCategory(context, ids.first())
+    }
+
+    /**
+     * Pinned categories for the new category picker (up to 5). Persists
+     * across restarts. Defaults to Wildcard + a few good-to-explore
+     * picks (Artists, Films, Books, Scientists) on first launch.
+     */
+    fun getPinnedCategories(context: Context): List<CategoryId> {
+        val raw = prefs(context).getString(KEY_PINNED_CATEGORIES, null)
+        val ids = raw
+            ?.split(",")
+            ?.map { it.trim() }
+            ?.filter { it.isNotEmpty() }
+            ?.mapNotNull { name -> CategoryId.values().firstOrNull { it.name == name } }
+            .orEmpty()
+        return if (ids.isNotEmpty()) ids.take(5)
+            else listOf(CategoryId.WILDCARD, CategoryId.ARTISTS, CategoryId.FILMS, CategoryId.BOOKS, CategoryId.SCIENTISTS)
+    }
+
+    fun setPinnedCategories(context: Context, ids: List<CategoryId>) {
+        val names = ids.map { it.name }.distinct().take(5)
+        prefs(context).edit().putString(KEY_PINNED_CATEGORIES, names.joinToString(",")).apply()
+    }
+
+    /** Toggle a category in/out of the pinned set (max 5). */
+    fun togglePinnedCategory(context: Context, id: CategoryId): List<CategoryId> {
+        val current = getPinnedCategories(context).toMutableList()
+        if (current.contains(id)) current.remove(id) else {
+            if (current.size >= 5) current.removeAt(0)
+            current.add(id)
+        }
+        setPinnedCategories(context, current)
+        return current
+    }
+
+    // ── New picker: named mixes + classic toggle ──────────────────────
+    /**
+     * All saved named mixes, in creation order (newest first after
+     * [addOrReplaceMix]). Persisted as a JSON array (the [PinnedTopic]
+     * pattern) so mix names survive round-trips.
+     */
+    fun getSavedMixes(context: Context): List<NamedMix> {
+        val raw = prefs(context).getString(KEY_NAMED_MIXES, null) ?: return emptyList()
+        return try {
+            val arr = JSONArray(raw)
+            List(arr.length()) { i ->
+                val obj = arr.getJSONObject(i)
+                val lanes = obj.optJSONArray("lanes") ?: return@List null
+                if (lanes.length() == 0) return@List null
+                val laneIds = List(lanes.length()) { j ->
+                    CategoryId.values().firstOrNull { it.name == lanes.optString(j) }
+                }.filterNotNull()
+                if (laneIds.isEmpty()) return@List null
+                NamedMix(
+                    name = obj.optString("name", "Mix").ifBlank { "Mix" },
+                    laneIds = laneIds,
+                    createdAtMillis = obj.optLong("createdAtMillis", System.currentTimeMillis())
+                )
+            }.filterNotNull()
+        } catch (_: Exception) {
+            emptyList()
+        }
+    }
+
+    fun saveSavedMixes(context: Context, mixes: List<NamedMix>) {
+        val arr = JSONArray()
+        mixes.forEach { mix ->
+            val lanes = JSONArray()
+            mix.laneIds.forEach { lanes.put(it.name) }
+            arr.put(
+                JSONObject()
+                    .put("name", mix.name)
+                    .put("lanes", lanes)
+                    .put("createdAtMillis", mix.createdAtMillis)
+            )
+        }
+        prefs(context).edit().putString(KEY_NAMED_MIXES, arr.toString()).apply()
+        savedMixesState = mixes
+    }
+
+    /**
+     * Adds a new mix, or replaces an EXISTING one matched by
+     * [NamedMix.createdAtMillis] (the stable id — editing/renaming keeps
+     * it). Returns the updated list.
+     */
+    fun addOrReplaceMix(context: Context, mix: NamedMix): List<NamedMix> {
+        val updated = getSavedMixes(context).toMutableList().apply {
+            val idx = indexOfFirst { it.createdAtMillis == mix.createdAtMillis }
+            if (idx >= 0) this[idx] = mix else add(0, mix)
+        }
+        saveSavedMixes(context, updated)
+        return updated
+    }
+
+    fun deleteMix(context: Context, createdAtMillis: Long): List<NamedMix> {
+        val updated = getSavedMixes(context).filterNot { it.createdAtMillis == createdAtMillis }
+        saveSavedMixes(context, updated)
+        return updated
+    }
+
+    // ── Cabinet collections (v3xx — Cabinet v2 folders) ──────────────
+    /**
+     * All saved Cabinet collections, newest first. Persisted as a JSON
+     * array of [CurioCollection] (id, name, createdAtMillis, members);
+     * members are [CurioCollectionMember] — either a pinned TOPIC
+     * (categoryName = CategoryId.name, refName = topic name) or a saved
+     * ENTRY (refName = the entry's stable id).
+     */
+    fun getCabinetCollections(context: Context): List<CurioCollection> {
+        val raw = prefs(context).getString(KEY_CABINET_COLLECTIONS, null) ?: return emptyList()
+        return try {
+            val arr = JSONArray(raw)
+            List(arr.length()) { i ->
+                val obj = arr.getJSONObject(i)
+                val membersArr = obj.optJSONArray("members") ?: JSONArray()
+                val members = List(membersArr.length()) { j ->
+                    val m = membersArr.getJSONObject(j)
+                    val kind = runCatching {
+                        CurioCollectionMember.MemberKind.valueOf(m.optString("kind", "TOPIC"))
+                    }.getOrDefault(CurioCollectionMember.MemberKind.TOPIC)
+                    CurioCollectionMember(
+                        kind = kind,
+                        categoryName = m.optString("cat", "").takeIf { it.isNotBlank() },
+                        refName = m.optString("ref", "")
+                    )
+                }
+                CurioCollection(
+                    id = obj.optString("id", "").ifBlank { "${obj.optLong("createdAtMillis", System.currentTimeMillis())}" },
+                    name = obj.optString("name", "Collection").ifBlank { "Collection" },
+                    createdAtMillis = obj.optLong("createdAtMillis", System.currentTimeMillis()),
+                    members = members.filter { it.refName.isNotBlank() },
+                    // v3xx — the custom card style (tone/art/icon), absent
+                    // on legacy collections → -1/null (auto/cycle).
+                    tone = obj.optInt("tone", -1),
+                    art = obj.optInt("art", -1),
+                    icon = obj.optString("icon", "").takeIf { it.isNotBlank() }
+                )
+            }.filter { it.id.isNotBlank() }
+        } catch (_: Exception) {
+            emptyList()
+        }
+    }
+
+    fun saveCabinetCollections(context: Context, collections: List<CurioCollection>) {
+        val arr = JSONArray()
+        collections.forEach { c ->
+            val members = JSONArray()
+            c.members.forEach { m ->
+                members.put(
+                    JSONObject()
+                        .put("kind", m.kind.name)
+                        .put("cat", m.categoryName ?: "")
+                        .put("ref", m.refName)
+                )
+            }
+            arr.put(
+                JSONObject()
+                    .put("id", c.id)
+                    .put("name", c.name)
+                    .put("createdAtMillis", c.createdAtMillis)
+                    .put("members", members)
+                    .put("tone", c.tone)
+                    .put("art", c.art)
+                    .put("icon", c.icon ?: "")
+            )
+        }
+        prefs(context).edit().putString(KEY_CABINET_COLLECTIONS, arr.toString()).apply()
+        collectionsState = collections
+    }
+
+    /** Adds a new collection, or replaces an EXISTING one matched by id. */
+    fun addOrReplaceCollection(context: Context, collection: CurioCollection): List<CurioCollection> {
+        val updated = getCabinetCollections(context).toMutableList().apply {
+            val idx = indexOfFirst { it.id == collection.id }
+            if (idx >= 0) this[idx] = collection else add(0, collection)
+        }
+        saveCabinetCollections(context, updated)
+        return updated
+    }
+
+    fun deleteCollection(context: Context, id: String): List<CurioCollection> {
+        val updated = getCabinetCollections(context).filterNot { it.id == id }
+        saveCabinetCollections(context, updated)
+        return updated
+    }
+
+    /**
+     * v3xx50 — the LAST number of saved entries this install had, persisted
+     * across launches. The Cabinet's loading state paints a skeleton of
+     * exactly this many cards, so a cold open matches the archive that is
+     * arriving instead of showing a generic couple of boxes.
+     */
+    fun getCabinetEntryCount(context: Context): Int =
+        prefs(context).getInt(KEY_CABINET_ENTRY_COUNT, 0)
+
+    /** Records the saved-entry count for the next cold open's skeleton. */
+    fun setCabinetEntryCount(context: Context, count: Int) {
+        if (count < 0) return
+        if (prefs(context).getInt(KEY_CABINET_ENTRY_COUNT, 0) == count) return
+        prefs(context).edit().putInt(KEY_CABINET_ENTRY_COUNT, count).apply()
+    }
+
+    /**
+     * Toggle a topic in/out of a seeded shelf (Curiying now / Want to
+     * read / Completed / Personal). Creates the shelf on the fly if it
+     * hasn't been seeded yet (a reveal sheet can toggle before the Cabinet
+     * was ever opened). Returns the new on/off state.
+     */
+    fun toggleShelfTopic(context: Context, shelfId: String, categoryId: CategoryId, topicName: String): Boolean {
+        val collections = getCabinetCollections(context).toMutableList()
+        var idx = collections.indexOfFirst { it.id == shelfId }
+        if (idx < 0) {
+            collections.add(
+                CurioCollection(
+                    id = shelfId,
+                    name = shelfDisplayName(shelfId),
+                    createdAtMillis = System.currentTimeMillis(),
+                    members = emptyList()
+                )
+            )
+            idx = collections.lastIndex
+        }
+        val c = collections[idx]
+        val has = c.members.any {
+            it.kind == CurioCollectionMember.MemberKind.TOPIC &&
+                it.categoryName == categoryId.name && it.refName == topicName
+        }
+        val updated = if (has)
+            c.copy(members = c.members.filterNot {
+                it.kind == CurioCollectionMember.MemberKind.TOPIC &&
+                    it.categoryName == categoryId.name && it.refName == topicName
+            })
+        else
+            c.copy(members = c.members + CurioCollectionMember(
+                kind = CurioCollectionMember.MemberKind.TOPIC,
+                categoryName = categoryId.name,
+                refName = topicName
+            ))
+        collections[idx] = updated
+        saveCabinetCollections(context, collections)
+        return !has
+    }
+
+    /** Whether a topic sits in a seeded shelf right now. */
+    fun isTopicInShelf(context: Context, shelfId: String, categoryId: CategoryId, topicName: String): Boolean {
+        val c = getCabinetCollections(context).firstOrNull { it.id == shelfId } ?: return false
+        return c.members.any {
+            it.kind == CurioCollectionMember.MemberKind.TOPIC &&
+                it.categoryName == categoryId.name && it.refName == topicName
+        }
+    }
+
+    /** The display name for a seeded shelf id (used when creating it on the fly). */
+    private fun shelfDisplayName(id: String): String = when (id) {
+        "shelf:currently-reading" -> "Curiying now"
+        "shelf:want-to-read" -> "Want to Read"
+        "shelf:completed" -> "Completed"
+        "shelf:personal" -> "Personal"
+        else -> "Collection"
+    }
+
+    // ── Built-in starter shelves (v3xx — Cabinet folders) ──────────────
+    /** Whether the four empty starter shelves were seeded once. */
+    fun isCabinetShelvesSeeded(context: Context): Boolean =
+        prefs(context).getBoolean(KEY_CABINET_SHELVES_SEEDED, false)
+
+    /**
+     * Seeds the four EMPTY starter shelves (Curiying now / Want to
+     * Read / Completed / Personal) into the collection store — one time.
+     * They are ordinary [CurioCollection]s (ids prefixed `shelf:`), so the
+     * existing add-captures / file-to-collection / rename / delete flows
+     * all work on them. The virtual shelves (Favorites / Saved entries /
+     * Notes) are computed from live data and are NOT persisted here.
+     */
+    fun seedCabinetShelves(context: Context) {
+        if (isCabinetShelvesSeeded(context)) {
+            // v3xx33 — the reading shelf is renamed to the Curio verb
+            // ("Curiying now" — it holds series + albums too). Installs
+            // seeded under the old label get renamed here, once.
+            val collections = getCabinetCollections(context)
+            val renamed = collections.map { c ->
+                if (c.id == "shelf:currently-reading" && c.name != "Curiying now")
+                    c.copy(name = "Curiying now")
+                else c
+            }
+            if (renamed != collections) saveCabinetCollections(context, renamed)
+            return
+        }
+        val now = System.currentTimeMillis()
+        val shelves = listOf(
+            CurioCollection(id = "shelf:currently-reading", name = "Curiying now", createdAtMillis = now, members = emptyList()),
+            CurioCollection(id = "shelf:want-to-read", name = "Want to Read", createdAtMillis = now, members = emptyList()),
+            CurioCollection(id = "shelf:completed", name = "Completed", createdAtMillis = now, members = emptyList()),
+            CurioCollection(id = "shelf:personal", name = "Personal", createdAtMillis = now, members = emptyList())
+        )
+        saveCabinetCollections(context, getCabinetCollections(context) + shelves)
+        prefs(context).edit().putBoolean(KEY_CABINET_SHELVES_SEEDED, true).apply()
+        cabinetShelvesSeededState = true
+    }
+
+    /**
+     * Classic-picker toggle: false = the NEW picker is the default; true
+     * restores the OLD glass-pill picker (the A/B side of the redesign).
+     */
+    /** Whether the starter mixes were already written once. */
+    fun isPickerMixesSeeded(context: Context): Boolean =
+        prefs(context).getBoolean(KEY_PICKER_MIXES_SEEDED, false)
+
+    fun setPickerMixesSeeded(context: Context, on: Boolean) {
+        prefs(context).edit().putBoolean(KEY_PICKER_MIXES_SEEDED, on).apply()
+        pickerMixesSeededState = on
+    }
+
+    // ── Picker default page + curated suggestions (v3xx) ─────────────
+    /** The curated default "fun to explore" list (up to 10), in order. */
+    val defaultSuggestions: List<CategoryId> = listOf(
+        CategoryId.FILMS, CategoryId.BOOKS, CategoryId.ANIMALS,
+        CategoryId.SCIENTISTS, CategoryId.HISTORY, CategoryId.ARTISTS,
+        CategoryId.FOOD, CategoryId.GAMES, CategoryId.MYTHOLOGY,
+        CategoryId.ANIME
+    )
+
+    /** Which picker page opens first: 0 = classic, 1 = new. */
+    fun getPickerDefaultPage(context: Context): Int =
+        prefs(context).getInt(KEY_PICKER_DEFAULT_PAGE, 0)
+
+    fun setPickerDefaultPage(context: Context, page: Int) {
+        prefs(context).edit().putInt(KEY_PICKER_DEFAULT_PAGE, page).apply()
+        pickerDefaultPageState = page
+    }
+
+    /** The last APPLIED named mix's name, or null for single/surprise decks. */
+    fun getLastMixName(context: Context): String? =
+        prefs(context).getString(KEY_LAST_MIX_NAME, null)
+
+    fun setLastMixName(context: Context, name: String?) {
+        prefs(context).edit().putString(KEY_LAST_MIX_NAME, name).apply()
+        lastMixNameState = name
+    }
+
+    // ── Cover fetching consent (v320 → v3xx51 MERGED) ────────────────
+    /**
+     * v3xx51 — ONE consent for ALL cover fetching. Books, albums and series
+     * used to have separate toggles, which the user merged into a single
+     * "Cover fetching" switch. This is the canonical gate: every reader
+     * (the hub's bulk pass, the reveal's on-demand resolvers, the Cabinet
+     * cover cache and the share cards) checks it, and nothing reaches the
+     * network while it is OFF.
+     *
+     * Opt-OUT by default (false) — nothing downloads without explicit
+     * consent. The legacy per-category keys are still honoured ONCE on read
+     * (an install that had any of them on migrates to the merged key), then
+     * never written again.
+     */
+    fun isCoverFetchEnabled(context: Context): Boolean {
+        val p = prefs(context)
+        if (p.contains(KEY_COVER_FETCH_ENABLED)) {
+            return p.getBoolean(KEY_COVER_FETCH_ENABLED, true)
+        }
+        val legacy = p.getBoolean(KEY_BOOK_FETCH_ENABLED, false) ||
+            p.getBoolean(KEY_ALBUM_FETCH_ENABLED, false) ||
+            p.getBoolean(KEY_SERIES_FETCH_ENABLED, false)
+        if (legacy) {
+            p.edit().putBoolean(KEY_COVER_FETCH_ENABLED, true).apply()
+            return true
+        }
+        // ── v406 — COVERS ARE ON BY DEFAULT ──────────────────────────────
+        //
+        // The merged consent used to start OFF, so every fresh install opened
+        // on placeholder art until the member went and found the switch. A
+        // stored legacy choice still wins (someone who turned the old per-kind
+        // switches off keeps them off); NO stored choice at all means nobody
+        // has ever answered the question, and the answer is yes.
+        val everChosen = p.contains(KEY_BOOK_FETCH_ENABLED) ||
+            p.contains(KEY_ALBUM_FETCH_ENABLED) ||
+            p.contains(KEY_SERIES_FETCH_ENABLED)
+        if (everChosen) return false
+        p.edit().putBoolean(KEY_COVER_FETCH_ENABLED, true).apply()
+        return true
+    }
+
+    fun setCoverFetchEnabled(context: Context, enabled: Boolean) {
+        prefs(context).edit().putBoolean(KEY_COVER_FETCH_ENABLED, enabled).apply()
+        // All three mirrors move together — every existing reader keeps
+        // working unchanged off its own state field.
+        coverFetchEnabledState = enabled
+        bookFetchEnabledState = enabled
+        albumFetchEnabledState = enabled
+        seriesFetchEnabledState = enabled
+    }
+
+    // Legacy per-category accessors — thin aliases of the merged consent (so
+    // the ~15 existing call sites keep compiling AND behave identically).
+    fun isBookFetchEnabled(context: Context): Boolean = isCoverFetchEnabled(context)
+    fun setBookFetchEnabled(context: Context, enabled: Boolean) = setCoverFetchEnabled(context, enabled)
+    fun isAlbumFetchEnabled(context: Context): Boolean = isCoverFetchEnabled(context)
+    fun setAlbumFetchEnabled(context: Context, enabled: Boolean) = setCoverFetchEnabled(context, enabled)
+    fun isSeriesFetchEnabled(context: Context): Boolean = isCoverFetchEnabled(context)
+    fun setSeriesFetchEnabled(context: Context, enabled: Boolean) = setCoverFetchEnabled(context, enabled)
+
+    /** The selected cover provider (a BookCoverProvider enum name). v356 —
+     *  defaults to ITUNES (the keyless first-choice source). v361 — when the
+     *  free LibraryThing key is configured (BuildConfig) and no provider was
+     *  ever picked, LIBRARY_THING is the default: a fresh install with the
+     *  key set gets the highest-quality ISBN covers immediately instead of
+     *  the keyless fallback. */
+    fun getBookCoverProvider(context: Context): String {
+        val stored = prefs(context).getString(KEY_BOOK_COVER_PROVIDER, null)
+        if (!stored.isNullOrBlank()) return stored
+        return if (com.curio.app.BuildConfig.LIBRARY_THING_API_KEY.isNotBlank())
+            "LIBRARY_THING" else "ITUNES"
+    }
+
+    fun setBookCoverProvider(context: Context, name: String) {
+        prefs(context).edit().putString(KEY_BOOK_COVER_PROVIDER, name).apply()
+        bookCoverProviderState = name
+    }
+
+    /** The book names whose covers failed the last bulk fetch. */
+    fun getBookCoverFailed(context: Context): List<String> {
+        val raw = prefs(context).getString(KEY_BOOK_COVER_FAILED, null) ?: return emptyList()
+        return runCatching {
+            org.json.JSONArray(raw).let { arr ->
+                (0 until arr.length()).mapNotNull { i -> arr.optString(i).takeIf { it.isNotBlank() } }
+            }
+        }.getOrDefault(emptyList())
+    }
+
+    fun setBookCoverFailed(context: Context, names: List<String>) {
+        prefs(context).edit().putString(KEY_BOOK_COVER_FAILED, org.json.JSONArray(names).toString()).apply()
+        bookCoverFailedState = names
+    }
+
+    /** Book names whose covers VERIFIED as real images in a bulk fetch. */
+    fun getBookCoverDone(context: Context): List<String> {
+        val raw = prefs(context).getString(KEY_BOOK_COVER_DONE, null) ?: return emptyList()
+        return runCatching {
+            org.json.JSONArray(raw).let { arr ->
+                (0 until arr.length()).mapNotNull { i -> arr.optString(i).takeIf { it.isNotBlank() } }
+            }
+        }.getOrDefault(emptyList())
+    }
+
+    fun setBookCoverDone(context: Context, names: List<String>) {
+        prefs(context).edit().putString(KEY_BOOK_COVER_DONE, org.json.JSONArray(names).toString()).apply()
+        bookCoverDoneState = names
+    }
+
+    /**
+     * v389 — the book ids whose metadata lookup already COMPLETED. Read by the
+     * book page's auto-fetch so a finished lookup is not repeated on every open
+     * (and after every restart). Disk-backed: call it off the main thread.
+     */
+    fun getBookLookupDone(context: Context): Set<String> {
+        val raw = prefs(context).getString(KEY_BOOK_LOOKUP_DONE, null) ?: return emptySet()
+        return runCatching {
+            org.json.JSONArray(raw).let { arr ->
+                (0 until arr.length()).mapNotNull { i ->
+                    arr.optString(i).takeIf { it.isNotBlank() }
+                }.toSet()
+            }
+        }.getOrDefault(emptySet())
+    }
+
+    /**
+     * v389 — marks one book's metadata lookup as COMPLETED across restarts.
+     * Only ever called for a pass that actually returned (see BookDetailScreen:
+     * a pass that threw is retried next time instead of being remembered as
+     * done).
+     */
+    fun markBookLookupDone(context: Context, bookId: String) {
+        if (bookId.isBlank()) return
+        val done = getBookLookupDone(context) + bookId
+        prefs(context).edit()
+            .putString(KEY_BOOK_LOOKUP_DONE, org.json.JSONArray(done.toList()).toString())
+            .apply()
+    }
+
+    /** v361 — wipe EVERY book-cover record (resolved URLs, verified-done
+     *  set, failed list) so the hub's "Clear all covers" starts a provider
+     *  test from a blank slate. The Coil disk cache is cleared by the caller
+     *  (BookCoverFetch.clearAllCovers) so old artwork doesn't linger.
+     *  v389 — also drops the completed-metadata-lookup markers: this is the
+     *  book-metadata reset door, and a book marked "looked up" would otherwise
+     *  never be looked up again — the opposite of what a reset is for. */
+    fun clearBookCovers(context: Context) {
+        prefs(context).edit()
+            .remove(KEY_BOOK_COVER_URLS)
+            .remove(KEY_BOOK_COVER_DONE)
+            .remove(KEY_BOOK_COVER_FAILED)
+            .remove(KEY_BOOK_LOOKUP_DONE)
+            .apply()
+        bookCoverUrlsState = emptyMap()
+        bookCoverDoneState = emptyList()
+        bookCoverFailedState = emptyList()
+    }
+
+    /** The keyless-fetched average ratings: book name → Google Books average. */
+    fun getBookRatings(context: Context): Map<String, Double> {
+        val raw = prefs(context).getString(KEY_BOOK_RATINGS, null) ?: return emptyMap()
+        return runCatching {
+            val obj = org.json.JSONObject(raw)
+            val out = LinkedHashMap<String, Double>()
+            val keys = obj.keys()
+            while (keys.hasNext()) {
+                val k = keys.next()
+                out[k] = obj.optDouble(k, 0.0)
+            }
+            out
+        }.getOrDefault(emptyMap())
+    }
+
+    fun setBookRating(context: Context, name: String, rating: Double) {
+        val cur = getBookRatings(context).toMutableMap()
+        cur[name] = rating
+        prefs(context).edit().putString(KEY_BOOK_RATINGS, org.json.JSONObject(cur).toString()).apply()
+        bookRatingsState = cur
+    }
+
+    /** The keyless-fetched ratings COUNTS (Google Books ratingsCount): book
+     *  name → count. Stored next to [getBookRatings] so the reveal can show
+     *  "★ 4.2 · 1.2k ratings" instead of a bare average. */
+    fun getBookRatingsCount(context: Context): Map<String, Int> {
+        val raw = prefs(context).getString(KEY_BOOK_RATINGS_COUNT, null) ?: return emptyMap()
+        return runCatching {
+            val obj = org.json.JSONObject(raw)
+            val out = LinkedHashMap<String, Int>()
+            val keys = obj.keys()
+            while (keys.hasNext()) {
+                val k = keys.next()
+                out[k] = obj.optInt(k, 0)
+            }
+            out
+        }.getOrDefault(emptyMap())
+    }
+
+    /** v328 — cache BOTH stars: the average rating and its ratings count. */
+    fun setBookRatingWithCount(context: Context, name: String, rating: Double, count: Int) {
+        setBookRating(context, name, rating)
+        val cur = getBookRatingsCount(context).toMutableMap()
+        cur[name] = count
+        prefs(context).edit().putString(KEY_BOOK_RATINGS_COUNT, org.json.JSONObject(cur).toString()).apply()
+        bookRatingsCountState = cur
+    }
+
+    /** v328 — chapters read per book (name → highest chapter number read). */
+    fun getBookReadingProgress(context: Context): Map<String, Int> {
+        val raw = prefs(context).getString(KEY_BOOK_READING, null) ?: return emptyMap()
+        return runCatching {
+            val obj = org.json.JSONObject(raw)
+            val out = LinkedHashMap<String, Int>()
+            val keys = obj.keys()
+            while (keys.hasNext()) {
+                val k = keys.next()
+                out[k] = obj.optInt(k, 0)
+            }
+            out
+        }.getOrDefault(emptyMap())
+    }
+
+    /** v328 — record that [chaptersRead] chapters of [name] are done. Only
+     *  ever moves forward (never lowers progress).
+     *  v334 — kept for callers that only ever move forward; the share-card
+     *  slider and the reveal's read toggle use [setBookReadingProgressExact]
+     *  so progress can go BOTH ways (undoing a chapter read). */
+    fun setBookReadingProgress(context: Context, name: String, chaptersRead: Int) {
+        if (chaptersRead <= 0) return
+        val cur = getBookReadingProgress(context).toMutableMap()
+        if ((cur[name] ?: 0) >= chaptersRead) return
+        cur[name] = chaptersRead
+        prefs(context).edit().putString(KEY_BOOK_READING, org.json.JSONObject(cur).toString()).apply()
+        bookReadingProgressState = cur
+    }
+
+    /**
+     * v334 — set the exact chapter progress for [name] (may go BACKWARD, so
+     * a mis-tapped chapter read can be undone). Zero removes the entry.
+     * The reveal's chapter toggle and the share-card progress slider both
+     * write through this so the Book Notes reader stays in sync.
+     */
+    fun setBookReadingProgressExact(context: Context, name: String, chaptersRead: Int) {
+        val cur = getBookReadingProgress(context).toMutableMap()
+        if (chaptersRead <= 0) {
+            cur.remove(name)
+        } else {
+            cur[name] = chaptersRead
+        }
+        prefs(context).edit().putString(KEY_BOOK_READING, org.json.JSONObject(cur).toString()).apply()
+        bookReadingProgressState = cur
+    }
+
+    /** The user's curated suggestion ids (empty = use [defaultSuggestions]). */
+    fun getPickerSuggestions(context: Context): List<CategoryId> {
+        val raw = prefs(context).getString(KEY_PICKER_SUGGESTIONS, null) ?: return emptyList()
+        return runCatching {
+            JSONArray(raw).let { arr ->
+                (0 until arr.length()).mapNotNull { i ->
+                    runCatching { CategoryId.valueOf(arr.getString(i)) }.getOrNull()
+                }
+            }
+        }.getOrDefault(emptyList())
+    }
+
+    fun setPickerSuggestions(context: Context, ids: List<CategoryId>) {
+        val arr = JSONArray()
+        ids.forEach { arr.put(it.name) }
+        prefs(context).edit().putString(KEY_PICKER_SUGGESTIONS, arr.toString()).apply()
+        pickerSuggestionsState = ids
+    }
+
+    /** Adds a category id to the curated suggestions (no-op if present). */
+    fun addPickerSuggestion(context: Context, id: CategoryId) {
+        val cur = getPickerSuggestions(context).toMutableList()
+        if (id !in cur) { cur.add(id); setPickerSuggestions(context, cur) }
+    }
+
+    /** Removes a category id from the curated suggestions. */
+    fun removePickerSuggestion(context: Context, id: CategoryId) {
+        // Seed from the EFFECTIVE list (defaults when the user list is still
+        // empty) so removing a default suggestion actually removes it — the
+        // old write was a no-op against an empty user list, so the lane
+        // stayed in Continue exploring. An all-removed list is empty again,
+        // which simply falls back to the defaults.
+        val cur = getPickerSuggestions(context).toMutableList()
+            .ifEmpty { defaultSuggestions.toMutableList() }
+        cur.remove(id)
+        setPickerSuggestions(context, cur)
+    }
+
+    // ── Picker scroll + mode persistence (v3xx13 / v3xx14) ─────────────
+    /** Saved scroll position of one picker pager page (or mode tab). */
+    data class PickerScrollPos(val index: Int = 0, val offset: Int = 0)
+
+    private fun encodeScroll(pos: PickerScrollPos): String = "${pos.index}:${pos.offset}"
+
+    private fun decodeScroll(raw: String?): PickerScrollPos =
+        raw?.split(":")?.let { parts ->
+            runCatching { PickerScrollPos(parts[0].toInt(), parts[1].toInt()) }
+                .getOrDefault(PickerScrollPos())
+        } ?: PickerScrollPos()
+
+    /** Page 0's persisted mode tab name — "MIX" (default), "CURIO", "KNOWLEDGE". */
+    fun getPickerPage0Mode(context: Context): String =
+        prefs(context).getString(KEY_PICKER_PAGE0_MODE, "MIX") ?: "MIX"
+
+    fun setPickerPage0Mode(context: Context, mode: String) {
+        prefs(context).edit().putString(KEY_PICKER_PAGE0_MODE, mode).apply()
+        pickerPage0ModeState = mode
+    }
+
+    /** Saved scroll position of one page-0 mode tab (tab = PickerMode.name). */
+    fun getPickerPage0TabScroll(context: Context, tab: String): PickerScrollPos =
+        decodeScroll(prefs(context).getString("$KEY_PICKER_PAGE0_TAB_SCROLL$tab", null))
+
+    fun setPickerPage0TabScroll(context: Context, tab: String, pos: PickerScrollPos) {
+        prefs(context).edit().putString("$KEY_PICKER_PAGE0_TAB_SCROLL$tab", encodeScroll(pos)).apply()
+    }
+
+    /** Saved scroll position of page 1 — the new picker page. */
+    fun getPickerPage1Scroll(context: Context): PickerScrollPos =
+        decodeScroll(prefs(context).getString(KEY_PICKER_PAGE1_SCROLL, null))
+
+    fun setPickerPage1Scroll(context: Context, pos: PickerScrollPos) {
+        prefs(context).edit().putString(KEY_PICKER_PAGE1_SCROLL, encodeScroll(pos)).apply()
+    }
+
+    // ── Custom pet design (v8.34 — Pet designer playground) ──────────
+    /** The saved custom pet-design text, or null for the default look. */
+    fun getPetDesign(context: Context): String? =
+        prefs(context).getString(KEY_PET_DESIGN, null)
+
+    /** Saves a custom pet design (always-on: the pet wears it everywhere). */
+    fun setPetDesign(context: Context, text: String) {
+        prefs(context).edit().putString(KEY_PET_DESIGN, text).apply()
+        petDesignState = text
+    }
+
+    /** Removes the custom design, returning the pet to its default look. */
+    fun clearPetDesign(context: Context) {
+        prefs(context).edit().remove(KEY_PET_DESIGN).apply()
+        petDesignState = null
+    }
+
+    // ── Custom pet slots (v8.56 — Pet studio Pets page) ──────────────
+    /** The two saved custom-pet design texts (null = empty slot). */
+    fun getCustomPets(context: Context): List<String?> = listOf(
+        prefs(context).getString(KEY_PET_CUSTOM_1, null),
+        prefs(context).getString(KEY_PET_CUSTOM_2, null)
+    )
+
+    /** Saves a custom-pet design into one of the two slots (always-on). */
+    fun setCustomPet(context: Context, index: Int, text: String) {
+        val key = if (index == 0) KEY_PET_CUSTOM_1 else KEY_PET_CUSTOM_2
+        prefs(context).edit().putString(key, text).apply()
+        customPetsState = getCustomPets(context)
+    }
+
+    /** Removes one custom-pet slot (returns it to the empty state). */
+    fun clearCustomPet(context: Context, index: Int) {
+        val key = if (index == 0) KEY_PET_CUSTOM_1 else KEY_PET_CUSTOM_2
+        prefs(context).edit().remove(key).apply()
+        customPetsState = getCustomPets(context)
+    }
+
+
+    // ── Landed Spin topic (per category) — persisted so the landed card ──
+    //    survives ANY navigation. rememberSaveable alone dies when the
+    //    Spin back-stack entry is popped (e.g. top-bar back arrow to
+    //    Home); mirroring the topic name here lets Spin restore it the
+    //    next time it's composed. Cleared when a new spin starts.
+    fun getLandedTopic(context: Context, categoryId: CategoryId): String? =
+        prefs(context).getString(KEY_LANDED_TOPIC_PREFIX + categoryId.name, null)
+
+    fun setLandedTopic(context: Context, categoryId: CategoryId, topicName: String?) {
+        prefs(context).edit()
+            .putString(KEY_LANDED_TOPIC_PREFIX + categoryId.name, topicName)
+            .apply()
+    }
+
+    // ── Legacy flower-bed design compatibility ───────────────────────
+    /** Returns old saved bed rows for migration compatibility; no UI writes them. */
+    fun getBedDesignRows(context: Context): List<String>? =
+        prefs(context).getString(KEY_BED_DESIGN, null)
+            ?.split("\n")
+            ?.takeIf { it.size == 18 && it.all { row -> row.length == 32 } }
+
+    fun setBedDesignRows(context: Context, rows: List<String>) {
+        prefs(context).edit().putString(KEY_BED_DESIGN, rows.joinToString("\n")).apply()
+        bedDesignRowsState = rows
+    }
+
+    fun clearBedDesignRows(context: Context) {
+        prefs(context).edit().remove(KEY_BED_DESIGN).apply()
+        bedDesignRowsState = null
+    }
+
+    // ── Evolution path (v9.5) ───────────────────────────────────
+    private const val KEY_EVO_PATH = "evo_path"
+
+    fun getEvoPath(context: Context): String? =
+        prefs(context).getString(KEY_EVO_PATH, null)
+
+    /** Reactive read (no context needed) — returns null when unset. */
+    fun evoPath(): CurioPet.EvoPath? =
+        evoPathState?.let { runCatching { CurioPet.EvoPath.valueOf(it) }.getOrNull() }
+
+    fun setEvoPath(context: Context, path: CurioPet.EvoPath) {
+        prefs(context).edit().putString(KEY_EVO_PATH, path.name).apply()
+        evoPathState = path.name
+    }
+
+    // ── Pet editor experiments (v9.6) ────────────────────────────────
+    private const val KEY_PET_PART_TRANSFORMS = "pet_part_transforms"
+
+    fun isPetPartTransformsEnabled(context: Context): Boolean =
+        prefs(context).getBoolean(KEY_PET_PART_TRANSFORMS, false)
+
+    fun setPetPartTransformsEnabled(context: Context, enabled: Boolean) {
+        prefs(context).edit().putBoolean(KEY_PET_PART_TRANSFORMS, enabled).apply()
+        petPartTransformsState = enabled
+    }
+
+    // ── Update checker (opt-in) ──────────────────────────────────────
+    // Curio is an offline-first app: the background update check (and its
+    // notification/toast) costs data every launch. OFF by default — the
+    // Updates page's toggle opts in. The MANUAL check on the Updates page
+    // always works regardless of this flag.
+    private const val KEY_UPDATE_CHECKER_ENABLED = "update_checker_enabled"
+
+    var updateCheckerEnabledState by mutableStateOf(false)
+        private set
+
+    fun isUpdateCheckerEnabled(context: Context): Boolean =
+        prefs(context).getBoolean(KEY_UPDATE_CHECKER_ENABLED, true)
+
+    fun setUpdateCheckerEnabled(context: Context, enabled: Boolean) {
+        prefs(context).edit().putBoolean(KEY_UPDATE_CHECKER_ENABLED, enabled).apply()
+        updateCheckerEnabledState = enabled
+    }
+
+    // ── Auto backup (pick a folder once) ─────────────────────────────
+    // The user picks a save location ONCE (CreateDocument); the chosen
+    // document URI is persisted with a persistable permission grant so a
+    // background auto-backup can write to it without re-asking.
+    private const val KEY_AUTO_BACKUP_ENABLED = "auto_backup_enabled"
+    private const val KEY_AUTO_BACKUP_URI = "auto_backup_uri"
+    private const val KEY_AUTO_BACKUP_LAST_AT = "auto_backup_last_at"
+    private const val KEY_AUTO_BACKUP_FREQUENCY_DAYS = "auto_backup_frequency_days"
+
+    var autoBackupEnabledState by mutableStateOf(false)
+        private set
+
+    fun isAutoBackupEnabled(context: Context): Boolean =
+        prefs(context).getBoolean(KEY_AUTO_BACKUP_ENABLED, false)
+
+    fun setAutoBackupEnabled(context: Context, enabled: Boolean) {
+        prefs(context).edit().putBoolean(KEY_AUTO_BACKUP_ENABLED, enabled).apply()
+        autoBackupEnabledState = enabled
+    }
+
+    /** The persisted auto-backup destination URI string, or "" when unset. */
+    fun getAutoBackupUri(context: Context): String =
+        prefs(context).getString(KEY_AUTO_BACKUP_URI, "").orEmpty()
+
+    fun setAutoBackupUri(context: Context, uri: String) {
+        prefs(context).edit().putString(KEY_AUTO_BACKUP_URI, uri).apply()
+    }
+
+    // v227c �� auto-backup FREQUENCY in days: 1 = daily (the old fixed
+    // cadence, still the default), 3, or 7. MainActivity reads this for
+    // its due check; BackupToolsScreen renders the picker.
+    val autoBackupFrequencyDaysOptions = intArrayOf(1, 3, 7)
+
+    var autoBackupFrequencyDaysState by mutableIntStateOf(1)
+        private set
+
+    fun getAutoBackupFrequencyDays(context: Context): Int =
+        prefs(context).getInt(KEY_AUTO_BACKUP_FREQUENCY_DAYS, 1)
+
+    fun setAutoBackupFrequencyDays(context: Context, days: Int) {
+        prefs(context).edit().putInt(KEY_AUTO_BACKUP_FREQUENCY_DAYS, days).apply()
+        autoBackupFrequencyDaysState = days
+    }
+
+    /** Milliseconds of the last AUTO backup run, or 0 if never. */
+    fun getAutoBackupLastAtMillis(context: Context): Long =
+        prefs(context).getLong(KEY_AUTO_BACKUP_LAST_AT, 0L)
+
+    fun setAutoBackupLastAtMillis(context: Context, millis: Long) {
+        prefs(context).edit().putLong(KEY_AUTO_BACKUP_LAST_AT, millis).apply()
+    }
+
+    // ── Share card edit persistence ─────────────────────────────────
+    /** Save per-topic card customisations so they restore when the same
+     *  topic is shared again. [topicName] is the key; [edit] is the JSON
+     *  the share sheet builds — it carries a per-style "moves" object
+     *  (each style keeps its OWN position/size offsets), bodyScale and the
+     *  edited title/fact. Callers own the JSON field names. */
+    fun saveShareCardEdits(context: Context, topicName: String, edit: JSONObject) {
+        val json = try {
+            val raw = prefs(context).getString(KEY_SHARE_CARD_EDITS, null)
+                ?.let { JSONObject(it) } ?: JSONObject()
+            raw.put(topicName, edit)
+            raw.toString()
+        } catch (_: Exception) { return }
+        prefs(context).edit().putString(KEY_SHARE_CARD_EDITS, json).apply()
+    }
+
+    /** Load saved card edits for [topicName], or null if none. */
+    fun loadShareCardEdits(context: Context, topicName: String): JSONObject? = try {
+        val raw = prefs(context).getString(KEY_SHARE_CARD_EDITS, null)
+            ?.let { JSONObject(it) } ?: return null
+        raw.optJSONObject(topicName)
+    } catch (_: Exception) { null }
+
+    /** Remove the saved card edits for [topicName] — called when the user
+     *  LEAVES the Topic Reveal screen (v325), so the next share of that
+     *  topic starts clean; accidental sheet exits meanwhile keep the edits
+     *  (persisted on dismissal). */
+    fun clearShareCardEdits(context: Context, topicName: String) {
+        try {
+            val raw = prefs(context).getString(KEY_SHARE_CARD_EDITS, null)
+                ?.let { JSONObject(it) } ?: return
+            if (raw.has(topicName)) {
+                raw.remove(topicName)
+                prefs(context).edit().putString(KEY_SHARE_CARD_EDITS, raw.toString()).apply()
+            }
+        } catch (_: Exception) { }
+    }
+
+    /** Record a shared card for the Share Hub gallery. */
+    fun recordSharedCard(context: Context, topicName: String, categoryName: String,
+        style: String, aspect: String) {
+        val json = try {
+            val arr = prefs(context).getString(KEY_SHARED_CARDS, null)
+                ?.let { JSONArray(it) } ?: JSONArray()
+            // Dedupe by topic + style
+            val existing = (0 until arr.length()).mapNotNull { arr.optJSONObject(it) }
+            val deduped = JSONArray()
+            val seen = mutableSetOf<String>()
+            existing.forEach { obj ->
+                val key = "${obj.optString("topic")}:${obj.optString("style")}"
+                if (seen.add(key)) deduped.put(obj)
+            }
+            deduped.put(JSONObject().apply {
+                put("topic", topicName); put("category", categoryName)
+                put("style", style); put("aspect", aspect)
+                put("at", System.currentTimeMillis())
+            })
+            // Keep last 50
+            while (deduped.length() > 50) deduped.remove(0)
+            deduped.toString()
+        } catch (_: Exception) { return }
+        prefs(context).edit().putString(KEY_SHARED_CARDS, json).apply()
+    }
+
+    /** Load recent shared cards for the Share Hub. */
+    fun loadSharedCards(context: Context): List<JSONObject> = try {
+        val arr = prefs(context).getString(KEY_SHARED_CARDS, null)
+            ?.let { JSONArray(it) } ?: return emptyList()
+        (0 until arr.length()).mapNotNull { arr.optJSONObject(it) }
+            .sortedByDescending { it.optLong("at", 0) }
+    } catch (_: Exception) { emptyList() }
+
+    // ── Internal ─────────────────────────────────────────────────────
+    private fun prefs(context: Context) =
+        context.applicationContext.getSharedPreferences(NAME, Context.MODE_PRIVATE)
+}
+
+/**
+ * One named category mix for the new category picker — a user-saved set of
+ * lanes with a friendly name (e.g. "Cosy night"). [createdAtMillis] acts as
+ * the stable id: editing/renaming keeps it, so mixes can be replaced in
+ * place, and [AppPreferences.addOrReplaceMix] matches on it.
+ */
+data class NamedMix(
+    val name: String,
+    val laneIds: List<CategoryId>,
+    val createdAtMillis: Long
+)
+
+/**
+ * One named Cabinet collection/folder (v3xx — Cabinet v2 collections): a
+ * keepsake folder holding pinned TOPICS (from the reveal's "File to…") and
+ * saved ENTRY ids (added from the Cabinet). [id] is the stable identity
+ * (UUID string) — rename/reorder keeps it, so collections can be replaced
+ * in place via [AppPreferences.addOrReplaceCollection].
+ */
+data class CurioCollection(
+    val id: String,
+    val name: String,
+    val createdAtMillis: Long,
+    val members: List<CurioCollectionMember>,
+    /** v3xx — CUSTOM CARD STYLE (chosen in the New-collection sheet): the
+     *  index into the Cabinet's tone swatch list (-1 = auto/cycle). */
+    val tone: Int = -1,
+    /** v3xx — the index into the Cabinet's art list (-1 = auto/cycle). */
+    val art: Int = -1,
+    /** v3xx — a custom icon glyph (null = the default sparkle). */
+    val icon: String? = null
+)
+
+/** One member of a [CurioCollection]. */
+data class CurioCollectionMember(
+    val kind: MemberKind,
+    /** TOPIC only — the CategoryId.name the topic lives in. */
+    val categoryName: String?,
+    /** TOPIC: the topic name; ENTRY: the entry's stable Room id. */
+    val refName: String
+) {
+    enum class MemberKind { TOPIC, ENTRY }
+}
+
+/**
+ * A topic the user pinned on the Topic Reveal screen so they can revisit it
+ * later (listed under "Pinned for later" in Topic History).
+ */
+data class PinnedTopic(
+    val categoryId: CategoryId,
+    val topicName: String,
+    val pinnedAtMillis: Long
+)
+
+/**
+ * A quote the user bookmarked from a saved entry (bookmark icon on the
+ * quote card in the entry detail view). Listed on the Home screen's
+ * "Saved" shelf together with [PinnedTopic]s.
+ */
+data class SavedQuote(
+    val entryId: String,
+    val topicName: String,
+    val categoryId: CategoryId,
+    val quoteText: String,
+    val savedAtMillis: Long
+)

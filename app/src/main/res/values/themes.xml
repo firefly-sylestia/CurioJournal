@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources xmlns:tools="http://schemas.android.com/tools">
+    <!-- Compose owns the runtime theme; this XML provides the Midnight Signal
+         bootstrap surface before Compose takes over. -->
+    <style name="Theme.Curio" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:statusBarColor">@color/curio_deep_plum</item>
+        <item name="android:navigationBarColor">@color/curio_deep_plum</item>
+        <item name="android:windowLightStatusBar" tools:targetApi="m">false</item>
+        <item name="android:windowLightNavigationBar" tools:targetApi="o_mr1">false</item>
+        <item name="android:windowBackground">@color/curio_deep_plum</item>
+    </style>
+</resources>

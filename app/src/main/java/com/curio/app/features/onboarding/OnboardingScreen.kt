@@ -1,0 +1,1411 @@
+package com.curio.app.features.onboarding
+
+import android.Manifest
+import android.content.Context
+import android.content.Intent
+import android.content.pm.PackageManager
+import android.net.Uri
+import android.os.Build
+import android.provider.Settings
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxScope
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.BiasAlignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.layout.boundsInWindow
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.graphics.lerp
+import com.curio.app.ui.theme.isCurioDarkTheme
+import com.curio.app.ui.theme.LocalCurioThemeTransition
+import com.curio.app.ui.theme.switchThemeWithReveal
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.core.content.ContextCompat
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.navigation.NavController
+import com.curio.app.R
+import com.curio.app.data.AppPreferences
+import com.curio.app.data.CategoryFamily
+import com.curio.app.data.CategoryId
+import com.curio.app.data.CurioCategories
+import com.curio.app.data.SearchEngine
+import com.curio.app.data.TourController
+import com.curio.app.features.settings.settingsReadableInk
+import com.curio.app.features.settings.settingsRoseAccent
+import com.curio.app.navigation.CurioRoutes
+import com.curio.app.ui.adaptive.isWide
+import com.curio.app.ui.adaptive.windowWidthSizeClass
+import com.curio.app.ui.components.CurioSettingsCard
+import com.curio.app.ui.components.CurioSettingsDivider
+import com.curio.app.ui.components.rememberCurioControlTick
+import com.curio.app.ui.components.CurioWatermarkBackdrop
+import com.curio.app.ui.components.glyphWatermarkDepthScale
+import com.curio.app.ui.components.MorphEntrance
+import com.curio.app.ui.components.SoftTornBottomShape
+import com.curio.app.ui.components.SoftTornSheetShape
+import com.curio.app.ui.theme.CurioColors
+import com.curio.app.ui.theme.CurioEditorialBody
+import com.curio.app.ui.theme.curioRoseInk
+import com.curio.app.ui.theme.CurioIcon
+import com.curio.app.ui.theme.CurioIcons
+import kotlinx.coroutines.launch
+
+/**
+ * First-launch onboarding — the torn-rose family redesign (v7.102).
+ *
+ * The hero is the whole show: a solid rose banner torn with the shared
+ * [SoftTornBottomShape] seam covers well over HALF the screen, and every
+ * slide's content — the intro kicker + headline + subtext, the theme
+ * options, and the permission cards — lives INSIDE the banner in its
+ * readable ink. The illustration tiles are gone; only a slim Curio
+ * wordmark (with the tagline) sits at the top of the banner above a
+ * subtle mirrored watermark collage. Below the tear: page dots and the
+ * Skip / Next controls. The setup step's permission cards are borderless
+ * [CurioSettingsCard] paper boxes with coral icon chips.
+ */
+@Composable
+fun OnboardingScreen(navController: NavController) {
+    // Intro slides + theme step + search step + ONLINE step + permission setup
+    // (v7.100 adds the theme picker; v23 the search-engine step; v461 the online
+    // step — the member: *"add online in intro, with log in in that, and exlaing
+    // you can share your thoughts"*). The online step sits BEFORE setup, because
+    // signing in is something to offer while the member is still being shown
+    // around, and the permission cards are the last thing they should be asked.
+    val pagerState = rememberPagerState(pageCount = { OnboardingSlides.size + 4 })
+    val scope = rememberCoroutineScope()
+    val context = LocalContext.current
+    val isLastSlide = pagerState.currentPage == OnboardingSlides.size + 3
+
+    // ── Setup-step permission state ───────────────────────────────────
+    var notificationGranted by remember { mutableStateOf(hasNotificationPermission(context)) }
+    var micGranted by remember { mutableStateOf(hasMicPermission(context)) }
+    // "Display over other apps" — special access for the floating explore
+    // bubble. No runtime dialog on Android 10+, so "Allow" opens the system
+    // settings page; the ON_RESUME observer picks up the grant on return.
+    // v7.35 — [AppPreferences.overlayActuallyUsable] (not raw canDrawOverlays):
+    // an Android 15+ first-time grant can sit in the system's PENDING state
+    // where canDrawOverlays() lies and no overlay ever shows — the card
+    // stays "Allow" until the AppOps state actually settles (toggle off/on
+    // in the system page resolves it).
+    var overlayGranted by remember { mutableStateOf(AppPreferences.overlayActuallyUsable(context)) }
+    // v8.1 — tracks a trip to the overlay settings page so the ON_RESUME
+    // observer can record a decline (return without granting) and stop the
+    // app from re-asking the permission on every explore.
+    var overlayAwaitingReturn by remember { mutableStateOf(false) }
+    // "Want the daily shuffle reminder on?" — only reachable once
+    // notifications are granted; applied to prefs the moment it flips.
+    var reminderWanted by rememberSaveable { mutableStateOf(false) }
+    val finishOnboardingNow: () -> Unit = {
+        finishOnboarding(context, navController)
+    }
+
+    val requestNotifications = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        notificationGranted = granted
+        // If they asked for the reminder before granting, it lands now.
+        if (granted && reminderWanted) {
+            AppPreferences.setReminderEnabled(context, true)
+        }
+    }
+    val requestMic = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { granted -> micGranted = granted }
+    // The result callback is empty on purpose: `StartActivityForResult`
+    // fires while the settings page is still open (permission not yet
+    // granted), so the ON_RESUME observer above is the real source of truth.
+    val requestOverlay = rememberLauncherForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) { _ -> }
+
+    fun openOverlaySettings() {
+        val launched = runCatching {
+            overlayAwaitingReturn = true
+            requestOverlay.launch(
+                Intent(
+                    Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                    Uri.parse("package:${context.packageName}")
+                )
+            )
+        }
+        if (launched.isFailure) overlayAwaitingReturn = false
+    }
+
+    // Re-read permission state when returning from the system Settings
+    // screen — users can flip grants mid-session and the cards should
+    // reflect reality the moment they come back.
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                notificationGranted = hasNotificationPermission(context)
+                micGranted = hasMicPermission(context)
+                overlayGranted = AppPreferences.overlayActuallyUsable(context)
+                // v8.1 — returning from the overlay settings page: a grant
+                // opens the door again; coming back without granting records
+                // the "no" so the app stops re-asking (the Settings toggle
+                // still grants it anytime).
+                if (overlayAwaitingReturn) {
+                    overlayAwaitingReturn = false
+                    if (AppPreferences.overlayActuallyUsable(context)) {
+                        AppPreferences.setOverlayAskDeclined(context, false)
+                    } else {
+                        AppPreferences.setOverlayAskDeclined(context, true)
+                    }
+                }
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(MaterialTheme.colorScheme.background)
+    ) {
+        // ── Watermark backdrop — muted category glyphs behind the slides
+        // (the Home/Profile language; the wildcard sparkle leads because
+        // onboarding is category-neutral).
+        // Wide windows: the NavHost's full-bleed collage replaces the page's
+        // own backdrop so there is ONE continuous collage, not a double.
+        if (!windowWidthSizeClass().isWide) {
+            CurioWatermarkBackdrop(
+                activeCat = CurioCategories.byId(CategoryId.WILDCARD),
+                alphaScale = 0.45f
+            )
+        }
+        Column(modifier = Modifier.fillMaxSize()) {
+            // ── The big torn-rose hero — covers well over half the screen
+            //    (v7.111: deepened from 0.62 to 0.70 of the screen height so
+            //    the tear dips toward the lower third; v37: deepened again
+            //    to 0.76 so the tear sits just above the page dots and the
+            //    dead band between the dots and the bottom controls is
+            //    gone). EVERY slide renders INSIDE the banner: intro texts,
+            //    the theme options and the permission cards all sit on the
+            //    rose fill in its readable ink, with the Curio wordmark +
+            //    tagline at the top. Below the tear are only the page dots
+            //    and the Skip / Next controls.
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .fillMaxHeight(0.76f)
+            ) {
+                // The rose banner + ragged tear + watermark collage fill the
+                // whole box (drawn first; the wordmark + pager overlay it).
+                OnboardingHeroBackdrop()
+
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .statusBarsPadding()
+                ) {
+                    // ── Brand wordmark + tagline — v7.112: enlarged again
+                    //    so Curio leads the intro without crowding the tagline.
+                    //    v22 — two steps up the type scale (displaySmall →
+                    //    displayLarge, labelSmall → labelLarge) with a no-AI
+                    //    pledge beneath: research stays the user's own words. ──
+                    Spacer(Modifier.height(18.dp))
+                    Text(
+                        text = "Curio",
+                        style = MaterialTheme.typography.displayLarge.copy(
+                            fontWeight = FontWeight.ExtraBold,
+                            letterSpacing = 4.sp
+                        ),
+                        color = heroInk(),
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    Text(
+                        text = stringResource(R.string.app_tagline),
+                        style = MaterialTheme.typography.labelLarge,
+                        color = heroInk().copy(alpha = 0.85f),
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    Text(
+                        text = "Keep your research your own, and stay curious.",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = heroInk().copy(alpha = 0.72f),
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+
+                    Spacer(Modifier.height(10.dp))
+
+                    // ── Slide area — the pager fills the rest of the banner ──
+                    HorizontalPager(
+                        state = pagerState,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .weight(1f)
+                            .padding(start = 24.dp, end = 24.dp, top = 8.dp, bottom = 26.dp)
+                    ) { pageIndex ->
+                        when (pageIndex) {
+                            OnboardingSlides.size -> {
+                                // Theme step: the pastel toggle (light-only since v78).
+                                MorphEntrance {
+                                    ThemeSlide()
+                                }
+                            }
+                            OnboardingSlides.size + 1 -> {
+                                // Search step: which engine Explore opens in the browser.
+                                MorphEntrance {
+                                    SearchSlide()
+                                }
+                            }
+                            OnboardingSlides.size + 2 -> {
+                                MorphEntrance {
+                                    OnlineSlide(
+                                        onSignIn = {
+                                            // Finish the intro FIRST (it marks
+                                            // itself complete and hands the member
+                                            // Home), then open the account page
+                                            // over it — so the way back from
+                                            // signing in is the app, never the
+                                            // intro again.
+                                            finishOnboarding(context, navController)
+                                            navController.navigate(CurioRoutes.SETTINGS_ONLINE)
+                                        }
+                                    )
+                                }
+                            }
+                            OnboardingSlides.size + 3 -> {
+                                // Final step: permission setup, not an intro slide.
+                                SetupSlide(
+                                    notificationGranted = notificationGranted,
+                                    micGranted = micGranted,
+                                    overlayGranted = overlayGranted,
+                                    reminderWanted = reminderWanted,
+                                    onReminderChange = { wanted ->
+                                        reminderWanted = wanted
+                                        AppPreferences.setReminderEnabled(context, wanted)
+                                    },
+                                    onRequestNotifications = {
+                                        requestNotifications.launch(Manifest.permission.POST_NOTIFICATIONS)
+                                    },
+                                    onRequestMic = {
+                                        requestMic.launch(Manifest.permission.RECORD_AUDIO)
+                                    },
+                                    onRequestOverlay = { openOverlaySettings() }
+                                )
+                            }
+                            else -> {
+                                MorphEntrance {
+                                    OnboardingSlide(slide = OnboardingSlides[pageIndex])
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // ── Page pills (empty on the final setup step — keeps layout
+            //    stable). v37 — proper pill indicators: the active page is a
+            //    wider capsule instead of the old oversized dot (a 12dp box
+            //    scaled 1.2x looked like a random blob), and the row carries
+            //    even gaps so the pills read as one tidy group.
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 12.dp),
+                horizontalArrangement = Arrangement.Center
+            ) {
+                if (!isLastSlide) {
+                    // One pill per intro slide + one for each of the three
+                    // custom steps (theme, search, online).
+                    (0..OnboardingSlides.size + 2).forEach { index ->
+                        val selected = pagerState.currentPage == index
+                        PageDot(
+                            selected = selected,
+                            onClick = { scope.launch { pagerState.animateScrollToPage(index) } }
+                        )
+                    }
+                }
+            }
+
+            // ── Bottom controls — anchored to the bottom edge: a flexible
+            //    spacer absorbs the space between the tear and the controls,
+            //    so the Skip / Next row sits on the navigation inset on every
+            //    screen height instead of floating high under the banner ──
+            Spacer(Modifier.weight(1f))
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .navigationBarsPadding()
+                    .padding(horizontal = 24.dp, vertical = 20.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                TextButton(
+                    onClick = finishOnboardingNow,
+                    contentPadding = PaddingValues(horizontal = 18.dp, vertical = 12.dp)
+                ) {
+                    Text(
+                        text = "Skip",
+                        style = MaterialTheme.typography.labelLarge,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                Button(
+                    onClick = {
+                        if (isLastSlide) {
+                            finishOnboardingNow()
+                        } else {
+                            scope.launch {
+                                pagerState.animateScrollToPage(pagerState.currentPage + 1)
+                            }
+                        }
+                    },
+                    shape = RoundedCornerShape(26.dp),
+                    contentPadding = PaddingValues(horizontal = 26.dp, vertical = 14.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.primary,
+                        contentColor = MaterialTheme.colorScheme.onPrimary
+                    )
+                ) {
+                    Text(
+                        text = if (isLastSlide) "Let's go" else "Next",
+                        style = MaterialTheme.typography.labelLarge
+                    )
+                }
+            }
+        }
+
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Big torn-rose hero backdrop — v7.102, deepened in v7.111: the banner now
+// fills well past half the screen (its host Box is sized to 70% height in
+// the screen body), tears with the shared bold seam at its bottom edge, and
+// wears the mirrored wildcard watermark collage at a whisper. The wordmark
+// + pager overlay it. The tear geometry adapts to the banner's height
+// (align + small offsets instead of the old fixed 170dp construction).
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** Fixed tear seed — the onboarding hero always tears in the SAME pattern
+ *  (its own seed; Settings wears 0x5EED, Profile 0xC0FEE). Never re-rolls. */
+private const val ONBOARDING_TEAR_SEED = 0x0B0A5EED
+
+/** One mirrored hero watermark pair — the left glyph mirrors the right
+ *  (the Settings/Profile hero construction). */
+private data class OnboardingHeroPair(
+    val biasX: Float,
+    val biasY: Float,
+    val size: Dp,
+    val rotation: Float,
+    val alpha: Float
+)
+
+/** The hero's readable ink — shared by the backdrop, the wordmark and every
+ *  slide that renders inside the banner. */
+@Composable
+private fun heroInk(): Color = settingsReadableInk(settingsRoseAccent())
+
+@Composable
+private fun OnboardingHeroBackdrop() {
+    val heroTornShape = remember(ONBOARDING_TEAR_SEED) {
+        SoftTornBottomShape(ONBOARDING_TEAR_SEED, bold = true)
+    }
+    val sheetShape = remember(ONBOARDING_TEAR_SEED) {
+        SoftTornSheetShape(ONBOARDING_TEAR_SEED, lip = 10.dp, baseline = 14.dp, bold = true)
+    }
+    val fill = settingsRoseAccent()
+    val ink = settingsReadableInk(fill)
+    Box(
+        modifier = Modifier.fillMaxSize()
+    ) {
+        // ── Under-sheet — the shared white paper layer, so the tear stays
+        // bright beneath the rose hero in every theme. It pokes a couple of
+        // dp BELOW the hero so the ragged seam reads.
+        // v108 — OFF by default (Settings → Experiments → Paper & headers);
+        // the toggle restores this extra paper layer.
+        if (AppPreferences.heroTearSheetState) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .align(Alignment.BottomCenter)
+                .offset(y = 12.dp)
+                .height(46.dp)
+                .clip(sheetShape)
+                // v81 — dark: a subtle lighter lip off the dark hero.
+                .background(
+                    if (isCurioDarkTheme()) lerp(fill, Color.White, 0.10f)
+                    else CurioColors.CreamWhite
+                )
+        )
+        }
+        // ── Torn-edge shadow — hairline dark rim under the seam.
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .align(Alignment.BottomCenter)
+                .offset(y = 1.dp)
+                .clip(heroTornShape)
+                .background(Color.Black.copy(alpha = 0.20f))
+        )
+        // ── Solid rose banner, torn bottom edge ────────────────────────
+        Surface(
+            shape = heroTornShape,
+            color = fill,
+            shadowElevation = 0.dp,
+            modifier = Modifier.fillMaxSize()
+        ) {
+            Box(modifier = Modifier.fillMaxSize()) {
+                // Mirrored watermark collage — the wildcard family's symbols
+                // float near the banner edges at a whisper so the slide
+                // content always reads first (Settings' exact construction,
+                // spread for the taller banner).
+                val symbols = CurioIcons.heroWatermarkSymbols(CategoryFamily.WILDCARD)
+                val pairs = listOf(
+                    OnboardingHeroPair(biasX = 0.93f, biasY = -0.80f, size = 46.dp, rotation = 12f, alpha = 0.10f),
+                    OnboardingHeroPair(biasX = 0.58f, biasY = -0.55f, size = 50.dp, rotation = 8f, alpha = 0.11f),
+                    OnboardingHeroPair(biasX = 0.95f, biasY = 0.10f, size = 58.dp, rotation = 14f, alpha = 0.10f),
+                    OnboardingHeroPair(biasX = 0.60f, biasY = 0.70f, size = 52.dp, rotation = 10f, alpha = 0.11f),
+                    OnboardingHeroPair(biasX = 0.95f, biasY = 1.05f, size = 46.dp, rotation = 6f, alpha = 0.10f)
+                )
+                pairs.forEachIndexed { i, pair ->
+                    OnboardingHeroSymbol(
+                        glyph = symbols[i * 2],
+                        alignment = BiasAlignment(-pair.biasX, pair.biasY),
+                        size = pair.size,
+                        rotation = -pair.rotation,
+                        alpha = pair.alpha,
+                        tint = ink
+                    )
+                    OnboardingHeroSymbol(
+                        glyph = symbols[i * 2 + 1],
+                        alignment = BiasAlignment(pair.biasX, pair.biasY),
+                        size = pair.size,
+                        rotation = pair.rotation,
+                        alpha = pair.alpha,
+                        tint = ink
+                    )
+                }
+            }
+        }
+    }
+}
+
+/** One mirrored watermark glyph on the hero banner — the banner's readable
+ *  ink at a soft alpha (the Settings/Profile collage construction). */
+@Composable
+private fun BoxScope.OnboardingHeroSymbol(
+    glyph: String,
+    alignment: Alignment,
+    size: Dp,
+    rotation: Float,
+    alpha: Float,
+    tint: Color
+) {
+    CurioIcon(
+        name = glyph,
+        contentDescription = null,
+        // v407 — the hero's mirrored glyph collage tones down with the page
+        // backdrop and the mood board (Appearance → "Glyph backdrop").
+        tint = tint.copy(alpha = alpha * glyphWatermarkDepthScale()),
+        size = size,
+        modifier = Modifier
+            .align(alignment)
+            .padding(10.dp)
+            .graphicsLayer { rotationZ = rotation }
+    )
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Intro slides — v7.102: no more illustration tile. Each slide renders INSIDE
+// the big rose hero: a step kicker, a bold headline and a short subtext, all
+// in the banner's readable ink.
+// ─────────────────────────────────────────────────────────────────────────────
+
+@Composable
+private fun OnboardingSlide(slide: OnboardingSlideData) {
+    val ink = heroInk()
+    BoxWithConstraints(
+        modifier = Modifier.fillMaxSize(),
+        contentAlignment = Alignment.Center
+    ) {
+        val compact = maxHeight < 300.dp
+        Column(
+            // Scrollable like the theme/setup steps — large system font
+            // scales must never clip the headline/subtext (the Box centers
+            // the scrollable column as a whole, so it stays centered when
+            // it fits).
+            modifier = Modifier
+                .fillMaxWidth()
+                .verticalScroll(rememberScrollState()),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
+        ) {
+            // ── Step kicker — SHUFFLE / EXPLORE / KEEP ────────────────
+            // v22 — kicker/headline/subtext bumped larger with roomier
+            // spacing (labelMedium → labelLarge, headlineLarge →
+            // displayMedium, bodyLarge → 18sp) so the intro reads bolder.
+            Text(
+                text = slide.kicker,
+                style = MaterialTheme.typography.labelLarge.copy(
+                    fontWeight = FontWeight.ExtraBold,
+                    letterSpacing = 2.sp
+                ),
+                color = ink.copy(alpha = 0.75f),
+                textAlign = TextAlign.Center
+            )
+
+            Spacer(Modifier.height(if (compact) 8.dp else 12.dp))
+
+            Text(
+                text = slide.headline,
+                style = MaterialTheme.typography.displayMedium.copy(
+                    fontWeight = FontWeight.ExtraBold,
+                    lineHeight = if (compact) 40.sp else 52.sp
+                ),
+                color = ink,
+                textAlign = TextAlign.Center,
+                maxLines = 3
+            )
+
+            Spacer(Modifier.height(if (compact) 10.dp else 14.dp))
+
+            Text(
+                text = slide.subtext,
+                // v35 — the intro subtext reads in the Lora editorial serif
+                // (the curated-magazine voice) instead of the UI sans.
+                style = CurioEditorialBody.copy(
+                    fontSize = 18.sp,
+                    lineHeight = 27.sp
+                ),
+                color = ink.copy(alpha = 0.85f),
+                textAlign = TextAlign.Center,
+                maxLines = 4
+            )
+        }
+    }
+}
+
+@Composable
+private fun SetupSlide(
+    notificationGranted: Boolean,
+    micGranted: Boolean,
+    overlayGranted: Boolean,
+    reminderWanted: Boolean,
+    onReminderChange: (Boolean) -> Unit,
+    onRequestNotifications: () -> Unit,
+    onRequestMic: () -> Unit,
+    onRequestOverlay: () -> Unit
+) {
+    // Renders INSIDE the big rose hero (v7.102): heading in the banner's
+    // ink, permission cards as paper boxes. Centered when the content fits,
+    // scrollable on very small screens — the Box centers the scrollable
+    // column as a whole.
+    val context = LocalContext.current
+    val ink = heroInk()
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(horizontal = 24.dp, vertical = 8.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Column(
+            modifier = Modifier.verticalScroll(rememberScrollState()),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Text(
+                text = "Make Curio yours",
+                style = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.ExtraBold),
+                color = ink,
+                textAlign = TextAlign.Center
+            )
+
+            Spacer(Modifier.height(6.dp))
+
+            Text(
+                text = "Grant what you like. You can change it anytime in Settings.",
+                style = CurioEditorialBody.copy(color = ink.copy(alpha = 0.85f)),
+                textAlign = TextAlign.Center
+            )
+
+            Spacer(Modifier.height(14.dp))
+
+            // ── Notifications ─────────────────────────────────────────
+            PermissionCard(
+                glyph = CurioIcons.Notifications,
+                title = "Notifications",
+                // v22 — reasons, not descriptions: each permission explains
+                // WHY Curio uses it.
+                subtitle = "Your explore sessions get timed and we can nudge you back to write your finds down",
+                granted = notificationGranted,
+                onRequest = onRequestNotifications
+            ) {
+                // Ask whether the daily shuffle reminder should be on —
+                // only once notifications are actually granted (it can't
+                // work without them). Rides INSIDE the notifications card
+                // behind a divider.
+                if (notificationGranted) {
+                    CurioSettingsDivider()
+                    ReminderRow(
+                        reminderWanted = reminderWanted,
+                        onReminderChange = onReminderChange
+                    )
+                }
+            }
+
+            Spacer(Modifier.height(10.dp))
+
+            // ── Microphone ────────────────────────────────────────────
+            PermissionCard(
+                glyph = CurioIcons.Mic,
+                title = "Microphone",
+                subtitle = "So you can capture ideas out in voice no typing needed",
+                granted = micGranted,
+                onRequest = onRequestMic
+            )
+
+            Spacer(Modifier.height(10.dp))
+
+            // ── Display over other apps (floating explore bubble) ─────
+            PermissionCard(
+                glyph = CurioIcons.BubbleChart,
+                title = "Display over other apps",
+                subtitle = "So the explore bubble can float over any app while you research, your timer stays in view with quick notes at your finger tips",
+                granted = overlayGranted,
+                onRequest = onRequestOverlay
+            ) {
+                // v23 — the bubble opt-in lives inside this card once the
+                // permission is granted (mirrors the reminder-row pattern).
+                if (overlayGranted) {
+                    CurioSettingsDivider()
+                    BubbleOptInRow()
+                }
+            }
+        }
+    }
+}
+
+/** A borderless settings-box permission card — coral icon chip + label +
+ *  Allow/Granted, the torn-family language of the Settings hub. */
+@Composable
+private fun PermissionCard(
+    glyph: String,
+    title: String,
+    subtitle: String,
+    granted: Boolean,
+    onRequest: () -> Unit,
+    extraContent: @Composable ColumnScope.() -> Unit = {}
+) {
+    val accent = MaterialTheme.colorScheme.primary
+    CurioSettingsCard(shadowElevation = 0.dp) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            // ── Coral icon chip (the CurioCardHeader construction) ─────
+            Box(
+                modifier = Modifier
+                    .size(38.dp)
+                    .clip(RoundedCornerShape(14.dp))
+                    .background(CurioColors.CoralBlush.copy(alpha = 0.16f)),
+                contentAlignment = Alignment.Center
+            ) {
+                CurioIcon(
+                    name = glyph,
+                    contentDescription = null,
+                    tint = curioRoseInk(),
+                    size = 20.dp
+                )
+            }
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    title,
+                    style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold),
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                Text(
+                    subtitle,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    // v22 — permission subtitles now carry the REASON (longer
+                    // than the old one-line descriptions), and the setup slide
+                    // scrolls — give them room instead of clipping mid-reason.
+                    maxLines = 3,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+            if (granted) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    CurioIcon(
+                        name = CurioIcons.Check,
+                        contentDescription = null,
+                        tint = accent,
+                        size = 16.dp
+                    )
+                    Text(
+                        "Granted",
+                        style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
+                        color = accent
+                    )
+                }
+            } else {
+                Button(
+                    onClick = onRequest,
+                    shape = RoundedCornerShape(18.dp),
+                    contentPadding = PaddingValues(horizontal = 18.dp, vertical = 10.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = accent,
+                        contentColor = MaterialTheme.colorScheme.onPrimary
+                    )
+                ) {
+                    Text(
+                        "Allow",
+                        style = MaterialTheme.typography.labelLarge
+                    )
+                }
+            }
+        }
+        extraContent()
+    }
+}
+
+@Composable
+private fun ReminderRow(
+    reminderWanted: Boolean,
+    onReminderChange: (Boolean) -> Unit
+) {
+    // v3xx51 — the shared one-tick haptic on every switch flip.
+    val tick = rememberCurioControlTick()
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = 6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(10.dp)
+    ) {
+        CurioIcon(
+            name = CurioIcons.Schedule,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            size = 18.dp
+        )
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                "Daily shuffle reminder",
+                style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium),
+                color = MaterialTheme.colorScheme.onSurface
+            )
+            Text(
+                "A gentle nudge to discover something new",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
+        Switch(checked = reminderWanted, onCheckedChange = { tick { onReminderChange(it) } })
+    }
+}
+
+/** v23 — the explore-bubble opt-in row inside the overlay permission card
+ *  (self-contained: reads/writes the bubble pref directly). */
+@Composable
+private fun BubbleOptInRow() {
+    val context = LocalContext.current
+    // v3xx51 — the shared one-tick haptic on every switch flip.
+    val tick = rememberCurioControlTick()
+    var bubbleEnabled by remember { mutableStateOf(AppPreferences.isOverlayBubbleEnabled(context)) }
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = 6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(10.dp)
+    ) {
+        CurioIcon(
+            name = CurioIcons.BubbleChart,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            size = 18.dp
+        )
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                "Show the explore bubble",
+                style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium),
+                color = MaterialTheme.colorScheme.onSurface
+            )
+            Text(
+                "A small timer that floats over other apps while you explore",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
+        Switch(
+            checked = bubbleEnabled,
+            onCheckedChange = { enabled ->
+                tick {
+                    bubbleEnabled = enabled
+                    if (enabled) AppPreferences.setOverlayAskDeclined(context, false)
+                    AppPreferences.setOverlayBubbleEnabled(context, enabled)
+                }
+            }
+        )
+    }
+}
+
+/** POST_NOTIFICATIONS is a no-op below API 33 — treated as granted. */
+private fun hasNotificationPermission(context: Context): Boolean =
+    Build.VERSION.SDK_INT < 33 ||
+        ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) ==
+        PackageManager.PERMISSION_GRANTED
+
+private fun hasMicPermission(context: Context): Boolean =
+    ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) ==
+        PackageManager.PERMISSION_GRANTED
+
+@Composable
+private fun PageDot(selected: Boolean, onClick: () -> Unit) {
+    // v37 — a real pill indicator: the active page is a wider capsule
+    // (8dp tall × 22dp wide), the rest are plain 8dp circles, all sitting
+    // on the same 8dp vertical line with even gaps. The old version stacked
+    // a 1.2x scale on a 12dp box, so the active dot read as a random blob
+    // and the group looked uneven.
+    val width = if (selected) 22.dp else 8.dp
+    val color = if (selected) {
+        MaterialTheme.colorScheme.primary
+    } else {
+        MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.35f)
+    }
+    Box(
+        modifier = Modifier
+            .padding(horizontal = 3.dp)
+            .width(width)
+            .height(8.dp)
+            .background(color, shape = CircleShape)
+            .clickable(onClick = onClick)
+    )
+}
+
+private fun finishOnboarding(context: Context, navController: NavController) {
+    CurioOnboardingState.markComplete(context)
+    // The tour offer belongs on Home so the pet can physically emerge from
+    // its house there; onboarding itself stays focused on setup.
+    TourController.offer()
+    navController.navigate(CurioRoutes.HOME) {
+        popUpTo(CurioRoutes.ONBOARDING) { inclusive = true }
+        // launchSingleTop dedups the replay path: onboarding is pushed on
+        // top of an existing HOME, so without it [HOME, ONBOARDING] → pops
+        // onboarding → pushes a second HOME and back walks Home twice.
+        launchSingleTop = true
+    }
+}
+
+private data class OnboardingSlideData(
+    val kicker: String,
+    val headline: String,
+    val subtext: String
+)
+
+// v7.102 — intro copy rewritten; each slide opens with a step kicker and
+// renders inside the big rose hero (no illustration tiles).
+private val OnboardingSlides = listOf(
+    OnboardingSlideData(
+        kicker = "SHUFFLE",
+        headline = "Every shuffle, something new",
+        subtext = "Spin the deck and Curio deals you a film, an album, a book, or a discovery you didn't know you wanted."
+    ),
+    OnboardingSlideData(
+        kicker = "EXPLORE",
+        headline = "Explore it your way",
+        subtext = "Listen, read, watch, or scroll. Your time is timed, never rushed. Wander wherever curiosity leads."
+    ),
+    OnboardingSlideData(
+        kicker = "KEEP",
+        headline = "Keep what moves you",
+        subtext = "Voice notes, reviews, moodboards, journal pages: save what stays with you, in the format that fits how you think."
+    )
+)
+
+/** The theme step — v81: Light / Dark / System picker + one pastel toggle
+ *  (v7.100 heritage). Dark is the reimagined pitch-black + glow design.
+ *  Applies instantly via the reactive [AppPreferences] state. */
+@Composable
+private fun ThemeSlide() {
+    val context = LocalContext.current
+    val pastel = AppPreferences.pastelColorsState
+    val fill = settingsRoseAccent()
+    val ink = settingsReadableInk(fill)
+    BoxWithConstraints(
+        modifier = Modifier.fillMaxSize(),
+        contentAlignment = Alignment.Center
+    ) {
+        val compact = maxHeight < 380.dp
+        Column(
+            // Scrollable like the setup step — short screens must never
+            // clip the pastel card (the Box centers the scrollable column
+            // as a whole).
+            modifier = Modifier
+                .fillMaxWidth()
+                .verticalScroll(rememberScrollState()),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
+        ) {
+            // ── Step kicker — v22: bumped larger to match the intro slides ──
+            Text(
+                text = "THEME",
+                style = MaterialTheme.typography.labelLarge.copy(
+                    fontWeight = FontWeight.ExtraBold,
+                    letterSpacing = 2.sp
+                ),
+                color = ink.copy(alpha = 0.75f),
+                textAlign = TextAlign.Center
+            )
+
+            Spacer(Modifier.height(if (compact) 8.dp else 12.dp))
+
+            Text(
+                text = "Pick your look",
+                style = MaterialTheme.typography.headlineLarge.copy(fontWeight = FontWeight.ExtraBold),
+                color = ink,
+                textAlign = TextAlign.Center
+            )
+
+            Spacer(Modifier.height(if (compact) 8.dp else 12.dp))
+
+            Text(
+                text = "Light, dark, or follow your phone, and keep Curio's soft pastel colors?",
+                style = CurioEditorialBody.copy(
+                    fontSize = 18.sp,
+                    lineHeight = 27.sp
+                ),
+                color = ink.copy(alpha = 0.85f),
+                textAlign = TextAlign.Center
+            )
+
+            Spacer(Modifier.height(if (compact) 16.dp else 22.dp))
+
+            // ── Mode chips — Light / Dark / System ──
+            // v(theme switch) — each choice plays the Telegram-style circular
+            // reveal from that chip. Bounds/scope resolved in composition
+            // (the chip onClick lambdas aren't @Composable).
+            val themeTransition = LocalCurioThemeTransition.current
+            val transitionScope = rememberCoroutineScope()
+            // v3xx51 — the shared one-tick haptic for the Pastel switch below.
+            val tick = rememberCurioControlTick()
+            var lightChipBounds by remember { mutableStateOf(Rect.Zero) }
+            var darkChipBounds by remember { mutableStateOf(Rect.Zero) }
+            var systemChipBounds by remember { mutableStateOf(Rect.Zero) }
+            fun chipCenter(bounds: Rect) =
+                if (bounds == Rect.Zero) Offset.Zero else bounds.center
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Box(Modifier.onGloballyPositioned { lightChipBounds = it.boundsInWindow() }) {
+                    ThemeModeChip(
+                        label = "Light",
+                        glyph = CurioIcons.LightMode,
+                        selected = AppPreferences.themeModeState == AppPreferences.THEME_LIGHT,
+                        fill = fill,
+                        ink = ink,
+                        onClick = {
+                            switchThemeWithReveal(themeTransition, transitionScope, context, chipCenter(lightChipBounds), AppPreferences.THEME_LIGHT)
+                        }
+                    )
+                }
+                Box(Modifier.onGloballyPositioned { darkChipBounds = it.boundsInWindow() }) {
+                    ThemeModeChip(
+                        label = "Dark",
+                        glyph = CurioIcons.DarkMode,
+                        selected = AppPreferences.themeModeState == AppPreferences.THEME_DARK,
+                        fill = fill,
+                        ink = ink,
+                        onClick = {
+                            switchThemeWithReveal(themeTransition, transitionScope, context, chipCenter(darkChipBounds), AppPreferences.THEME_DARK)
+                        }
+                    )
+                }
+                Box(Modifier.onGloballyPositioned { systemChipBounds = it.boundsInWindow() }) {
+                    ThemeModeChip(
+                        label = "System",
+                        glyph = CurioIcons.Contrast,
+                        selected = AppPreferences.themeModeState == AppPreferences.THEME_SYSTEM,
+                        fill = fill,
+                        ink = ink,
+                        onClick = {
+                            switchThemeWithReveal(themeTransition, transitionScope, context, chipCenter(systemChipBounds), AppPreferences.THEME_SYSTEM)
+                        }
+                    )
+                }
+            }
+
+            Spacer(Modifier.height(if (compact) 12.dp else 16.dp))
+
+            // ── Pastel toggle — borderless box, the setup-card language ──
+            CurioSettingsCard(shadowElevation = 0.dp) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    CurioIcon(
+                        name = CurioIcons.Palette,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        size = 20.dp
+                    )
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            "Pastel colors",
+                            style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Text(
+                            "Soft pastel accents instead of deep tones",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    Switch(
+                        checked = pastel,
+                        onCheckedChange = { tick { AppPreferences.setPastelColorsEnabled(context, it) } }
+                    )
+                }
+            }
+        }
+    }
+}
+
+/** One mode chip in the theme picker — sits ON the rose banner: selected
+ *  fills with the banner's ink (text flips to the rose fill), unselected is
+ *  an opaque ink-glass pill with a hairline ink rim. */
+@Composable
+private fun ThemeModeChip(
+    label: String,
+    glyph: String,
+    selected: Boolean,
+    fill: Color,
+    ink: Color,
+    onClick: () -> Unit
+) {
+    Surface(
+        onClick = onClick,
+        shape = RoundedCornerShape(50),
+        // v27n — the unselected pill fill is OPAQUE (was ink at 14% alpha,
+        // which let the elevation shadow bleed through).
+        color = if (selected) ink else lerp(MaterialTheme.colorScheme.surface, ink, 0.14f),
+        // v27q — flat 2dp: selection reads through the solid ink fill.
+        shadowElevation = 2.dp
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            CurioIcon(
+                name = glyph,
+                contentDescription = null,
+                tint = if (selected) fill else ink.copy(alpha = 0.9f),
+                size = 16.dp
+            )
+            Text(
+                text = label,
+                style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
+                color = if (selected) fill else ink
+            )
+        }
+    }
+}
+
+/**
+ * v461 — THE ONLINE STEP.
+ *
+ * The member: *"add online in intro, with log in in that, and exlaing you can
+ * share your thoughts"*. The intro explained the deck, the theme and the search
+ * engine, and said nothing about the half of the app that only exists once there
+ * is an account — so a member met the Social tab as a stranger with no idea why
+ * they would want one. It is deliberately the same shape as the theme and search
+ * steps (kicker, headline, one paragraph in the editorial face) with ONE door,
+ * and it never blocks: the screen is skippable like every other step, and
+ * [onSignIn] finishes the intro before it opens the account page, so nothing here
+ * can strand a member inside the tour.
+ */
+@Composable
+private fun OnlineSlide(onSignIn: () -> Unit) {
+    val fill = settingsRoseAccent()
+    val ink = settingsReadableInk(fill)
+    BoxWithConstraints(
+        modifier = Modifier.fillMaxSize(),
+        contentAlignment = Alignment.Center
+    ) {
+        val compact = maxHeight < 380.dp
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .verticalScroll(rememberScrollState()),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
+        ) {
+            Text(
+                text = "ONLINE",
+                style = MaterialTheme.typography.labelLarge.copy(
+                    fontWeight = FontWeight.ExtraBold,
+                    letterSpacing = 2.sp
+                ),
+                color = ink.copy(alpha = 0.75f),
+                textAlign = TextAlign.Center
+            )
+
+            Spacer(Modifier.height(if (compact) 8.dp else 12.dp))
+
+            Text(
+                text = "Sign in and share your thoughts",
+                style = MaterialTheme.typography.headlineLarge.copy(fontWeight = FontWeight.ExtraBold),
+                color = ink,
+                textAlign = TextAlign.Center
+            )
+
+            Spacer(Modifier.height(if (compact) 8.dp else 12.dp))
+
+            Text(
+                text = "Everything in Curio works without an account. Sign in and it also \u2014 keep your captures, journals and shelf with you on another phone, add friends, and post what a topic made you think about: a take, a quote or a whole page, to the people who are into the same things.",
+                style = CurioEditorialBody.copy(
+                    fontSize = 18.sp,
+                    lineHeight = 27.sp
+                ),
+                color = ink.copy(alpha = 0.82f),
+                textAlign = TextAlign.Center
+            )
+
+            Spacer(Modifier.height(if (compact) 14.dp else 20.dp))
+
+            Button(
+                onClick = onSignIn,
+                shape = RoundedCornerShape(26.dp),
+                contentPadding = PaddingValues(horizontal = 26.dp, vertical = 14.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = MaterialTheme.colorScheme.primary,
+                    contentColor = MaterialTheme.colorScheme.onPrimary
+                )
+            ) {
+                Text(
+                    text = "Sign in",
+                    style = MaterialTheme.typography.labelLarge
+                )
+            }
+
+            Spacer(Modifier.height(10.dp))
+
+            Text(
+                text = "You can do this later from Settings \u2192 Online mode",
+                style = MaterialTheme.typography.bodySmall,
+                color = ink.copy(alpha = 0.62f),
+                textAlign = TextAlign.Center
+            )
+        }
+    }
+}
+
+// ── v461 — SEARCHSLIDE'S OWN DOC AND ANNOTATIONS, BACK ON SEARCHSLIDE ───────
+// The online step was inserted above this function, and the insertion took the
+// three lines that had been sitting here (`@OptIn`, `@Composable` and the v23
+// doc) with it — the v458 trap again: **an annotation binds to the next
+// DECLARATION**, so a block inserted between an annotation and its function takes
+// the annotation. They are written here, with the step above them.
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun SearchSlide() {
+    val context = LocalContext.current
+    val engineId = AppPreferences.searchEngineState
+    val fill = settingsRoseAccent()
+    val ink = settingsReadableInk(fill)
+    BoxWithConstraints(
+        modifier = Modifier.fillMaxSize(),
+        contentAlignment = Alignment.Center
+    ) {
+        val compact = maxHeight < 380.dp
+        Column(
+            // Scrollable like the theme/setup steps — large system font
+            // scales must never clip the chips.
+            modifier = Modifier
+                .fillMaxWidth()
+                .verticalScroll(rememberScrollState()),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
+        ) {
+            Text(
+                text = "SEARCH",
+                style = MaterialTheme.typography.labelLarge.copy(
+                    fontWeight = FontWeight.ExtraBold,
+                    letterSpacing = 2.sp
+                ),
+                color = ink.copy(alpha = 0.75f),
+                textAlign = TextAlign.Center
+            )
+
+            Spacer(Modifier.height(if (compact) 8.dp else 12.dp))
+
+            Text(
+                text = "Explore with your engine",
+                style = MaterialTheme.typography.headlineLarge.copy(fontWeight = FontWeight.ExtraBold),
+                color = ink,
+                textAlign = TextAlign.Center
+            )
+
+            Spacer(Modifier.height(if (compact) 8.dp else 12.dp))
+
+            Text(
+                text = "Pick which search engine the Explore button opens in your browser. You can change it anytime in Settings.",
+                style = CurioEditorialBody.copy(
+                    fontSize = 18.sp,
+                    lineHeight = 27.sp
+                ),
+                color = ink.copy(alpha = 0.85f),
+                textAlign = TextAlign.Center
+            )
+
+            Spacer(Modifier.height(if (compact) 16.dp else 22.dp))
+
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(10.dp, Alignment.CenterHorizontally),
+                verticalArrangement = Arrangement.spacedBy(10.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                SearchEngine.entries.forEach { engine ->
+                    SearchEngineChip(
+                        engine = engine,
+                        selected = engine.id == engineId,
+                        fill = fill,
+                        ink = ink,
+                        onClick = { AppPreferences.setSearchEngine(context, engine) }
+                    )
+                }
+            }
+        }
+    }
+}
+
+/** One engine chip in the search step — selected fills with the banner's
+ *  ink (text flips to the rose fill) and wears a check; unselected is a
+ *  translucent ink-glass pill with a hairline ink rim. */
+@Composable
+private fun SearchEngineChip(
+    engine: SearchEngine,
+    selected: Boolean,
+    fill: Color,
+    ink: Color,
+    onClick: () -> Unit
+) {
+    Surface(
+        onClick = onClick,
+        shape = RoundedCornerShape(50),
+        // v27n — the unselected pill fill is OPAQUE (was ink at 14% alpha).
+        color = if (selected) ink else lerp(MaterialTheme.colorScheme.surface, ink, 0.14f),
+        // v27q — flat 2dp: selection reads through the solid ink fill.
+        shadowElevation = 2.dp
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 14.dp, vertical = 9.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            if (selected) {
+                CurioIcon(
+                    name = CurioIcons.Check,
+                    contentDescription = null,
+                    tint = fill,
+                    size = 15.dp
+                )
+            }
+            Text(
+                text = engine.displayName,
+                style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
+                color = if (selected) fill else ink
+            )
+        }
+    }
+}
+
+object CurioOnboardingState {
+    private const val PREFS = "curio_onboarding"
+    private const val KEY_COMPLETE = "complete"
+
+    fun isComplete(context: Context): Boolean =
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+            .getBoolean(KEY_COMPLETE, false)
+
+    fun markComplete(context: Context) {
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+            .edit()
+            .putBoolean(KEY_COMPLETE, true)
+            .apply()
+    }
+
+    fun reset(context: Context) {
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+            .edit()
+            .putBoolean(KEY_COMPLETE, false)
+            .apply()
+    }
+}

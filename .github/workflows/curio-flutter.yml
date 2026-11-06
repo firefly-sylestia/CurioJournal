@@ -1,0 +1,114 @@
+# Curio Flutter — the Windows client (curio_flutter/), and later iOS.
+#
+# This is the ONLY place the new app is compiled: the development environment has
+# no Flutter SDK, so a push that touches curio_flutter/ or the canonical catalog is
+# what proves it builds. It is deliberately independent of android.yml — a red run
+# here never blocks an Android release.
+name: Curio Flutter
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    # Tag pushes build too, so every `v*` release has a Windows build beside the
+    # Android APKs. A tag push is not path-filtered, which is why `paths` below
+    # only ever narrows branch runs.
+    tags: ['v*']
+    paths:
+      - 'curio_flutter/**'
+      - 'data/topics/**'
+      - '.github/workflows/curio-flutter.yml'
+  pull_request:
+    paths:
+      - 'curio_flutter/**'
+      - 'data/topics/**'
+      - '.github/workflows/curio-flutter.yml'
+
+concurrency:
+  group: curio-flutter-${{ github.ref }}
+  cancel-in-progress: true
+
+# `write` so a tag run can attach its build to the GitHub release the Android
+# workflow creates (`gh release upload`). PR and branch runs only read.
+permissions:
+  contents: write
+
+jobs:
+  windows:
+    name: Windows — analyse and build
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: curio_flutter
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      # The catalog is not in git under assets/ — it is the repo's one copy at
+      # data/topics/, the same way the Android build bundles it. Without this the
+      # app compiles and ships with an empty catalog.
+      - name: Bundle the topic catalog
+        run: ./tool/sync_assets.sh
+
+      # windows/ is generated, not committed (see README): this creates the runner
+      # on the runner itself, so the app can be built before a runner is checked in.
+      - name: Generate the Windows runner
+        run: flutter create --org com.curio --platforms=windows .
+
+      - name: Resolve dependencies
+        run: flutter pub get
+
+      - name: Analyse
+        run: flutter analyze --no-fatal-infos
+
+      # The lane table and the catalog parser are pure Dart — they run without a
+      # GPU or a window, so a drift between the Kotlin catalog and lanes.dart,
+      # or a phone topic the desktop model cannot read, fails here first.
+      - name: Test
+        run: flutter test
+
+      - name: Build
+        run: flutter build windows --release
+
+      - name: Upload the built app
+        uses: actions/upload-artifact@v4
+        with:
+          name: curio-windows-${{ github.run_number }}
+          path: curio_flutter/build/windows/x64/runner/Release/
+          if-no-files-found: error
+          retention-days: 7
+
+      # ── On a tag, the build also becomes a release asset ───────────────────
+      # Zipped here (the Release folder is a tree, not a file) and attached to
+      # the release the Android workflow creates for the same tag. The upload is
+      # GUARDED: if the release does not exist yet — the Android job may still be
+      # running — or `gh` fails, this step says so and the run stays green,
+      # because the build itself succeeded and its artifact is in the run. It
+      # never creates a release of its own, so it can never race Android's
+      # release body.
+      - name: Package the Windows app
+        if: startsWith(github.ref, 'refs/tags/')
+        shell: pwsh
+        run: |
+          Compress-Archive -Path build/windows/x64/runner/Release/* `
+            -DestinationPath "Curio-${{ github.ref_name }}-windows.zip" -Force
+
+      - name: Attach it to the release
+        if: startsWith(github.ref, 'refs/tags/')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          tag="${GITHUB_REF_NAME}"
+          file="Curio-${tag}-windows.zip"
+          if gh release view "$tag" >/dev/null 2>&1; then
+            gh release upload "$tag" "$file" --clobber
+            echo "Attached $file to release $tag"
+          else
+            echo "No release for $tag yet — the Windows build is in this run's artifacts."
+          fi

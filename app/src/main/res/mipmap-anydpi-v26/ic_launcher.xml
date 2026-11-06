@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Adaptive-icon declaration for Curio (API 26+).
+    Background = the full-bleed midnight sky + stars, foreground = the
+    v113 cosmic card art (the designer's PNG, drawn inset 8dp so the card
+    fills ~74% of the icon while its rounded corners still clear the
+    launcher mask — v133) in ic_launcher_foreground.xml.
+    The adaptive-icon framework composites these two layers per the
+    launcher's chosen mask shape (circle/squircle/teardrop/etc.) and
+    handles foreground parallax for Pixel-style launchers.
+
+    For pre-API-26 launchers (which minSdk=26 in this app excludes — see
+    app/build.gradle.kts), PNG fallbacks under mipmap-{density}/ would be
+    needed. Curio ships without them.
+-->
+<adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
+    <background android:drawable="@drawable/ic_launcher_background" />
+    <foreground android:drawable="@drawable/ic_launcher_foreground" />
+    <monochrome android:drawable="@drawable/ic_launcher_monochrome" />
+</adaptive-icon>

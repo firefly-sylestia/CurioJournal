@@ -1,0 +1,125 @@
+name: Bug report
+description: Report a reproducible problem in the Curio Android app
+title: "[Bug]: "
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for helping improve Curio. Please remove private data, account details, API keys, and unrelated personal information from screenshots and logs.
+
+  - type: textarea
+    id: summary
+    attributes:
+      label: What went wrong?
+      description: Describe the problem and what you were trying to do.
+      placeholder: Curio shows… when I…
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: Give the smallest reliable sequence that triggers the problem.
+      placeholder: |
+        1. Open…
+        2. Tap…
+        3. Enter…
+        4. Observe…
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+      description: What should Curio have done?
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+      description: What happened instead? Include any visible error message.
+    validations:
+      required: true
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area of Curio
+      description: Which part of the app is affected?
+      options:
+        - Home
+        - Spin and topic reveal
+        - Capture and editing
+        - Cabinet and search
+        - Entry detail
+        - Profile and Settings
+        - Backup and restore
+        - Audio or voice notes
+        - Other
+    validations:
+      required: true
+
+  - type: input
+    id: app_version
+    attributes:
+      label: Curio version
+      description: Find this in Settings → About, or in the crash report header.
+      placeholder: 1.0.0 (20260804)
+    validations:
+      required: true
+
+  - type: input
+    id: android_version
+    attributes:
+      label: Android version
+      placeholder: Android 16
+    validations:
+      required: true
+
+  - type: input
+    id: device
+    attributes:
+      label: Device model
+      placeholder: Samsung Galaxy A56
+    validations:
+      required: true
+
+  - type: dropdown
+    id: install_source
+    attributes:
+      label: Install source
+      options:
+        - GitHub release APK
+        - Local debug build
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs or crash report
+      description: Paste the relevant section only, with private information removed.
+      render: shell
+
+  - type: textarea
+    id: screenshots
+    attributes:
+      label: Screenshots or screen recording
+      description: Drag images or a short recording here if they make the problem clearer.
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Before submitting
+      options:
+        - label: I searched existing issues and did not find a duplicate.
+          required: true
+        - label: I removed private or sensitive information from this report.
+          required: true

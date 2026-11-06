@@ -1,0 +1,4407 @@
+package com.curio.app.features.cabinet
+
+import com.curio.app.features.settings.settingsReadableInk
+import com.curio.app.features.settings.settingsAccentInk
+import com.curio.app.features.settings.settingsRoseAccent
+import android.content.Context
+import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListScope
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.GridItemSpan
+import androidx.compose.foundation.lazy.grid.LazyGridScope
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.SizeTransform
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.FastOutLinearInEasing
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.togetherWith
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Checkbox
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
+import com.curio.app.ui.components.liquidglass.CurioGlassWindowBlur
+import com.curio.app.ui.theme.curioSheetContainerColor
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.rememberModalBottomSheetState
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import com.curio.app.ui.theme.curioSheetMaxWidth
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.navigation.NavController
+import coil.compose.AsyncImage
+import coil.request.ImageRequest
+import com.curio.app.data.AppPreferences
+import com.curio.app.data.CaptureData
+import com.curio.app.data.CaptureFormat
+import com.curio.app.data.CategoryId
+import com.curio.app.data.CurioCategories
+import com.curio.app.data.CurioCollection
+import com.curio.app.data.CurioCollectionMember
+import com.curio.app.data.CurioEntry
+import com.curio.app.data.CurioRepositoryHolder
+import com.curio.app.data.PersonalBookEntity
+import com.curio.app.data.PersonalNoteEntity
+import com.curio.app.data.PersonalRepositoryHolder
+import com.curio.app.data.CurioTopic
+import com.curio.app.data.TopicCatalog
+import com.curio.app.data.TopicJsonLoader
+import com.curio.app.data.matchesSavedName
+import com.curio.app.data.matchesSavedNameStrict
+import com.curio.app.data.shortName
+import com.curio.app.features.personal.personalRouteFor
+import com.curio.app.features.settings.BookCoverFetch
+import com.curio.app.navigation.CurioRoutes
+import com.curio.app.navigation.navigateToTab
+import com.curio.app.ui.adaptive.isWide
+import com.curio.app.ui.adaptive.windowWidthSizeClass
+import com.curio.app.ui.components.CurioDoodleEmptyState
+import com.curio.app.ui.components.CurioEntrySkeletonCard
+import com.curio.app.ui.components.CurioEmptyState
+import com.curio.app.ui.components.CurioEntryCard
+import com.curio.app.ui.components.CurioHoldPill
+import com.curio.app.ui.components.CurioTwoStepDeleteDialog
+import com.curio.app.ui.components.formatGlyph
+import com.curio.app.ui.components.isLiquidGlassPillsActive
+import com.curio.app.ui.components.liquidGlassCapsule
+import com.curio.app.ui.theme.CurioIcon
+import com.curio.app.ui.theme.CurioIcons
+import com.curio.app.ui.theme.curioTertiaryInk
+import com.curio.app.ui.theme.categoryInk
+import com.curio.app.ui.theme.categorySurface
+import com.curio.app.ui.theme.isCurioDarkTheme
+import com.curio.app.ui.theme.themedAccent
+import com.kyant.backdrop.backdrops.layerBackdrop
+import com.kyant.backdrop.backdrops.rememberLayerBackdrop
+import java.util.UUID
+
+/**
+ * v3xx — CABINET v2 (collections): the experimental Cabinet behind
+ * Settings → Experiments → "Cabinet v2 collections".
+ *
+ * One page, three levels reached from the torn Cabinet hero:
+ *  - HOME — the collections surface (5.1): an "Everything" card (3×2 cover
+ *    collage + count) plus one card per user collection (same collage of
+ *    its members' covers, name, count), a "+ New collection" tile, and a
+ *    "From a moodboard…" path in the create sheet when a GalleryWall
+ *    capture exists.
+ *  - EVERYTHING — the classic v2 content: saved captures (format filter
+ *    chips + long-press multi-select batch delete) + liked books/series/
+ *    albums rows.
+ *  - COLLECTION DETAIL — one folder: its members (pinned topics as rows,
+ *    saved entries as cards) with long-press Move up/down/Remove, an Add
+ *    pill (multi-select saved entries), rename + delete via the kebab.
+ *
+ * The hero is the SAME torn Cabinet banner as the classic view (reused
+ * [CabinetHeroHeader]), so the two views share chrome; search filters the
+ * active level; the liquid-glass capture feeds the hero pills.
+ */
+@Composable
+fun CabinetV2Content(navController: NavController) {
+    val context = LocalContext.current
+    val wide = windowWidthSizeClass().isWide
+    val scope = rememberCoroutineScope()
+    val haptics = LocalHapticFeedback.current
+
+    // ── Glass plumbing: the grid records into a LOCAL backdrop the hero
+    // pills blur (sibling overlay outside the captured subtree).
+    val glassOn = isLiquidGlassPillsActive()
+    val glassBackdrop = if (glassOn) rememberLayerBackdrop() else null
+
+    // ── Data: saved entries (repo flow) + liked books/series/albums +
+    // user collections.
+    // v3xx37 — the LIGHT flow: the grid only needs light columns (topic,
+    // format, timestamps, tags) — the full flow re-read + re-allocated every
+    // payload JSON blob on every DB emission, which is what made the Cabinet
+    // lag with a large saved-entries archive. Detail pages still use the
+    // full [observeById]; ReelNotes reviews keep their payload via the
+    // light query's ReelNotes-only formatDataJson column.
+    // v3xx43 — INSTANT: start from the repository's last light emission so the
+    // shelves paint on the first frame instead of flashing a loading state.
+    // v3xx50 — ARCHIVE-READY: the page may only claim "empty" once the first
+    // real emission has arrived. Before that it holds a skeleton the size of
+    // the archive this install last had (the reported "cabinet opening is
+    // bad" was the empty/suggestions state flashing before the read landed).
+    var archiveReady by rememberSaveable {
+        mutableStateOf(CurioRepositoryHolder.repo.peekLight().isNotEmpty())
+    }
+    val entries by androidx.compose.runtime.produceState<List<CurioEntry>>(
+        initialValue = CurioRepositoryHolder.repo.peekLight()
+    ) {
+        try {
+            CurioRepositoryHolder.repo.observeLight().collect {
+                value = it
+                if (!archiveReady) archiveReady = true
+            }
+        } catch (_: Exception) {
+            value = emptyList()
+        }
+    }
+    // v3xx50 — the skeleton's size = the last known saved-entry count (capped
+    // so a big archive can't compose hundreds of placeholder cards).
+    val skeletonCount = remember {
+        AppPreferences.getCabinetEntryCount(context).coerceIn(4, 12)
+    }
+    LaunchedEffect(entries.size, archiveReady) {
+        if (archiveReady) AppPreferences.setCabinetEntryCount(context, entries.size)
+    }
+    val entriesById = remember(entries) { entries.associateBy { it.id } }
+    // v387 — the PERSONAL WRITING store's own lists (journals + books). The
+    // Personal shelf shows these instead of captures; they come from their own
+    // tables through their own repository, so the archive above is untouched.
+    val personalJournals by androidx.compose.runtime.produceState<List<PersonalNoteEntity>>(
+        initialValue = emptyList()
+    ) {
+        runCatching {
+            PersonalRepositoryHolder.repo.observeJournals().collect { value = it }
+        }
+    }
+    val personalBooks by androidx.compose.runtime.produceState<List<PersonalBookEntity>>(
+        initialValue = emptyList()
+    ) {
+        runCatching {
+            PersonalRepositoryHolder.repo.observeBooks().collect { value = it }
+        }
+    }
+    // ── v389e — THE THREE KINDS OF PAGE, ON THE SHELF THAT OWNS EACH ──────
+    //
+    // The personal store keeps journals, notes on topics and to-do lists in one
+    // table, and the Personal shelf listed all three. The member's own split:
+    // PERSONAL keeps the journal days (a page per day), the NOTES collection
+    // takes the notes and the lists, and the journals list stops showing a
+    // to-do list among the days it is not (user request: "for topic notes dont
+    // add them in personal but add them in the notes collection, no more saved
+    // entires in notes, also todo goes inside notes too, no more in journa, the
+    // journal in personal keep sthe journals only").
+    val journalDays = remember(personalJournals) {
+        personalJournals.filter { !it.isTodo && !it.hasTopic }
+    }
+    val notePages = remember(personalJournals) {
+        personalJournals.filter { it.isTodo || it.hasTopic }
+    }
+    val books = remember(AppPreferences.bookFavoritesState, AppPreferences.bookCoverUrlsState) {
+        AppPreferences.getBookFavorites(context)
+            .map { name -> V2Liked(name, V2Kind.BOOK, findLikedTopic(V2Kind.BOOK, name)) }
+            .sortedBy { it.name.lowercase() }
+    }
+    val albums = remember(AppPreferences.albumFavTracksState) {
+        AppPreferences.albumFavTracksState.keys
+            .filter { it.isNotBlank() }
+            .map { name -> V2Liked(name, V2Kind.ALBUM, findLikedTopic(V2Kind.ALBUM, name)) }
+            .sortedBy { it.name.lowercase() }
+    }
+    val series = remember(AppPreferences.seriesFavoritesState) {
+        AppPreferences.getSeriesFavorites(context)
+            .map { name -> V2Liked(name, V2Kind.SERIES, findLikedTopic(V2Kind.SERIES, name)) }
+            .sortedBy { it.name.lowercase() }
+    }
+    val collections = AppPreferences.collectionsState
+
+    // ── v3xx43 — FAVORITES IS THE LIKED-TOPIC SHELF. The topic LIKE heart on
+    // a reveal (AppPreferences.topicSentimentsState, keyed "CATEGORY:topicId")
+    // feeds it, so it lists the TOPICS the user liked across every lane —
+    // while liked MEDIA (books / series / albums) is the Cupboard's wall. The
+    // two shelves used to show the same covers ("Favorites vs Everything are
+    // basically the same"); now each has its own content, and neither mixes
+    // in saved captures.
+    var catalogReady by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) {
+        // TopicRepository pre-warms every lane pool from Room at app init; if
+        // the Cabinet is the first surface opened, wait for them so the saved
+        // sentiment ids can resolve to real topics.
+        var guard = 0
+        while (!catalogReady && guard < 120) {
+            if (CategoryId.values().any { it != CategoryId.WILDCARD && TopicJsonLoader.cached(it) != null }) {
+                catalogReady = true
+            } else {
+                guard++
+                kotlinx.coroutines.delay(25)
+            }
+        }
+        // Never hold the shelf on skeletons forever: if the lanes never warm
+        // (a broken install), fall through to the real, truthful empty state.
+        if (!catalogReady) catalogReady = true
+    }
+    val likedTopics: List<V2Liked> = remember(AppPreferences.topicSentimentsState, catalogReady) {
+        AppPreferences.topicSentimentsState
+            .filterValues { it == AppPreferences.SENTIMENT_LIKE }
+            .mapNotNull { (key, _) ->
+                val cat = runCatching { CategoryId.valueOf(key.substringBefore(':')) }.getOrNull()
+                    ?: return@mapNotNull null
+                val id = key.substringAfter(':', "")
+                TopicJsonLoader.cached(cat)?.firstOrNull { it.id == id }
+                    ?.let { V2Liked(it.name, topicKind(it), it) }
+            }
+            .distinctBy { "${it.topic?.categoryId?.name}|${it.name}" }
+            .sortedBy { it.name.lowercase() }
+    }
+
+    // ── Seed the four empty starter shelves (Curiying now / Want to
+    // Read / Completed / Personal) once — they become ordinary, editable
+    // collections (ids prefixed `shelf:`); the virtual shelves (Favorites /
+    // Saved entries / Notes) are computed below and never persisted.
+    LaunchedEffect(Unit) { AppPreferences.seedCabinetShelves(context) }
+
+    // ── Shelf plumbing.
+    val seededById = remember(collections) {
+        collections.filter { it.id in seededShelfIds }.associateBy { it.id }
+    }
+    val userCollections = remember(collections) {
+        collections.filterNot { it.id in seededShelfIds }
+    }
+    val allLikes = remember(books, albums, series) { books + albums + series }
+    // v389e — the ARCHIVE's note-formatted captures used to be `noteEntries`,
+    // and they were the whole of the Notes shelf. That shelf is the member's own
+    // notes now (see `notePages`), so the archive's ones are read where they have
+    // always been read as entities — the Saved shelf, the Cupboard, search and
+    // Everything — and no longer by a shelf that is about writing.
+    // v3xx34 — the add-sheet's LIGHTWEIGHT projection (id + display text +
+    // format glyph), computed once. The picker never carries full
+    // [CurioEntry] objects — their capture payloads are what made the old
+    // add sheet lag on large archives.
+    val addOptions = remember(entries) {
+        entries.map { e ->
+            AddOption(
+                id = e.id,
+                name = e.topic.name,
+                subtitle = e.title?.ifBlank { null } ?: e.format.shortName,
+                glyph = formatGlyph(e.format)
+            )
+        }
+    }
+
+    // v3xx — the COVER CACHE warmer: liked books / albums / series resolve
+    // their cover art and keep the bytes on disk, so the Cabinet grid fills
+    // with real covers on first open and loads them INSTANTLY from the local
+    // file on every later visit. Throttled per recomposition to a small batch
+    // so a big shelf never bursts the pipe.
+    // v3xx51 — it is gated on the MERGED cover-fetch consent now (it used to
+    // download regardless of the Settings toggles), so with fetching OFF the
+    // warmer only pre-warms dominant colours from bytes ALREADY on disk and
+    // never reaches the network.
+    val unwarmedLikes = remember(allLikes) {
+        allLikes.filter {
+            CabinetCoverCache.persistedUrl(
+                context,
+                CabinetCoverCache.CoverKind.valueOf(it.kind.name),
+                it.name
+            ) == null
+        }
+    }
+    // v3xx37 — the warmer runs WHOLE on IO: it pre-warms every liked
+    // cover's dominant color (so composition-time [dominantCoverColor]
+    // always hits the cache instead of decoding on the main thread), then
+    // downloads up to 30 missing covers WITHOUT per-download version bumps
+    // and bumps the version ONCE after the batch — the old per-save bump
+    // recomposed every version-keyed tile per download.
+    val coverFetchConsent = AppPreferences.coverFetchEnabledState
+    LaunchedEffect(allLikes.size, unwarmedLikes.size, coverFetchConsent) {
+        var newCovers = 0
+        withContext(kotlinx.coroutines.Dispatchers.IO) {
+            allLikes.forEach { item ->
+                CabinetCoverCache.warmDominantColor(
+                    context,
+                    CabinetCoverCache.CoverKind.valueOf(item.kind.name),
+                    item.name
+                )
+            }
+            if (!coverFetchConsent) return@withContext
+            for (item in unwarmedLikes) {
+                if (newCovers >= 30) break
+                if (CabinetCoverCache.localCoverFile(
+                        context,
+                        CabinetCoverCache.CoverKind.valueOf(item.kind.name),
+                        item.name
+                    ) != null
+                ) continue
+                val saved = CabinetCoverCache.ensureLocalCover(
+                    context,
+                    CabinetCoverCache.CoverKind.valueOf(item.kind.name),
+                    item.name,
+                    item.topic?.byline,
+                    item.topic?.imageUrl,
+                    bumpVersion = false
+                )
+                if (saved != null) {
+                    CabinetCoverCache.warmDominantColor(
+                        context,
+                        CabinetCoverCache.CoverKind.valueOf(item.kind.name),
+                        item.name
+                    )
+                    newCovers++
+                }
+            }
+        }
+        if (newCovers > 0) CabinetCoverCache.version.intValue++
+    }
+    // v389 — the shelf's BOOKS are being read too. "Curiying now" counted only
+    // the members saved into its seeded collection, so a book the member had
+    // ADDED to the shelf and was part-way through was missing from the number
+    // (and from the shelf itself) — the reported wrong count. The extra books
+    // are counted by TITLE against the saved members, so a hearted book that is
+    // also on the shelf is not counted twice.
+    val readingBooks = remember(personalBooks) { personalBooks.filter { !it.isFinished } }
+    val readingNowExtra = remember(seededById, readingBooks) {
+        val saved = seededById["shelf:currently-reading"]?.members
+            ?.map { it.refName.trim().lowercase() }
+            ?.toSet()
+            ?: emptySet()
+        readingBooks.count { it.title.trim().lowercase() !in saved }
+    }
+    val shelfCounts = remember(
+        allLikes.size, likedTopics.size, entries.size, notePages.size, seededById,
+        journalDays.size, personalBooks.size, readingNowExtra
+    ) {
+        mapOf(
+            V2ShelfId.FAVORITES to likedTopics.size,
+            V2ShelfId.CURRENTLY_READING to
+                ((seededById["shelf:currently-reading"]?.members?.size ?: 0) + readingNowExtra),
+            V2ShelfId.WANT_TO_READ to (seededById["shelf:want-to-read"]?.members?.size ?: 0),
+            V2ShelfId.SAVED to entries.size,
+            V2ShelfId.COMPLETED to likedTopics.size,
+            // v389e — Notes counts the member's own notes and lists; Personal
+            // counts the journal days and the books (the same split the two
+            // shelves themselves use).
+            V2ShelfId.NOTES to notePages.size,
+            V2ShelfId.PERSONAL to (journalDays.size + personalBooks.size)
+        )
+    }
+
+    // ── Level: "" = collections home · "everything" = the library page
+    // · "shelf:*" = a virtual shelf detail · anything else = a collection
+    // id (its detail).
+    var openLevel by rememberSaveable { mutableStateOf("") }
+    val openCollection = collections.firstOrNull { it.id == openLevel }
+
+    // ── Search — filters the active level (collection names on home,
+    // members in a detail, everything on the Everything page).
+    var searchActive by rememberSaveable { mutableStateOf(false) }
+    var searchQuery by rememberSaveable { mutableStateOf("") }
+    val searchFocus = remember { FocusRequester() }
+    LaunchedEffect(searchActive) {
+        if (searchActive) searchFocus.requestFocus()
+    }
+    fun matchesQ(text: String): Boolean {
+        val q = searchQuery.trim()
+        return q.isEmpty() || text.contains(q, ignoreCase = true)
+    }
+
+    // ── Everything-level state: type filter (the JSX filter rail) + sort.
+    // (v3xx — the old grid/list view toggle is gone: Everything is always
+    // the 3-column media grid, so there is no second view mode to store.)
+    var typeFilter by rememberSaveable { mutableStateOf<String?>(null) }
+
+    // ── Everything-level filters: search + type.
+    val filteredEntries = remember(entries, searchQuery) {
+        val q = searchQuery.trim()
+        if (q.isEmpty()) entries
+        else entries.filter {
+            matchesQ(it.topic.name) || it.title?.let { t -> matchesQ(t) } == true ||
+                it.tags.any { tag -> matchesQ(tag) }
+        }
+    }
+    val shownEntries = remember(filteredEntries, typeFilter) {
+        filteredEntries.filter { entryInType(it, typeFilter) }
+            .sortedByDescending { it.capturedAtMillis }
+    }
+    fun filteredLiked(all: List<V2Liked>): List<V2Liked> =
+        if (searchQuery.isBlank()) all
+        else all.filter {
+            matchesQ(it.name) || (it.topic?.byline?.let { b -> matchesQ(b) } == true)
+        }
+    // v3xx — liked media order by the LIKED timestamp (Recent) or name
+    // (A–Z): the Everything "All" view reads as a proper media library, not
+    // an alphabetical list glued to the sort toggle.
+    val likedAtMap = AppPreferences.likedAtState
+    fun likedAtFor(item: V2Liked): Long =
+        likedAtMap["${item.kind.name.lowercase()}|${item.name}"] ?: 0L
+    val shownBooks = remember(books, searchQuery, typeFilter, likedAtMap) {
+        filteredLiked(books).filter { likedShownForType(typeFilter, V2Kind.BOOK) }
+            .sortedByDescending { likedAtFor(it) }
+    }
+    val shownAlbums = remember(albums, searchQuery, typeFilter, likedAtMap) {
+        filteredLiked(albums).filter { likedShownForType(typeFilter, V2Kind.ALBUM) }
+            .sortedByDescending { likedAtFor(it) }
+    }
+    val shownSeries = remember(series, searchQuery, typeFilter, likedAtMap) {
+        filteredLiked(series).filter { likedShownForType(typeFilter, V2Kind.SERIES) }
+            .sortedByDescending { likedAtFor(it) }
+    }
+
+    // ── v3xx — the Everything rail only lists LIKED MEDIA (saved captures
+    // are no longer part of the gallery), so only the kinds that actually
+    // hold content show a chip.
+    val railAvailable = remember(books, albums, series) {
+        buildSet {
+            if (books.isNotEmpty()) add("books")
+            if (albums.isNotEmpty()) add("albums")
+            if (series.isNotEmpty()) add("series")
+        }
+    }
+
+    // ── Home-level filter: shelf + collection names.
+    val visibleShelves = remember(builtInShelves, shelfCounts, searchQuery) {
+        builtInShelves.map { it to shelfCounts[it.id]!! }.filter { matchesQ(it.first.title) }
+    }
+    val shownUserCollections = remember(userCollections, searchQuery) {
+        if (searchQuery.isBlank()) userCollections
+        else userCollections.filter { matchesQ(it.name) }
+    }
+
+    val searching = searchActive && searchQuery.isNotBlank()
+
+    // ── Multi-select batch (Everything entries only).
+    var selectionMode by rememberSaveable { mutableStateOf(false) }
+    var selectedEntryIds by rememberSaveable { mutableStateOf<Set<String>>(emptySet()) }
+    var showBulkDeleteConfirm by rememberSaveable { mutableStateOf(false) }
+
+    // v3xx — BACK handling: system back now walks OUT of the open pages
+    // instead of popping the whole Cabinet to Home. Order: cancel the
+    // selection → close search → close the open collection / Everything /
+    // virtual shelf → then (openLevel == "") let the system back leave the
+    // Cabinet as usual. (Declared after the selection state it reads.)
+    BackHandler(enabled = selectionMode || searchActive || openLevel.isNotEmpty()) {
+        when {
+            selectionMode -> {
+                selectionMode = false
+                selectedEntryIds = emptySet()
+            }
+            searchActive -> {
+                searchActive = false
+                searchQuery = ""
+            }
+            else -> {
+                openLevel = ""
+                searchActive = false
+                searchQuery = ""
+                typeFilter = null
+            }
+        }
+    }
+    val visibleIds = remember(openLevel, shownEntries, entries) {
+        when (openLevel) {
+            SHELF_LEVEL_SAVED -> entries.map { it.id }.toSet()
+            // v389e — the Notes collection holds the member's own pages (topic
+            // notes, to-do lists), so there is nothing of the ARCHIVE to select
+            // there: its rows open a page rather than joining a selection.
+            SHELF_LEVEL_NOTES -> emptySet()
+            "everything" -> shownEntries.map { it.id }.toSet()
+            "" -> entries.map { it.id }.toSet() // home Saved-entries section
+            else -> emptySet()
+        }
+    }
+    LaunchedEffect(selectedEntryIds, visibleIds) {
+        val kept = selectedEntryIds.intersect(visibleIds)
+        if (kept != selectedEntryIds) selectedEntryIds = kept
+        if (selectedEntryIds.isEmpty() && selectionMode) selectionMode = false
+    }
+    val allVisibleSelected = visibleIds.isNotEmpty() && visibleIds.all { it in selectedEntryIds }
+
+    // ── v407 — THE EMPTY-CABINET SUGGESTION RAILS ARE GONE (user: "dont
+    // show those recommendations when the cabinet is empty"). An empty or
+    // fresh Cabinet now opens straight onto its own furniture — the Cupboard
+    // card and the shelves below it — instead of a second, louder empty state
+    // with three shuffled picks and a Shuffle pill. Nothing else changed:
+    // the shelves, the Cupboard and the New-collection tile all still lead
+    // where they always did.
+
+    // ── Collection edit state.
+    var showCreateSheet by rememberSaveable { mutableStateOf(false) }
+    // v3xx43 — the Cupboard's catalog search sheet (Add on the wall).
+    var showCupboardAdd by rememberSaveable { mutableStateOf(false) }
+    var renameTarget by rememberSaveable { mutableStateOf<String?>(null) }
+    var deleteTarget by rememberSaveable { mutableStateOf<String?>(null) }
+    var addTarget by rememberSaveable { mutableStateOf<AddTarget?>(null) }
+    var pillTarget by remember { mutableStateOf<PillTarget?>(null) }
+    // v3xx — the liked-tile ⋮ target: opens the cover-source sheet where the
+    // user can switch a book/album/series to its OTHER art provider.
+    var coverSourceItem by remember { mutableStateOf<V2Liked?>(null) }
+
+    // ── Hero chrome — the SAME torn banner as the classic view.
+    val heroTitle = when {
+        selectionMode -> "${selectedEntryIds.size} selected"
+        openCollection != null -> openCollection.name
+        openLevel == SHELF_LEVEL_FAVORITES -> "Favorites"
+        openLevel == SHELF_LEVEL_COMPLETED -> "Completed"
+        openLevel == SHELF_LEVEL_SAVED -> "Saved entries"
+        openLevel == SHELF_LEVEL_NOTES -> "Notes"
+        // v387 — the Personal shelf holds the member's OWN writing now.
+        openLevel == SHELF_LEVEL_PERSONAL -> "Personal"
+        openLevel == "everything" -> "Cupboard"
+        else -> "The Cabinet"
+    }
+    val heroSubtitle = when {
+        selectionMode -> "Long-press cards to select"
+        openCollection != null -> {
+            val total = openCollection.members.size +
+                (if (openCollection.id == "shelf:currently-reading") readingNowExtra else 0)
+            "$total item${if (total == 1) "" else "s"}"
+        }
+        openLevel == SHELF_LEVEL_FAVORITES -> "${likedTopics.size} liked topic${if (likedTopics.size == 1) "" else "s"}"
+        openLevel == SHELF_LEVEL_COMPLETED -> "${likedTopics.size} completed topic${if (likedTopics.size == 1) "" else "s"}"
+        openLevel == SHELF_LEVEL_SAVED -> "${entries.size} saved captures"
+        openLevel == SHELF_LEVEL_NOTES -> buildString {
+            val notes = notePages.count { !it.isTodo }
+            val todos = notePages.count { it.isTodo }
+            append(if (notes == 1) "1 note" else "$notes notes")
+            append(" · ")
+            append(if (todos == 1) "1 list" else "$todos lists")
+        }
+        openLevel == SHELF_LEVEL_PERSONAL -> buildString {
+            append(if (journalDays.size == 1) "1 journal" else "${journalDays.size} journals")
+            append(" · ")
+            append(if (personalBooks.size == 1) "1 book" else "${personalBooks.size} books")
+        }
+        openLevel == "everything" -> "Books · albums · series"
+        else -> "Collections · Cupboard · your keepsakes"
+    }
+    val compactBannerHeight = if (wide) CabinetHeroBannerHeightCompact else CabinetHeroBannerHeight
+    val heroTotal = compactBannerHeight + CabinetHeroSheetExtent
+    // The hero's search field lives INSIDE the banner (fixed height), so the
+    // grid just clears the torn hero + a breathing gap.
+    val contentTop = if (wide) 0.dp else heroTotal + 12.dp
+
+    val pageAccent = settingsRoseAccent()
+
+    val heroTrailing: @Composable (Color, Color) -> Unit = { ink, fill ->
+        V2HeroTrailing(
+            openLevel = openLevel,
+            selectionMode = selectionMode,
+            allVisibleSelected = allVisibleSelected,
+            selectedCount = selectedEntryIds.size,
+            ink = ink, fill = fill,
+            glassBackdrop = glassBackdrop,
+            onBack = { openLevel = ""; searchActive = false; searchQuery = "" },
+            onToggleSearch = { searchActive = !searchActive },
+            onRecycleBin = { navController.navigate(CurioRoutes.RECYCLE_BIN) { launchSingleTop = true } },
+            onSelectAll = {
+                selectedEntryIds = if (allVisibleSelected) selectedEntryIds - visibleIds
+                else selectedEntryIds + visibleIds
+            },
+            onDelete = { if (selectedEntryIds.isNotEmpty()) showBulkDeleteConfirm = true },
+            onCancelSelection = { selectionMode = false; selectedEntryIds = emptySet() }
+        )
+    }
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(MaterialTheme.colorScheme.background)
+    ) {
+        // ── The scrolling grid — runs UNDER the hero.
+        // v3xx — each level owns a FRESH grid state: the single shared
+        // remembered scroll made opening a collection land MID-list and made
+        // page switches visibly jump (the glitch). A per-level key recreates
+        // the grid per level, so every level opens from the TOP (v467: the key
+        // is now `key(level)` inside the `AnimatedContent` below, which is also
+        // what lets both levels be composed at once — see the swap machinery).
+        // The wide-window hero — the grid's first item on tablets/landscape
+        // (shared by the regular grid and the Everything masonry below).
+        val wideHero: @Composable () -> Unit = {
+            CabinetHeroHeader(
+                title = heroTitle,
+                subtitle = heroSubtitle,
+                activeCat = null,
+                legacyMode = false,
+                searchActive = searchActive,
+                searchQuery = searchQuery,
+                onSearchQueryChange = { searchQuery = it },
+                onCloseSearch = { searchActive = false; searchQuery = "" },
+                searchFocus = searchFocus,
+                trailing = heroTrailing,
+                glassBackdrop = glassBackdrop
+            )
+        }
+
+        // ── v467 — THE LEVEL SWAP CROSSES OVER INSTEAD OF CUTTING.
+        //
+        // v407 gave this a rise-and-fade because tapping a collection used to
+        // replace the whole grid in a single frame. It was still glitchy, and the
+        // reason is the SHAPE of that animation, not its curve: it was
+        // ENTER-ONLY. `levelSwap` snapped to 0 and eased back to 1 on every level
+        // change, so the outgoing level was disposed in the SAME FRAME the
+        // incoming one mounted at alpha 0 — the page went visibly empty and then
+        // rose into place. A fade with nothing behind it is a blank frame.
+        //
+        // `AnimatedContent` composes BOTH levels at once, so there is no frame
+        // where the page is empty: the outgoing one leaves while the incoming one
+        // arrives, and neither ever holds the screen alone. Direction comes from
+        // the level itself — going INTO something descends, coming back returns —
+        // and each half drifts a small opposite amount (~6% of the width, not a
+        // full page: this is one screen changing its contents, not a push), with
+        // the incoming fade held back 110ms so the cross reads as one movement
+        // rather than a blur.
+        //
+        // ⚠️ THE HERO IS DELIBERATELY STILL OUTSIDE THIS. `CabinetHeroHeader` is
+        // a sibling drawn after the content, and it owns the torn banner, the
+        // sheet extent and the search field. Moving it in would compose two torn
+        // banners with two glass backdrops for the length of the transition, and
+        // the header is shared with the legacy Cabinet — so the banner keeps its
+        // instant title swap and only the content crosses over. Recorded rather
+        // than silently left undone.
+        AnimatedContent(
+            targetState = openLevel,
+            transitionSpec = {
+                // Root → level descends (in from the right); level → root
+                // returns (in from the left). A level → level move cannot happen
+                // without passing through the root, so two directions are enough.
+                val descending = initialState.isEmpty() && targetState.isNotEmpty()
+                val drift = if (descending) 1 else -1
+                val enter = slideInHorizontally(
+                    animationSpec = tween(340, easing = FastOutSlowInEasing),
+                    initialOffsetX = { full -> drift * full / 16 }
+                ) + fadeIn(
+                    animationSpec = tween(240, delayMillis = 110)
+                )
+                val leave = slideOutHorizontally(
+                    animationSpec = tween(340, easing = FastOutLinearInEasing),
+                    targetOffsetX = { full -> -drift * full / 22 }
+                ) + fadeOut(
+                    animationSpec = tween(170)
+                )
+                // `clip = false`: the two levels are the same size, so there is
+                // nothing to size-animate, and clipping would crop the drift at
+                // the edges and give back the hard seam this replaces.
+                (enter togetherWith leave) using SizeTransform(clip = false)
+            },
+            label = "cabinetLevel",
+            modifier = Modifier.fillMaxSize()
+        ) { level ->
+        // `key` is kept even though AnimatedContent already keys its content by
+        // target state: the FRESH LazyGridState per level is what makes every
+        // level open from the TOP (v3xx — a single shared remembered scroll made
+        // opening a collection land mid-list). One brace open for one brace open,
+        // which is why the body below needed no restructuring at all.
+        key(level) {
+        // ── THE CUPBOARD — the JSX masonry wall: a dense STAGGERED grid of
+        // covers-only posters (books tall jackets, albums squares, series
+        // posters — no cards, no titles, no boxes, just the art with a
+        // whisper of rounded corners) with filter chips that smoothly reflow
+        // the wall — every cover animates to its new spot when the filter
+        // changes, and (v3xx43) keeps its OWN size while it moves.
+        // Favorites is the LIKED-TOPIC shelf now, so it renders in the
+        // regular grid below instead of wearing this media wall.
+        if (level == "everything") {
+            // v3xx45 — THE CUPBOARD WALL IS A PACKED SHELF MOSAIC.
+            //
+            // The wall used to be an 8-column LazyVerticalGrid with a span
+            // cycle (6+1+1, 4+4, 3+3+2). Spans fill a LINE horizontally, but a
+            // grid line shares ONE height — so a tall book beside two small
+            // albums always left a hole under the albums (the reported "space
+            // left below those 2"). No span tweak can fix that.
+            //
+            // Instead the covers are packed into SHELVES: each shelf is a row
+            // laid out at a single height, with every cover's width derived
+            // from its OWN aspect, so the widths plus the gaps sum to exactly
+            // the available width. Covers keep their shape, nothing stretches,
+            // and no shelf leaves a gap.
+            BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+                val wallWidth = (maxWidth - 20.dp).coerceAtLeast(1.dp)
+                // v3xx48 — SWITCHING A FILTER ANIMATES AGAIN. The packed
+                // shelves can't slide covers to new slots (they aren't lazy
+                // items any more), so a chip tap now FADES the wall into its
+                // new arrangement: the covers dip and ease back while the
+                // shelves re-pack underneath, instead of the covers snapping
+                // (user: "why the animation isnt there anymore when switching
+                // between category").
+                val wallSwap = remember { Animatable(1f) }
+                var lastFilter by remember { mutableStateOf(typeFilter) }
+                LaunchedEffect(typeFilter) {
+                    if (lastFilter == typeFilter) return@LaunchedEffect
+                    lastFilter = typeFilter
+                    wallSwap.snapTo(0.25f)
+                    wallSwap.animateTo(
+                        targetValue = 1f,
+                        animationSpec = tween(280, easing = FastOutSlowInEasing)
+                    )
+                }
+                val shelves = remember(shownBooks, shownAlbums, shownSeries, wallWidth) {
+                    buildCupboardShelves(
+                        items = (shownBooks + shownAlbums + shownSeries)
+                            .sortedByDescending { likedAtFor(it) },
+                        availableWidth = wallWidth
+                    )
+                }
+                LazyColumn(
+                    state = rememberLazyListState(),
+                    contentPadding = PaddingValues(
+                        start = 10.dp,
+                        end = 10.dp,
+                        top = contentTop,
+                        bottom = 24.dp + 84.dp +
+                            WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
+                    ),
+                    verticalArrangement = Arrangement.spacedBy(10.dp),
+                    modifier = Modifier
+                        .fillMaxSize()
+                        // v3xx42 — NO seam plate: the wall sits on the page's
+                        // own surface, so the gaps read as clean whitespace
+                        // between covers instead of a boxed border plate.
+                        .then(if (glassOn && glassBackdrop != null)
+                            Modifier.layerBackdrop(glassBackdrop) else Modifier)
+                ) {
+                    if (wide) {
+                        item(key = "hero", contentType = "hero") {
+                            wideHero()
+                        }
+                    }
+                    v2EverythingMasonryItems(
+                        shelves = shelves,
+                        railAvailable = railAvailable,
+                        typeFilter = typeFilter,
+                        onTypeFilter = { typeFilter = it },
+                        onOpenLiked = { item -> item.open(navController) },
+                        onCoverSource = { coverSourceItem = it },
+                        // v3xx43 — the Cupboard's Add searches the CATALOG
+                        // (books / series / albums) and pins the picked media
+                        // onto the wall, so adding never dumps the user out to
+                        // another screen.
+                        onAddNew = { showCupboardAdd = true },
+                        pageAccent = pageAccent,
+                        wallSwap = { wallSwap.value }
+                    )
+                }
+            }
+        } else {
+        // ── v467 — THE LEVEL'S OWN COLLECTION, RESOLVED FROM THE ANIMATED LEVEL.
+        //
+        // `openCollection` (the outer val) is derived from `openLevel`, which is
+        // the level being animated TOWARDS. Inside `AnimatedContent` the outgoing
+        // frame is still composed while the incoming one arrives, so reading the
+        // outer val there would resolve the level that is LEAVING to the
+        // collection that is ARRIVING. This one reads the level this frame is
+        // actually showing. The outer val keeps its own job — the hero's title and
+        // subtitle, which should name the destination the member just chose.
+        val levelCollection = collections.firstOrNull { it.id == level }
+        LazyVerticalGrid(
+            state = rememberLazyGridState(),
+            // ── v467 — THE TILE LEVELS ARE THREE ACROSS, THE CARD LEVELS STAY TWO.
+            //
+            // The member: *"sho the 3 grid in collections ersonals etc"* (and
+            // explicitly *not* in journals, which went back to rows in the same
+            // change). Three columns suit a cell that IS a cover — a book jacket,
+            // a journal day — which is why the book shelf and the journals list
+            // have used three since they were built. They do not suit a cell that
+            // carries sentences: a liked-topic row or a saved capture in a third
+            // of the width loses the title that is the reason to show it.
+            //
+            // So the split is by CONTENT, not by level name:
+            //   `levelCollection != null` — a collection's members, and
+            //   "Currently reading" (books, so covers);
+            //   `SHELF_LEVEL_PERSONAL` — journal days and books.
+            // Favorites / Completed / Saved / Notes keep two across.
+            columns = if (wide) GridCells.Adaptive(minSize = 176.dp)
+                else if (levelCollection != null || level == SHELF_LEVEL_PERSONAL)
+                    GridCells.Fixed(3)
+                else GridCells.Fixed(2),
+            contentPadding = PaddingValues(
+                start = 16.dp,
+                end = 16.dp,
+                top = contentTop,
+                bottom = 24.dp + 84.dp +
+                    WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
+            ),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+            modifier = Modifier
+                .fillMaxSize()
+                .then(if (glassOn && glassBackdrop != null)
+                    Modifier.layerBackdrop(glassBackdrop) else Modifier)
+        ) {
+            if (wide) {
+                item(key = "hero", span = { GridItemSpan(maxLineSpan) }, contentType = "hero") {
+                    wideHero()
+                }
+            }
+
+            when {
+                levelCollection != null -> {
+                v2DetailItems(
+                    collection = levelCollection,
+                    entriesById = entriesById,
+                    searching = searching,
+                    searchQuery = searchQuery,
+                    onOpenMember = { m ->
+                        val t = memberLiked(m, entriesById)?.topic
+                        val cat = t?.categoryId ?: m.categoryName
+                            ?.let { n -> runCatching { CategoryId.valueOf(n) }.getOrNull() }
+                        if (cat != null) {
+                            navController.navigate(
+                                CurioRoutes.revealFor(cat.routeSlug, t?.name ?: m.refName)
+                            ) { launchSingleTop = true }
+                        }
+                    },
+                    onOpenEntry = { id ->
+                        navController.navigate(CurioRoutes.entryDetail(id)) { launchSingleTop = true }
+                    },
+                    onMemberLongPress = { index -> pillTarget = PillTarget.Member(levelCollection.id, index) },
+                    onAdd = { addTarget = AddTarget.Collection(levelCollection) },
+                    onRename = { renameTarget = levelCollection.id },
+                    onDelete = { deleteTarget = levelCollection.id }
+                )
+                // v389 — "Curiying now" also holds the member's OWN shelf books
+                // that are part-way through (additive: the collection's saved
+                // members keep their grid above and their door below).
+                if (levelCollection.id == "shelf:currently-reading") {
+                    v2ReadingNowItems(
+                        books = readingBooks,
+                        searchQuery = searchQuery,
+                        onOpenBook = { id ->
+                            navController.navigate(CurioRoutes.bookDetail(id)) {
+                                launchSingleTop = true
+                            }
+                        }
+                    )
+                }
+                }
+                // v3xx43 — FAVORITES = the topics you liked (the reveal
+                // heart), listed as topic rows; the media covers live in the
+                // Cupboard, so the two shelves are no longer identical.
+                level == SHELF_LEVEL_FAVORITES || level == SHELF_LEVEL_COMPLETED -> v2LikedTopicItems(
+                    likes = likedTopics,
+                    searchQuery = searchQuery,
+                    catalogReady = catalogReady,
+                    onOpenTopic = { item ->
+                        val slug = item.topic?.categoryId?.routeSlug
+                            ?: CategoryId.WILDCARD.routeSlug
+                        navController.navigate(
+                            CurioRoutes.revealFor(slug, item.topic?.name ?: item.name)
+                        ) { launchSingleTop = true }
+                    }
+                )
+                // v3xx50 — the saved shelf holds the same archive, so it holds
+                // the same skeleton instead of an empty verdict.
+                //
+                // v389e — NOTES IS NOT THAT SHELF ANY MORE: it lists the
+                // member's own notes and to-do lists, so it waits on the PERSONAL
+                // store and not on the capture archive (see the shelf below).
+                level == SHELF_LEVEL_SAVED && !archiveReady ->
+                    v2SkeletonItems(count = skeletonCount)
+                level == SHELF_LEVEL_SAVED -> v2VirtualShelfItems(
+                    title = "Saved entries",
+                    likes = emptyList(),
+                    entries = entries,
+                    searchQuery = searchQuery,
+                    selectedEntryIds = selectedEntryIds,
+                    selectionMode = selectionMode,
+                    onOpenLiked = { item -> item.open(navController) },
+                    onEntryLongClick = { id ->
+                        selectionMode = true
+                        selectedEntryIds = selectedEntryIds + id
+                    },
+                    onEntryClick = { id ->
+                        if (selectionMode) {
+                            selectedEntryIds = if (id in selectedEntryIds) selectedEntryIds - id
+                            else selectedEntryIds + id
+                        } else {
+                            haptics.performHapticFeedback(HapticFeedbackType.KeyboardTap)
+                            navController.navigate(CurioRoutes.entryDetail(id)) { launchSingleTop = true }
+                        }
+                    },
+                    onLikedMore = { coverSourceItem = it }
+                )
+                // ── v389e — THE NOTES COLLECTION ─────────────────────────
+                //
+                // This shelf held the capture entries filed under "notes" (the
+                // saves from the field). It is the member's NOTES now: the pages
+                // written about a topic and the to-do lists, which are the two
+                // things they write that are neither a journal day nor a book.
+                // The saved captures are not deleted and not hidden elsewhere —
+                // they keep their own shelf, the Cupboard, search and Everything
+                // (user decision: "Replaced by the notes and lists … saved
+                // capture entries stop appearing on that shelf").
+                level == SHELF_LEVEL_NOTES -> v2PersonalWritingItems(
+                    journals = notePages,
+                    books = emptyList(),
+                    searchQuery = searchQuery,
+                    savedMemberCount = 0,
+                    onOpenJournal = { id ->
+                        val page = notePages.firstOrNull { it.id == id }
+                        navController.navigate(
+                            page?.let { personalRouteFor(it) } ?: CurioRoutes.entryDetail(id)
+                        ) { launchSingleTop = true }
+                    },
+                    onOpenBook = {},
+                    // The heading is the shelf's OWN name, and the shelf is the
+                    // whole list: it leads nowhere rather than to the journals
+                    // list, which is a different set of pages.
+                    onOpenAllJournals = {},
+                    onOpenShelf = {},
+                    onOpenSavedMembers = {},
+                    headings = "Notes",
+                    unit = "notes",
+                    emptyTitle = "Notes on a topic, and your to-do lists",
+                    emptyDoors = false
+                )
+                // v387 — the PERSONAL shelf: journals + books, each in its
+                // own small view, with the collection's saved members one tap
+                // away at the foot (nothing that lived here was removed).
+                level == SHELF_LEVEL_PERSONAL -> v2PersonalWritingItems(
+                    // v389e — the days only: a note and a list live in the Notes
+                    // collection (see `journalDays`).
+                    journals = journalDays,
+                    books = personalBooks,
+                    searchQuery = searchQuery,
+                    savedMemberCount = builtInShelves
+                        .firstOrNull { it.id == V2ShelfId.PERSONAL }
+                        ?.seededCollectionId
+                        ?.let { seeded ->
+                            shownUserCollections.firstOrNull { it.id == seeded }?.members?.size
+                        } ?: 0,
+                    // v389 — the shelf holds all three kinds of personal page,
+                    // so a row opens its OWN screen: a journal day the editor,
+                    // a to-do list the checklist page, a topic note the topic
+                    // page (see personalRouteFor in PersonalPage.kt).
+                    onOpenJournal = { id ->
+                        val note = personalJournals.firstOrNull { it.id == id }
+                        navController.navigate(
+                            note?.let { personalRouteFor(it) }
+                                ?: CurioRoutes.journalEditor(id)
+                        ) {
+                            launchSingleTop = true
+                        }
+                    },
+                    onOpenBook = { id ->
+                        navController.navigate(CurioRoutes.bookDetail(id)) {
+                            launchSingleTop = true
+                        }
+                    },
+                    onOpenAllJournals = {
+                        navController.navigate(CurioRoutes.JOURNALS) { launchSingleTop = true }
+                    },
+                    onOpenShelf = {
+                        navController.navigate(CurioRoutes.BOOKS) { launchSingleTop = true }
+                    },
+                    onOpenSavedMembers = {
+                        openLevel = builtInShelves
+                            .firstOrNull { it.id == V2ShelfId.PERSONAL }
+                            ?.seededCollectionId ?: "shelf:personal"
+                        searchActive = false
+                        searchQuery = ""
+                    }
+                )
+                else -> v2HomeItems(
+                    everythingLikes = allLikes,
+                    everythingCount = allLikes.size,
+                    visibleShelves = visibleShelves,
+                    userCollections = shownUserCollections,
+                    searching = searching,
+                    onOpenEverything = { openLevel = "everything"; searchActive = false; searchQuery = "" },
+                    onOpenShelf = { id ->
+                        openLevel = when (id) {
+                            V2ShelfId.FAVORITES -> SHELF_LEVEL_FAVORITES
+                            V2ShelfId.COMPLETED -> SHELF_LEVEL_COMPLETED
+                            V2ShelfId.SAVED -> SHELF_LEVEL_SAVED
+                            V2ShelfId.NOTES -> SHELF_LEVEL_NOTES
+                            // v387 — Personal opens the writing store (journals
+                            // + books); its saved members keep their door at
+                            // the foot of that level.
+                            V2ShelfId.PERSONAL -> SHELF_LEVEL_PERSONAL
+                            else -> {
+                                val seeded = builtInShelves.firstOrNull { it.id == id }?.seededCollectionId
+                                seeded ?: ""
+                            }
+                        }
+                        if (openLevel.isNotEmpty()) {
+                            searchActive = false
+                            searchQuery = ""
+                        }
+                    },
+                    onOpenCollection = { id -> openLevel = id; searchActive = false; searchQuery = "" },
+                    onRenameCollection = { id -> renameTarget = id },
+                    onDeleteCollection = { id -> deleteTarget = id },
+                    onNewCollection = { showCreateSheet = true },
+                    onClearSearch = { searchQuery = ""; searchActive = false }
+                )
+            }
+        }
+        }
+        }
+        }
+
+        // ── The torn hero — pinned overlay on phones (wide renders it as
+        // the grid's first item above).
+        if (!wide) {
+            CabinetHeroHeader(
+                title = heroTitle,
+                subtitle = heroSubtitle,
+                activeCat = null,
+                legacyMode = false,
+                searchActive = searchActive,
+                searchQuery = searchQuery,
+                onSearchQueryChange = { searchQuery = it },
+                onCloseSearch = { searchActive = false; searchQuery = "" },
+                searchFocus = searchFocus,
+                trailing = heroTrailing,
+                glassBackdrop = glassBackdrop
+            )
+        }
+    }
+
+    // ── Long-press option pills (collection member only — the collection
+    // card ⋮ and the detail ⋮ are anchored dropdowns now).
+    when (val target = pillTarget) {
+        is PillTarget.Member -> {
+            val c = collections.firstOrNull { it.id == target.collectionId }
+            if (c != null && target.index in c.members.indices) {
+                CurioHoldPill(
+                    title = c.members[target.index].refName,
+                    actions = listOf(
+                        "Move up" to {
+                            moveMember(context, c, target.index, -1)
+                            pillTarget = null
+                        },
+                        "Move down" to {
+                            moveMember(context, c, target.index, 1)
+                            pillTarget = null
+                        },
+                        "Remove from collection" to {
+                            removeMember(context, c, target.index)
+                            pillTarget = null
+                        }
+                    ),
+                    destructiveIndexes = setOf(2),
+                    onDismiss = { pillTarget = null }
+                )
+            }
+        }
+        null -> Unit
+    }
+
+    // ── Collection create / rename sheet (with "From a moodboard…").
+    if (showCreateSheet || renameTarget != null) {
+        val target = renameTarget?.let { id -> collections.firstOrNull { it.id == id } }
+        V2CollectionNameSheet(
+            initialName = target?.name ?: "",
+            // v3xx — the custom card style travels through the sheet: create
+            // starts on Auto (-1 / null), rename keeps the collection's own.
+            initialTone = target?.tone ?: -1,
+            initialArt = target?.art ?: -1,
+            initialIcon = target?.icon,
+            moodboards = if (target == null)
+                entries.filter { it.format == CaptureFormat.GalleryWall } else emptyList(),
+            showMoodboards = target == null,
+            title = if (target != null) "Rename collection" else "New collection",
+            confirmLabel = if (target != null) "Rename" else "Create",
+            onConfirm = { name, tone, art, icon ->
+                if (target != null) {
+                    AppPreferences.addOrReplaceCollection(context, target.copy(name = name))
+                } else {
+                    val id = UUID.randomUUID().toString()
+                    AppPreferences.addOrReplaceCollection(
+                        context,
+                        CurioCollection(
+                            id = id, name = name, createdAtMillis = System.currentTimeMillis(),
+                            members = emptyList(),
+                            tone = tone, art = art, icon = icon
+                        )
+                    )
+                    openLevel = id
+                }
+                renameTarget = null
+                showCreateSheet = false
+            },
+            onMoodboard = { entry ->
+                val id = UUID.randomUUID().toString()
+                AppPreferences.addOrReplaceCollection(
+                    context,
+                    CurioCollection(
+                        id = id,
+                        name = entry.title?.ifBlank { null } ?: entry.topic.name,
+                        createdAtMillis = System.currentTimeMillis(),
+                        members = listOf(CurioCollectionMember(
+                            kind = CurioCollectionMember.MemberKind.ENTRY,
+                            categoryName = null,
+                            refName = entry.id
+                        ))
+                    )
+                )
+                showCreateSheet = false
+                openLevel = id
+            },
+            onDismiss = {
+                showCreateSheet = false
+                renameTarget = null
+            }
+        )
+    }
+
+    // ── Add-to-shelf sheet (search topics / favorites / saved captures).
+    // v3xx34 — one redesigned picker for BOTH targets: a real collection
+    // (multi-pick saved captures + one-tap topic adds from favorites/search)
+    // and the Favorites virtual shelf (favorites mode: search topics to
+    // save them).
+    addTarget?.let { target ->
+        val c = (target as? AddTarget.Collection)?.collection
+        if (target is AddTarget.Collection && (c == null || collections.none { it.id == c.id })) {
+            LaunchedEffect(addTarget) { addTarget = null }
+        } else {
+            V2AddToShelfSheet(
+                target = target,
+                likes = allLikes,
+                addOptions = addOptions,
+                onAddEntries = { ids ->
+                    if (c == null) return@V2AddToShelfSheet
+                    val existing = c.members.filter { it.kind == CurioCollectionMember.MemberKind.ENTRY }
+                        .map { it.refName }.toSet()
+                    val fresh = ids.filterNot { it in existing }
+                    if (fresh.isNotEmpty()) {
+                        AppPreferences.addOrReplaceCollection(
+                            context,
+                            c.copy(members = c.members + fresh.map { id ->
+                                CurioCollectionMember(
+                                    kind = CurioCollectionMember.MemberKind.ENTRY,
+                                    categoryName = null,
+                                    refName = id
+                                )
+                            })
+                        )
+                    }
+                    addTarget = null
+                },
+                onToggleTopic = { liked ->
+                    if (c != null) {
+                        val member = likedToMember(liked)
+                        val has = c.members.any {
+                            it.kind == member.kind && it.categoryName == member.categoryName &&
+                                it.refName == member.refName
+                        }
+                        val members = if (has) c.members.filterNot {
+                            it.kind == member.kind && it.categoryName == member.categoryName &&
+                                it.refName == member.refName
+                        } else c.members + member
+                        AppPreferences.addOrReplaceCollection(context, c.copy(members = members))
+                    } else {
+                        toggleLikedFavorite(liked, context)
+                    }
+                },
+                onDismiss = { addTarget = null }
+            )
+        }
+    }
+
+    // ── Cupboard add — search the CATALOG (books / series / albums) and
+    // pin the picked media onto the wall (v3xx43).
+    if (showCupboardAdd) {
+        V2CupboardAddSheet(
+            likes = allLikes,
+            onToggle = { liked ->
+                toggleLikedFavorite(liked, context)
+                haptics.performHapticFeedback(HapticFeedbackType.Confirm)
+            },
+            onDismiss = { showCupboardAdd = false }
+        )
+    }
+
+    // ── Delete-collection confirm.
+    if (deleteTarget != null) {
+        val c = collections.firstOrNull { it.id == deleteTarget }
+        if (c != null) {
+            AlertDialog(
+                onDismissRequest = { deleteTarget = null },
+                title = { Text("Delete \"${c.name}\"?") },
+                text = { Text("The collection and its ${c.members.size} member${if (c.members.size == 1) "" else "s"} are removed. Your saved entries and topics stay untouched.") },
+                confirmButton = {
+                    CurioGlassWindowBlur()
+                    TextButton(onClick = {
+                        AppPreferences.deleteCollection(context, c.id)
+                        if (openLevel == c.id) openLevel = ""
+                        deleteTarget = null
+                    }) { Text("Delete", color = MaterialTheme.colorScheme.error) }
+                },
+                dismissButton = {
+                    TextButton(onClick = { deleteTarget = null }) { Text("Cancel") }
+                }
+            )
+        } else {
+            LaunchedEffect(deleteTarget) { deleteTarget = null }
+        }
+    }
+
+    // ── Liked-item cover source switch (the tile ⋮): pick the OTHER art
+    // provider for this book/album/series — the winner is persisted to the
+    // shared sheet-art store and the cache is redownloaded, so the Cabinet
+    // (and the reveal) show it instantly and forever after.
+    if (coverSourceItem != null) {
+        V2CoverSourceSheet(
+            item = coverSourceItem!!,
+            onDismiss = { coverSourceItem = null }
+        )
+    }
+
+    // ── Everything batch delete (two-step confirm like the classic view).
+    if (showBulkDeleteConfirm) {
+        CurioTwoStepDeleteDialog(
+            visible = showBulkDeleteConfirm,
+            title = if (selectedEntryIds.size == 1) "this capture"
+            else "${selectedEntryIds.size} selected captures",
+            body = "These ${selectedEntryIds.size} captures move to the Recycle bin.",
+            onDismiss = { showBulkDeleteConfirm = false },
+            onConfirmed = {
+                showBulkDeleteConfirm = false
+                val ids = selectedEntryIds.toList()
+                scope.launch {
+                    runCatching { CurioRepositoryHolder.repo.softDeleteByIds(ids) }
+                    selectedEntryIds = emptySet()
+                    selectionMode = false
+                }
+            }
+        )
+    }
+}
+
+// ────────────────────────────────────────────────────────────────────────
+// Grid emitters (LazyGridScope extensions — one per level)
+// ────────────────────────────────────────────────────────────────────────
+
+/** Collections HOME — the JSX folders layout: Everything card → Saved
+ *  entries → the shelf grid (built-ins + user collections) → New tile. */
+private fun LazyGridScope.v2HomeItems(
+    everythingLikes: List<V2Liked>,
+    everythingCount: Int,
+    visibleShelves: List<Pair<V2Shelf, Int>>,
+    userCollections: List<CurioCollection>,
+    searching: Boolean,
+    onOpenEverything: () -> Unit,
+    onOpenShelf: (V2ShelfId) -> Unit,
+    onOpenCollection: (String) -> Unit,
+    onRenameCollection: (String) -> Unit,
+    onDeleteCollection: (String) -> Unit,
+    onNewCollection: () -> Unit,
+    onClearSearch: () -> Unit
+) {
+    if (searching && visibleShelves.isEmpty() && userCollections.isEmpty()) {
+        item(key = "no-match", span = { GridItemSpan(maxLineSpan) }, contentType = "empty") {
+            CurioEmptyState(
+                glyph = CurioIcons.SearchOff,
+                headline = "No collections match",
+                subtext = "Try a different name, or open the Cupboard to search your media.",
+                tint = curioTertiaryInk().copy(alpha = 0.4f),
+                ctaLabel = "Clear search",
+                onCtaClick = onClearSearch
+            )
+        }
+        return
+    }
+
+    if (!searching) {
+        item(key = "everything-card", span = { GridItemSpan(maxLineSpan) }, contentType = "collection") {
+            V2EverythingCard(
+                likes = everythingLikes,
+                count = everythingCount,
+                onOpen = onOpenEverything
+            )
+        }
+
+    }
+
+    if (visibleShelves.isNotEmpty() || userCollections.isNotEmpty()) {
+        item(key = "h-collections", span = { GridItemSpan(maxLineSpan) }, contentType = "header") {
+            V2PageSectionHeader(
+                title = "Collections",
+                subtitle = "Your personal shelves",
+                trailing = if (searching) null else "${visibleShelves.size + userCollections.size}"
+            )
+        }
+        visibleShelves.forEach { (shelf, count) ->
+            val seededId = shelf.seededCollectionId
+            item(key = "s|${shelf.id}", contentType = "collection") {
+                V2ShelfCard(
+                    title = shelf.title,
+                    icon = shelf.icon,
+                    tone = shelf.tone,
+                    art = shelf.art,
+                    count = count,
+                    onClick = { onOpenShelf(shelf.id) },
+                    // v3xx — the card's OWN anchored ⋮ (Rename for the seeded
+                    // starter shelves; the seeded ones stay non-deletable).
+                    onRename = if (seededId != null) ({ onRenameCollection(seededId) }) else null
+                )
+            }
+        }
+        userCollections.forEachIndexed { i, c ->
+            item(key = "c|${c.id}", contentType = "collection") {
+                V2ShelfCard(
+                    title = c.name,
+                    // v3xx — a user collection renders its CUSTOM card style
+                    // (tone/art/icon chosen in the New-collection sheet) when
+                    // set; otherwise it cycles the palette like before.
+                    icon = c.icon ?: CurioIcons.AutoAwesome,
+                    tone = c.tone.takeIf { it >= 0 && it < userShelfTones.size }
+                        ?.let { userShelfTones[it] } ?: userShelfTones[i % userShelfTones.size],
+                    art = c.art.takeIf { it >= 0 && it < userShelfArts.size }
+                        ?.let { userShelfArts[it] } ?: userShelfArts[i % userShelfArts.size],
+                    count = c.members.size,
+                    onClick = { onOpenCollection(c.id) },
+                    onRename = { onRenameCollection(c.id) },
+                    onDelete = { onDeleteCollection(c.id) }
+                )
+            }
+        }
+    }
+    if (!searching) {
+        item(key = "new-collection", span = { GridItemSpan(maxLineSpan) }, contentType = "action") {
+            V2NewCollectionTile(onClick = onNewCollection)
+        }
+    }
+}
+
+/** v3xx50 — entry-card placeholders for a level whose archive has not been
+ *  read yet (the Cabinet home's Saved-entries slot, the Saved entries and
+ *  Notes shelves). They use the SAME grid cells the real cards do, so the
+ *  page keeps its shape when the data lands. */
+private fun LazyGridScope.v2SkeletonItems(count: Int) {
+    items(count, key = { index -> "skel|$index" }, contentType = { "skeleton" }) { _ ->
+        CurioEntrySkeletonCard(modifier = Modifier.fillMaxWidth())
+    }
+}
+
+/** COLLECTION DETAIL — header + members (topic rows / entry cards). */
+private fun LazyGridScope.v2DetailItems(
+    collection: CurioCollection,
+    entriesById: Map<String, CurioEntry>,
+    searching: Boolean,
+    searchQuery: String,
+    onOpenMember: (CurioCollectionMember) -> Unit,
+    onOpenEntry: (String) -> Unit,
+    onMemberLongPress: (Int) -> Unit,
+    onAdd: () -> Unit,
+    onRename: () -> Unit,
+    onDelete: () -> Unit
+) {
+    // v3xx43 — the hero owns the collection's name + count; this strip keeps
+    // only the ACTIONS (Add + kebab), so a shelf name is never printed twice
+    // on the page (the reported "Want to read" duplication).
+    item(key = "d-head", span = { GridItemSpan(maxLineSpan) }, contentType = "header") {
+        V2DetailHeader(onAdd = onAdd, onRename = onRename, onDelete = onDelete)
+    }
+    if (collection.members.isEmpty()) {
+        // v3xx — the JSX "Nothing here yet" scene (stacked books + leaf
+        // sprig + note card + twinkles) drawn in the app's flask doodle
+        // language — see V2CollectionEmptyState in CabinetShelves.kt.
+        item(key = "d-empty", span = { GridItemSpan(maxLineSpan) }, contentType = "empty") {
+            V2CollectionEmptyState(onAdd = onAdd)
+        }
+        return
+    }
+    var emitted = 0
+    collection.members.forEachIndexed { index, m ->
+        val shown = if (searching) {
+            when (m.kind) {
+                CurioCollectionMember.MemberKind.TOPIC -> searchQuery.isBlank() || m.refName.contains(searchQuery.trim(), ignoreCase = true)
+                CurioCollectionMember.MemberKind.ENTRY -> {
+                    val e = entriesById[m.refName]
+                    searchQuery.isBlank() || e != null && e.topic.name.contains(searchQuery.trim(), ignoreCase = true)
+                }
+            }
+        } else true
+        if (!shown) return@forEachIndexed
+        emitted++
+        when (m.kind) {
+            CurioCollectionMember.MemberKind.TOPIC -> item(
+                key = "d-t|${collection.id}|$index",
+                span = { GridItemSpan(maxLineSpan) },
+                contentType = "member"
+            ) {
+                val liked = memberLiked(m, entriesById)
+                V2LikedRow(
+                    item = liked ?: V2Liked(m.refName, topicKindForMember(m), null),
+                    onClick = { onOpenMember(m) },
+                    onLongClick = { onMemberLongPress(index) }
+                )
+            }
+            CurioCollectionMember.MemberKind.ENTRY -> {
+                val entry = entriesById[m.refName]
+                if (entry != null) {
+                    item(key = "d-e|${collection.id}|${m.refName}", contentType = "member") {
+                        // v496 — no fold here either: one card language, one
+                        // behaviour (see [CurioEntryCard]).
+                        CurioEntryCard(
+                            entry = entry,
+                            modifier = Modifier,
+                            onLongClick = { onMemberLongPress(index) },
+                            onClick = { onOpenEntry(entry.id) }
+                        )
+                    }
+                }
+            }
+        }
+    }
+    if (emitted == 0) {
+        item(key = "d-no-match", span = { GridItemSpan(maxLineSpan) }, contentType = "empty") {
+            CurioEmptyState(
+                glyph = CurioIcons.SearchOff,
+                headline = "No members match",
+                subtext = "Try a different search.",
+                tint = curioTertiaryInk().copy(alpha = 0.4f)
+            )
+        }
+    }
+}/**
+ * One packed shelf of the Cupboard wall — a row of covers at a shared height,
+ * with widths derived from each cover's own aspect so the line always fills
+ * the available width exactly.
+ */
+private data class CupboardShelf(val items: List<V2Liked>, val height: Dp)
+
+/** Every cover's own aspect (width / height): books are portrait jackets,
+ *  albums square sleeves, series posters. */
+private fun cupboardAspect(liked: V2Liked): Float = when (liked.kind) {
+    V2Kind.BOOK -> 0.667f
+    V2Kind.ALBUM -> 1f
+    V2Kind.SERIES -> 0.72f
+}
+
+/** Horizontal gap between the wall's covers (also the row gap). */
+private const val CUPBOARD_GAP_DP = 10f
+
+/**
+ * v3xx45 — packs [items] (display order) into SHELVES with no leftover space.
+ *
+ * A grid line shares ONE height, so a tall book beside two small albums always
+ * leaves a hole under the albums — the reported "space left below those 2".
+ * Here each shelf is a row of covers at a COMMON height: every cover's width
+ * is `height x its aspect`, so the widths plus the gaps sum to exactly
+ * [availableWidth]. Nothing is stretched and nothing is left empty. Shelf
+ * heights alternate feature / tight so the wall keeps its dense, varied look.
+ * The final (possibly short) shelf is capped at its target height so a lone
+ * leftover cover can't blow up to full width.
+ */
+private fun buildCupboardShelves(
+    items: List<V2Liked>,
+    availableWidth: Dp
+): List<CupboardShelf> {
+    if (items.isEmpty()) return emptyList()
+    val width = availableWidth.value
+    if (width <= 0f) return emptyList()
+    val gap = CUPBOARD_GAP_DP
+    // v3xx48 — the SIZE LADDER is back, as SHELF heights. The old grid gave
+    // every cover a tier (3x … 0.5x) and packed lines by spans, which is what
+    // left holes; here each shelf has ONE height so it always fills the
+    // width, and the heights cycle a feature → small → medium → smallest
+    // rhythm. The smallest shelf is ~0.34x the feature one, so the wall reads
+    // with the same big/small contrast the tiers had (user: "it doesnt have
+    // that 3x sizes or smaller one like .5x").
+    val targets = floatArrayOf(
+        width * 0.50f,
+        width * 0.28f,
+        width * 0.34f,
+        width * 0.21f
+    )
+    // A shelf is closed once its projected height would drop under 80% of its
+    // target, so it stays close to (never far under) the intended size.
+    val minFactor = 0.8f
+    val shelves = mutableListOf<CupboardShelf>()
+    var i = 0
+    var shelfIndex = 0
+    while (i < items.size) {
+        val target = targets[shelfIndex % targets.size]
+        val shelf = mutableListOf<V2Liked>()
+        var aspectSum = 0f
+        while (i < items.size) {
+            val nextSum = aspectSum + cupboardAspect(items[i])
+            val projected = (width - gap * shelf.size) / nextSum
+            if (shelf.isNotEmpty() && projected < target * minFactor) break
+            shelf.add(items[i])
+            aspectSum = nextSum
+            i++
+        }
+        val isLast = i >= items.size
+        val raw = (width - gap * (shelf.size - 1)) / aspectSum
+        val height = (if (isLast) minOf(raw, target) else raw).coerceAtLeast(1f)
+        shelves.add(CupboardShelf(shelf, height.dp))
+        shelfIndex++
+    }
+    return shelves
+}
+
+/** EVERYTHING (the Cupboard) — the dense covers-only wall. The liked media
+ *  merge into ONE recency stream (no category grouping) and are packed into
+ *  tightly-filled shelves by [buildCupboardShelves], so no cover ever leaves
+ *  a gap. The wall's background is the page's own surface (no plate behind
+ *  the covers); the filter chips + the corner Add pill ride the top line. */
+@OptIn(ExperimentalFoundationApi::class)
+private fun LazyListScope.v2EverythingMasonryItems(
+    shelves: List<CupboardShelf>,
+    railAvailable: Set<String>,
+    typeFilter: String?,
+    onTypeFilter: (String?) -> Unit,
+    onOpenLiked: (V2Liked) -> Unit,
+    onCoverSource: (V2Liked) -> Unit,
+    onAddNew: () -> Unit,
+    pageAccent: Color,
+    // v3xx48 — the wall's filter-swap fade (see the caller); read inside the
+    // item lambdas so the covers dip and ease back when the chips change.
+    wallSwap: () -> Float
+) {
+    // Top line: the filter chips + the corner ADD pill (the app-wide labeled
+    // Add, anchored TOP-RIGHT of the wall instead of a bottom button).
+    item(key = "everything-head", contentType = "head") {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 2.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            V2FilterRail(
+                current = typeFilter,
+                onSelect = onTypeFilter,
+                accent = pageAccent,
+                available = railAvailable,
+                modifier = Modifier.weight(1f)
+            )
+            V2AddPillCompact(onClick = onAddNew)
+        }
+    }
+
+    if (shelves.isEmpty()) {
+        item(key = "e-empty", contentType = "empty") {
+            CurioDoodleEmptyState(
+                headline = "Your Cupboard is empty",
+                subtext = "Add a book, series or album and its cover shows up on this wall."
+            )
+        }
+        return
+    }
+
+    shelves.forEachIndexed { index, shelf ->
+        item(key = "shelf|$index", contentType = "shelf") {
+            val swap = wallSwap()
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(shelf.height)
+                    .graphicsLayer {
+                        alpha = swap
+                        // A whisper of scale rides the fade so the swap reads as
+                        // the wall settling rather than a blink.
+                        scaleX = 0.985f + swap * 0.015f
+                        scaleY = 0.985f + swap * 0.015f
+                    }
+                    .then(
+                        Modifier.animateItem(
+                            fadeInSpec = tween(220),
+                            fadeOutSpec = tween(150),
+                            placementSpec = spring(stiffness = Spring.StiffnessMediumLow)
+                        )
+                    ),
+                horizontalArrangement = Arrangement.spacedBy(CUPBOARD_GAP_DP.dp)
+            ) {
+                shelf.items.forEach { liked ->
+                    // The fallback accent resolves INSIDE the item's composable
+                    // lambda (the wall builder itself is not @Composable).
+                    val fallbackAccent = liked.topic?.categoryId?.let { CurioCategories.byId(it) }
+                        ?.themedAccent() ?: settingsRoseAccent()
+                    // Every cover is sized to the shelf height by its OWN
+                    // aspect, so the row fills the width exactly and no cover
+                    // ever leaves space beside or below it.
+                    Box(
+                        modifier = Modifier
+                            .size(
+                                width = (shelf.height.value * cupboardAspect(liked)).dp,
+                                height = shelf.height
+                            )
+                            .clip(RoundedCornerShape(10.dp))
+                            .combinedClickable(
+                                onClick = { onOpenLiked(liked) },
+                                onLongClick = { onCoverSource(liked) }
+                            )
+                    ) {
+                        V2JacketArt(
+                            item = liked,
+                            accent = fallbackAccent,
+                            modifier = Modifier.fillMaxSize(),
+                            contentScale = ContentScale.Crop
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+// ────────────────────────────────────────────────────────────────────────
+// Hero pills
+// ────────────────────────────────────────────────────────────────────────
+
+/** The hero's action pills — level-aware (back / search / recycle bin, or
+ *  the selection controls in Everything). */
+@Composable
+private fun V2HeroTrailing(
+    openLevel: String,
+    selectionMode: Boolean,
+    allVisibleSelected: Boolean,
+    selectedCount: Int,
+    ink: Color,
+    fill: Color,
+    glassBackdrop: com.kyant.backdrop.backdrops.LayerBackdrop?,
+    onBack: () -> Unit,
+    onToggleSearch: () -> Unit,
+    onRecycleBin: () -> Unit,
+    onSelectAll: () -> Unit,
+    onDelete: () -> Unit,
+    onCancelSelection: () -> Unit
+) {
+    val glassMod = if (isLiquidGlassPillsActive() && glassBackdrop != null)
+        Modifier.liquidGlassCapsule(
+            MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.85f),
+            backdrop = glassBackdrop
+        )
+    else Modifier
+    Row(
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        if (selectionMode) {
+            CabinetHeroActionPill(
+                onClick = onSelectAll,
+                label = if (allVisibleSelected) "Clear" else "Select all",
+                emphasized = true,
+                ink = ink, backdrop = fill,
+                modifier = glassMod
+            )
+            CabinetHeroActionPill(
+                onClick = onDelete,
+                label = "Delete ($selectedCount)",
+                destructive = true,
+                ink = ink, backdrop = fill,
+                modifier = glassMod
+            )
+            CabinetHeroActionPill(
+                onClick = onCancelSelection,
+                glyph = CurioIcons.Close,
+                contentDescription = "Cancel selection",
+                ink = ink, backdrop = fill,
+                modifier = glassMod
+            )
+        } else {
+            if (openLevel.isNotEmpty()) {
+                CabinetHeroActionPill(
+                    onClick = onBack,
+                    glyph = CurioIcons.ChevronLeft,
+                    contentDescription = "Back to collections",
+                    ink = ink, backdrop = fill,
+                    modifier = glassMod
+                )
+            }
+            CabinetHeroActionPill(
+                onClick = onToggleSearch,
+                glyph = CurioIcons.Search,
+                contentDescription = "Search",
+                ink = ink, backdrop = fill,
+                modifier = glassMod
+            )
+            CabinetHeroActionPill(
+                onClick = onRecycleBin,
+                glyph = CurioIcons.Delete,
+                contentDescription = "Recycle bin",
+                ink = ink, backdrop = fill,
+                modifier = glassMod
+            )
+        }
+    }
+}
+
+// ────────────────────────────────────────────────────────────────────────
+// Collection cards
+// ───────────────────��──────────────────────��─────────────────────────────
+
+/** The "+ New collection" tile at the foot of the collections home. */
+@Composable
+private fun V2NewCollectionTile(onClick: () -> Unit) {
+    Surface(
+        onClick = onClick,
+        shape = RoundedCornerShape(20.dp),
+        color = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.55f),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 15.dp)
+        ) {
+            CurioIcon(
+                name = CurioIcons.Add,
+                contentDescription = null,
+                tint = settingsAccentInk(),
+                size = 19.dp
+            )
+            Text(
+                text = "New collection",
+                style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.ExtraBold),
+                color = settingsAccentInk()
+            )
+        }
+    }
+}
+
+// ────────────────────────────────────────────────────────────────────────
+// JSX-style home + library components (the Cabinet folders look)
+// ────────────────────────────────────────────────────────────────────────
+
+/** The "type" filter rail options — All + the app's real item kinds
+ *  (liked books/albums/series + capture formats) mapped onto the JSX's
+ *  visual rail. */
+private val TYPE_FILTERS = listOf(
+    Triple<String?, String, String>(null, "All", CurioIcons.Inventory2),
+    Triple<String?, String, String>("books", "Books", CurioIcons.MenuBook),
+    Triple<String?, String, String>("albums", "Albums", CurioIcons.Album),
+    Triple<String?, String, String>("series", "Series", CurioIcons.Movies),
+    Triple<String?, String, String>("notes", "Notes", CurioIcons.Note),
+    Triple<String?, String, String>("moodboard", "Moodboards", CurioIcons.Apps),
+    Triple<String?, String, String>("review", "Reviews", CurioIcons.FormatQuote)
+)
+
+/** Capture formats that read as a personal "note" (voice + journal + field
+ *  + wildcard) — the Notes shelf + the Notes rail chip. */
+private val noteFormats = setOf(
+    CaptureFormat.SoundBite,
+    CaptureFormat.Marginalia,
+    CaptureFormat.FieldNotes,
+    CaptureFormat.OpenNotebook
+)
+
+/** Tone + art palette for USER collections (built-ins carry their own).
+ *  v3xx — expanded for the New-collection style picker so there's plenty
+ *  of variety; `tone`/`art` on a CurioCollection are INDICES into these
+ *  two lists (-1 = auto/cycle). */
+private val userShelfTones = listOf(
+    V2ShelfTone(light = 0xFFE6D7B6, dark = 0xFF4E4534),  // warm sand
+    V2ShelfTone(light = 0xFFD6CAE9, dark = 0xFF4A3E63),  // soft lavender
+    V2ShelfTone(light = 0xFFC9DDD2, dark = 0xFF3A4F43),  // sage
+    V2ShelfTone(light = 0xFFEAC9CF, dark = 0xFF613F4B),  // blush pink
+    V2ShelfTone(light = 0xFFC9DDE9, dark = 0xFF3A5160),  // powder blue
+    V2ShelfTone(light = 0xFFC9E4D8, dark = 0xFF3A5449),  // mint
+    V2ShelfTone(light = 0xFFF2D8C3, dark = 0xFF5E4634),  // peach
+    V2ShelfTone(light = 0xFFC9D4E0, dark = 0xFF3C4A5C),  // slate
+    V2ShelfTone(light = 0xFFF1E3B8, dark = 0xFF54492E)   // butter
+)
+private val userShelfArts = listOf(
+    V2ShelfArtType.STAR,
+    V2ShelfArtType.NOTES,
+    V2ShelfArtType.MOUNTAIN,
+    V2ShelfArtType.PHOTOS,
+    V2ShelfArtType.BOOKS,
+    V2ShelfArtType.CONSTELLATION,
+    V2ShelfArtType.READING,
+    V2ShelfArtType.PEAK,
+    V2ShelfArtType.WINDOW,
+    V2ShelfArtType.MINIMAL_SUN,
+    V2ShelfArtType.MINIMAL_RINGS,
+    V2ShelfArtType.MINIMAL_WAVE,
+    V2ShelfArtType.MINIMAL_DOTS
+)
+
+/** Icon glyphs offered in the New-collection sheet's style picker. */
+private val collectionIconOptions = listOf(
+    CurioIcons.AutoAwesome,
+    CurioIcons.Star,
+    CurioIcons.Bookmark,
+    CurioIcons.MenuBook,
+    CurioIcons.MusicNote,
+    CurioIcons.Flag,
+    CurioIcons.Lightbulb,
+    CurioIcons.Brush,
+    CurioIcons.Palette,
+    CurioIcons.EmojiEvents,
+    CurioIcons.Note,
+    CurioIcons.Person
+)
+
+/** Does an entry belong to the given rail type? */
+private fun entryInType(e: CurioEntry, t: String?): Boolean = when (t) {
+    null -> true
+    "notes" -> e.format in noteFormats
+    "moodboard" -> e.format == CaptureFormat.GalleryWall
+    "review" -> e.format == CaptureFormat.ReelNotes
+    else -> false
+}
+
+/** Does a liked item (by kind) belong to the given rail type? */
+private fun likedShownForType(t: String?, kind: V2Kind): Boolean = when (t) {
+    null -> true
+    "books" -> kind == V2Kind.BOOK
+    "albums" -> kind == V2Kind.ALBUM
+    "series" -> kind == V2Kind.SERIES
+    else -> false
+}
+
+/** A section heading — display title + quiet subtitle + trailing count. */
+@Composable
+private fun V2PageSectionHeader(
+    title: String,
+    subtitle: String?,
+    trailing: String? = null,
+    modifier: Modifier = Modifier
+) {
+    Row(
+        verticalAlignment = Alignment.Bottom,
+        modifier = modifier.fillMaxWidth().padding(top = 6.dp, bottom = 2.dp)
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.ExtraBold),
+                color = MaterialTheme.colorScheme.onSurface,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+            if (subtitle != null) {
+                Text(
+                    text = subtitle,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+        }
+        if (trailing != null) {
+            Text(
+                text = trailing,
+                style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1
+            )
+        }
+    }
+}
+
+/** The CUPBOARD card — frosted icon tile + title + circular arrow, a media
+ *  rail of REAL cover art (books / albums / series) and the running item
+ *  count. Tap opens the Cupboard wall. v3xx43 — renamed from "Everything"
+ *  and its copy/count now describe liked MEDIA only (the saved captures and
+ *  the liked topics live on their own shelves). */
+@Composable
+private fun V2EverythingCard(
+    likes: List<V2Liked>,
+    count: Int,
+    onOpen: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    // v3xx — THEME-AWARE (the old hardcoded cream wash looked wrong in dark
+    // and in the pastel themes): the card wears the theme's surface tokens;
+    // the header icon tile + covers add their own category tints.
+    val context = LocalContext.current
+    val dark = isCurioDarkTheme()
+    val fill = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.92f)
+    val ink = MaterialTheme.colorScheme.onSurface
+    val muted = MaterialTheme.colorScheme.onSurfaceVariant
+    val tileFill = MaterialTheme.colorScheme.surfaceContainerHighest
+    Surface(
+        onClick = onOpen,
+        shape = RoundedCornerShape(26.dp),
+        color = fill,
+        modifier = modifier.fillMaxWidth()
+    ) {
+        Column(modifier = Modifier.padding(17.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Box(
+                    modifier = Modifier
+                        .size(44.dp)
+                        .clip(RoundedCornerShape(15.dp))
+                        .background(MaterialTheme.colorScheme.primaryContainer),
+                    contentAlignment = Alignment.Center
+                ) {
+                    CurioIcon(
+                        name = CurioIcons.Inventory2,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                        size = 23.dp
+                    )
+                }
+                Spacer(Modifier.width(12.dp))
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "Cupboard",
+                        style = MaterialTheme.typography.headlineSmall.copy(
+                            fontWeight = FontWeight.ExtraBold,
+                            lineHeight = 24.sp
+                        ),
+                        color = ink,
+                        maxLines = 1
+                    )
+                    Text(
+                        text = "Every book, album and series you keep",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = muted,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+                Spacer(Modifier.width(8.dp))
+                Box(
+                    modifier = Modifier
+                        .size(38.dp)
+                        .clip(RoundedCornerShape(50))
+                        .background(MaterialTheme.colorScheme.primaryContainer),
+                    contentAlignment = Alignment.Center
+                ) {
+                    CurioIcon(
+                        name = CurioIcons.ChevronRight,
+                        contentDescription = "Open the Cupboard",
+                        tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                        size = 19.dp
+                    )
+                }
+            }
+            Spacer(Modifier.height(14.dp))
+            // v3xx — a horizontally SCROLLABLE cover rail (no fixed 5 slots,
+            // no "+" tile): every saved book/album/series cover is reachable
+            // by swiping, thumbnails stay real and instant from the cache.
+            if (likes.isEmpty()) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(88.dp)
+                        .clip(RoundedCornerShape(14.dp))
+                        .background(tileFill.copy(alpha = 0.6f)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = "The covers of your books, albums and series appear here",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = muted
+                    )
+                }
+            } else {
+                LazyRow(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    contentPadding = PaddingValues(vertical = 2.dp)
+                ) {
+                    items(likes, key = { "${it.kind.name}|${it.name}" }) { item ->
+                        val cat = item.topic?.categoryId?.let { CurioCategories.byId(it) }
+                        // v3xx — the preview wears each cover's OWN color too
+                        // (dominant color extracted from the cached art). The
+                        // category fallback is computed OUTSIDE the remember
+                        // (themedAccent is @Composable).
+                        val fallbackAccent = cat?.themedAccent() ?: settingsRoseAccent()
+                        val accent = remember(item.name, item.kind, CabinetCoverCache.version.intValue) {
+                            CabinetCoverCache.dominantCoverColor(
+                                context,
+                                CabinetCoverCache.CoverKind.valueOf(item.kind.name),
+                                item.name,
+                                fallbackAccent
+                            )
+                        }
+                        // v3xx — the preview keeps each cover's OWN shape
+                        // (books tall, albums square, series posters — no more
+                        // albums squeezed into book jackets), centered in the
+                        // rail, inside the same thin rounded frame as the
+                        // gallery.
+                        val tileSize = when (item.kind) {
+                            V2Kind.ALBUM -> Modifier.size(width = 64.dp, height = 64.dp)
+                            V2Kind.SERIES -> Modifier.size(width = 64.dp, height = 88.dp)
+                            else -> Modifier.size(width = 59.dp, height = 88.dp)
+                        }
+                        Box(
+                            modifier = tileSize
+                                .clip(RoundedCornerShape(10.dp))
+                                .background(MaterialTheme.colorScheme.surfaceContainerHigh)
+                                .border(1.dp, MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.16f), RoundedCornerShape(10.dp))
+                        ) {
+                            V2JacketArt(
+                                item = item,
+                                accent = accent,
+                                modifier = Modifier.fillMaxSize()
+                            )
+                        }
+                    }
+                }
+            }
+            Spacer(Modifier.height(11.dp))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    text = "$count item${if (count == 1) "" else "s"}",
+                    style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.ExtraBold),
+                    color = ink
+                )
+            }
+        }
+    }
+}
+
+/** The JSX filter rail — horizontal type chips (All · Books · Albums …).
+ *  v3xx — `available` limits the rail to types that actually hold content:
+ *  a kind with nothing saved never shows an empty chip ("only show what's
+ *  in there, not something that doesn't exist"). All is always present. */
+@Composable
+private fun V2FilterRail(
+    current: String?,
+    onSelect: (String?) -> Unit,
+    accent: Color,
+    available: Set<String>,
+    // v3xx — lets the rail share a row with the corner Add pill (weight).
+    modifier: Modifier = Modifier
+) {
+    Row(
+        modifier = modifier
+            .horizontalScroll(rememberScrollState()),
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        TYPE_FILTERS.forEach { (key, label, icon) ->
+            if (key != null && key !in available) return@forEach
+            val selected = current == key
+            Surface(
+                onClick = { onSelect(if (selected) null else key) },
+                shape = RoundedCornerShape(50),
+                color = if (selected) accent
+                else MaterialTheme.colorScheme.surfaceContainerHigh,
+                contentColor = if (selected) settingsReadableInk(settingsRoseAccent())
+                else MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.height(34.dp)
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(5.dp),
+                    modifier = Modifier.padding(horizontal = 12.dp)
+                ) {
+                    CurioIcon(
+                        name = icon,
+                        contentDescription = null,
+                        tint = if (selected) settingsReadableInk(settingsRoseAccent())
+                        else MaterialTheme.colorScheme.onSurfaceVariant,
+                        size = 15.dp
+                    )
+                    Text(
+                        text = label,
+                        style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.ExtraBold),
+                        maxLines = 1
+                    )
+                }
+            }
+        }
+    }
+}
+
+/** The app-wide labeled Add pill — "+ Add" (46dp), anchored TOP-RIGHT of
+ *  the Everything wall beside the filter chips (the JSX fab as a pill; the
+ *  old full-width bottom button is gone). */
+@Composable
+private fun V2AddPillCompact(onClick: () -> Unit) {
+    Surface(
+        onClick = onClick,
+        shape = RoundedCornerShape(50),
+        color = settingsRoseAccent().copy(alpha = 0.13f),
+        modifier = Modifier.height(46.dp)
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            modifier = Modifier.padding(horizontal = 16.dp)
+        ) {
+            CurioIcon(
+                name = CurioIcons.Add,
+                contentDescription = null,
+                tint = settingsAccentInk(),
+                size = 20.dp
+            )
+            Text(
+                text = "Add",
+                style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.ExtraBold),
+                color = settingsAccentInk(),
+                maxLines = 1
+            )
+        }
+    }
+}
+
+/** Compact "when" label for the review tile footer (the shared
+ *  formatTimeAgo lives in CurioTopicCard; this file needs its own). */
+private fun v2TimeAgo(daysAgo: Int): String = when {
+    daysAgo <= 0 -> "today"
+    daysAgo == 1 -> "yesterday"
+    daysAgo < 7 -> "$daysAgo days ago"
+    daysAgo < 30 -> "${daysAgo / 7}w ago"
+    else -> "${daysAgo / 30}mo ago"
+}
+
+/** v3xx — a LIKED media tile in the Everything masonry. Every kind
+ *  renders in its OWN shape so nothing shares a look-alike cover box:
+ *  BOOKS wear a portrait jacket (spine + sheen), ALBUMS a square cover
+ *  with a vinyl disc peeking behind, SERIES a poster plate. */
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun V2MediaTileCard(
+    item: V2Liked,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    /** v3xx — the JSX's ⋮ on every item: opens the cover-source sheet so a
+     *  liked item can switch providers ("if you didn't like that one"). */
+    onMore: (() -> Unit)? = null
+) {
+    val context = LocalContext.current
+    val cat = item.topic?.categoryId?.let { CurioCategories.byId(it) }
+    val fallbackAccent = cat?.themedAccent() ?: settingsRoseAccent()
+    // v3xx — the tile wears ITS OWN color: the dominant color extracted from
+    // its cover art (fallback = category accent while the cover is still
+    // downloading). Re-keys when the cover cache warms a file.
+    val accent = remember(item.name, item.kind, CabinetCoverCache.version.intValue) {
+        CabinetCoverCache.dominantCoverColor(
+            context,
+            CabinetCoverCache.CoverKind.valueOf(item.kind.name),
+            item.name,
+            fallbackAccent
+        )
+    }
+    val dark = isCurioDarkTheme()
+    Surface(
+        modifier = modifier.combinedClickable(onClick = onClick),
+        shape = RoundedCornerShape(18.dp),
+        color = androidx.compose.ui.graphics.lerp(
+            cat?.categorySurface(MaterialTheme.colorScheme.surfaceContainerHigh)
+                ?: MaterialTheme.colorScheme.surfaceContainerHigh,
+            accent,
+            if (dark) 0.10f else 0.16f
+        )
+    ) {
+        Column {
+            val artRatio = when (item.kind) {
+                V2Kind.BOOK -> 0.667f   // portrait jacket
+                V2Kind.ALBUM -> 1f      // square sleeve
+                V2Kind.SERIES -> 0.72f  // poster
+            }
+            val plate = Brush.verticalGradient(
+                listOf(
+                    androidx.compose.ui.graphics.lerp(accent, Color.White, if (dark) 0.16f else 0.5f),
+                    androidx.compose.ui.graphics.lerp(accent, Color.Black, 0.42f)
+                )
+            )
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .aspectRatio(artRatio)
+                    .padding(8.dp)
+            ) {
+                // Albums get a vinyl disc behind the sleeve — a hint of the
+                // media behind the cover so albums never read as generic
+                // squares.
+                if (item.kind == V2Kind.ALBUM) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(12.dp)
+                            .background(Color.Black.copy(alpha = 0.55f), CircleShape)
+                    )
+                }
+                V2JacketArt(item = item, accent = accent, modifier = Modifier.fillMaxSize())
+                if (onMore != null) {
+                    // v3xx — the app-wide kebab (over art, kept subtler).
+                    Surface(
+                        onClick = onMore,
+                        shape = RoundedCornerShape(50),
+                        color = Color.Black.copy(alpha = 0.30f),
+                        modifier = Modifier
+                            .align(Alignment.TopEnd)
+                            .padding(3.dp)
+                            .size(30.dp)
+                    ) {
+                        Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
+                            CurioIcon(
+                                name = CurioIcons.MoreVert,
+                                contentDescription = "Cover source",
+                                tint = Color.White,
+                                size = 17.dp
+                            )
+                        }
+                    }
+                }
+            }
+            Column(
+                modifier = Modifier.padding(start = 11.dp, end = 11.dp, bottom = 11.dp),
+                verticalArrangement = Arrangement.spacedBy(2.dp)
+            ) {
+                Text(
+                    text = item.name,
+                    style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
+                    color = MaterialTheme.colorScheme.onSurface,
+                    maxLines = 2,
+                    minLines = 2,
+                    overflow = TextOverflow.Ellipsis
+                )
+                val byline = item.topic?.byline
+                if (!byline.isNullOrBlank()) {
+                    Text(
+                        text = byline,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Box(
+                        modifier = Modifier
+                            .size(6.dp)
+                            .clip(RoundedCornerShape(50))
+                            .background(accent.copy(alpha = 0.85f))
+                    )
+                    Spacer(Modifier.width(5.dp))
+                    Text(
+                        text = when (item.kind) {
+                            V2Kind.BOOK -> "Book"
+                            V2Kind.ALBUM -> "Album"
+                            V2Kind.SERIES -> "Series"
+                        } + (cat?.let { " · ${it.displayName}" } ?: ""),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = cat?.categoryInk() ?: MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+            }
+        }
+    }
+}
+
+/** Which cover kind a REVIEW's topic refers to — decided by which art the
+ *  Cabinet already persisted for that name (books key by name, albums /
+ *  series by `album|<name>` / `series|<name>`). Null = no cover yet → the
+ *  review falls back to the category accent. */
+private fun reviewCoverKind(name: String): CabinetCoverCache.CoverKind? {
+    if (!AppPreferences.bookCoverUrlsState[name].isNullOrBlank()) return CabinetCoverCache.CoverKind.BOOK
+    if (!AppPreferences.sheetArtUrlsState["album|$name"].isNullOrBlank()) return CabinetCoverCache.CoverKind.ALBUM
+    if (!AppPreferences.sheetArtUrlsState["series|$name"].isNullOrBlank()) return CabinetCoverCache.CoverKind.SERIES
+    return null
+}
+
+/** v3xx — a REVIEW (ReelNotes) tile with the REVIEWED media's OWN color: the
+ *  saved reviews of books/albums/series no longer masquerade as generic
+ *  capture cards — the dominant color extracted from the reviewed cover
+ *  tints the card (the thick outline is gone), with the quote mark, star
+ *  rating and a text preview making a review read as a review at a glance. */
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun V2ReviewTileCard(
+    entry: CurioEntry,
+    onClick: () -> Unit,
+    onLongClick: (() -> Unit)? = null,
+    selected: Boolean = false,
+    modifier: Modifier = Modifier
+) {
+    val context = LocalContext.current
+    val cat = CurioCategories.byId(entry.topic.categoryId)
+    val fallbackAccent = cat.themedAccent()
+    val kind = reviewCoverKind(entry.topic.name)
+    // v3xx — the review wears the reviewed media's OWN extracted cover
+    // color (fallback = category accent while the cover is still
+    // downloading). Re-keys when the cover cache warms a file.
+    val accent = if (kind != null) {
+        remember(entry.topic.name, kind, CabinetCoverCache.version.intValue) {
+            CabinetCoverCache.dominantCoverColor(context, kind, entry.topic.name, fallbackAccent)
+        }
+    } else fallbackAccent
+    val data = entry.captureData as? CaptureData.ReelNotes
+    Surface(
+        modifier = modifier
+            .combinedClickable(onClick = onClick, onLongClick = onLongClick),
+        shape = RoundedCornerShape(18.dp),
+        // v3xx — no more outline: the extracted cover color tints the card
+        // so it keeps its identity without the boxy border.
+        color = androidx.compose.ui.graphics.lerp(
+            MaterialTheme.colorScheme.surfaceContainerHigh,
+            accent,
+            if (isCurioDarkTheme()) 0.08f else 0.14f
+        )
+    ) {
+        Column(modifier = Modifier.padding(11.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Box(
+                    modifier = Modifier
+                        .size(30.dp)
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(accent.copy(alpha = 0.16f)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    CurioIcon(
+                        name = CurioIcons.FormatQuote,
+                        contentDescription = null,
+                        tint = accent,
+                        size = 16.dp
+                    )
+                }
+                Spacer(Modifier.width(7.dp))
+                Text(
+                    text = entry.topic.name,
+                    style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.ExtraBold),
+                    color = MaterialTheme.colorScheme.onSurface,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f)
+                )
+                if (selected) {
+                    CurioIcon(
+                        name = CurioIcons.Check,
+                        contentDescription = "Selected",
+                        tint = settingsAccentInk(),
+                        size = 18.dp
+                    )
+                }
+            }
+            val rating = data?.rating ?: 0
+            if (rating > 0) {
+                Spacer(Modifier.height(8.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(1.dp)) {
+                    repeat(5) { i ->
+                        Text(
+                            text = if (i < rating) "\u2605" else "\u2606",
+                            style = MaterialTheme.typography.titleSmall,
+                            color = if (i < rating) Color(0xFFE8A33D)
+                            else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.35f)
+                        )
+                    }
+                }
+            }
+            val reviewText = data?.reviewText?.ifBlank { null }
+            if (reviewText != null) {
+                Spacer(Modifier.height(7.dp))
+                Text(
+                    text = reviewText,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 4,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+            Spacer(Modifier.height(8.dp))
+            Text(
+                text = "Review · ${v2TimeAgo(entry.capturedAtDaysAgo)}",
+                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1
+            )
+        }
+    }
+}
+
+/** A liked item as a grid tile — jacket art plate + name + kind label. */
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun V2LikedTileCard(
+    item: V2Liked,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val context = LocalContext.current
+    val cat = item.topic?.categoryId?.let { CurioCategories.byId(it) }
+    val fallbackAccent = cat?.themedAccent() ?: settingsRoseAccent()
+    // v3xx — the tile wears ITS OWN color: the dominant color extracted from
+    // its cover art (fallback = category accent while the cover is still
+    // downloading). Re-keys when the cover cache warms a file.
+    val accent = remember(item.name, item.kind, CabinetCoverCache.version.intValue) {
+        CabinetCoverCache.dominantCoverColor(
+            context,
+            CabinetCoverCache.CoverKind.valueOf(item.kind.name),
+            item.name,
+            fallbackAccent
+        )
+    }
+    // v3xx35 — NO outline + NO background plate behind the art: the tile is
+    // the page surface and the cover art sits edge-to-edge on it (the old
+    // tinted Surface + 8dp frame read as an outline with a wash behind the
+    // album/series tiles).
+    Surface(
+        modifier = modifier.combinedClickable(onClick = onClick),
+        shape = RoundedCornerShape(18.dp),
+        color = Color.Transparent
+    ) {
+        Column {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(120.dp)
+            ) {
+                V2JacketArt(item = item, accent = accent, modifier = Modifier.fillMaxSize())
+            }
+            Column(modifier = Modifier.padding(start = 11.dp, end = 11.dp, bottom = 11.dp)) {
+                Text(
+                    text = item.name,
+                    style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
+                    color = MaterialTheme.colorScheme.onSurface,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                    minLines = 1
+                )
+                Spacer(Modifier.height(3.dp))
+                Text(
+                    text = when (item.kind) {
+                        V2Kind.BOOK -> "Book"
+                        V2Kind.ALBUM -> "Album"
+                        V2Kind.SERIES -> "Series"
+                    } + (cat?.let { " · ${it.displayName}" } ?: ""),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+        }
+    }
+}
+
+/** Emits the saved-capture cards in grid (2-col) or list (full-width) mode.
+ *  v496 — the v495 fold is deleted, so a card here is the same card as in the
+ *  grid: one tap opens it (the member: *"the fold the entry remove it"*). */
+private fun LazyGridScope.v2EntryItems(
+    entries: List<CurioEntry>,
+    fullSpan: Boolean,
+    selectionMode: Boolean,
+    selectedEntryIds: Set<String>,
+    onEntryLongClick: (String) -> Unit,
+    onEntryClick: (String) -> Unit
+) {
+    if (fullSpan) {
+        entries.forEach { e ->
+            item(key = "e|${e.id}", span = { GridItemSpan(maxLineSpan) }, contentType = "entry") {
+                CurioEntryCard(
+                    entry = e,
+                    modifier = Modifier,
+                    selected = e.id in selectedEntryIds,
+                    onLongClick = { onEntryLongClick(e.id) },
+                    onClick = { onEntryClick(e.id) }
+                )
+            }
+        }
+    } else {
+        items(entries, key = { "e|${it.id}" }) { e ->
+            CurioEntryCard(
+                entry = e,
+                modifier = Modifier,
+                selected = e.id in selectedEntryIds,
+                onLongClick = { onEntryLongClick(e.id) },
+                onClick = { onEntryClick(e.id) }
+            )
+        }
+    }
+}
+
+/** Emits liked items — jacket tiles in grid mode, full-width rows in list. */
+private fun LazyGridScope.v2LikedItems(
+    likes: List<V2Liked>,
+    fullSpan: Boolean,
+    onOpenLiked: (V2Liked) -> Unit
+) {
+    if (fullSpan) {
+        likes.forEach { item ->
+            item(key = "l|${item.kind}|${item.name}", span = { GridItemSpan(maxLineSpan) }, contentType = "liked") {
+                V2LikedRow(item = item, onClick = { onOpenLiked(item) })
+            }
+        }
+    } else {
+        items(likes, key = { "l|${it.kind}|${it.name}" }) { item ->
+            V2LikedTileCard(item = item, onClick = { onOpenLiked(item) })
+        }
+    }
+}
+
+/** FAVORITES (v3xx43) — the topics the user LIKED on a reveal, listed as
+ *  full-width topic rows. The Cupboard owns the media covers, so this shelf
+ *  never renders a book/album/series jacket and no longer mirrors the
+ *  Cupboard wall. */
+private fun LazyGridScope.v2LikedTopicItems(
+    likes: List<V2Liked>,
+    searchQuery: String,
+    catalogReady: Boolean,
+    onOpenTopic: (V2Liked) -> Unit
+) {
+    if (likes.isEmpty() && !catalogReady) {
+        // The lane pools are still warming — hold the frame with quiet
+        // skeleton rows instead of flashing an "empty" verdict the shelf
+        // cannot know yet.
+        repeat(3) {
+            item(key = "f-skel-$it", span = { GridItemSpan(maxLineSpan) }, contentType = "empty") {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(72.dp)
+                        .clip(RoundedCornerShape(18.dp))
+                        .background(MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.6f))
+                )
+            }
+        }
+        return
+    }
+    val q = searchQuery.trim()
+    fun shown(text: String): Boolean = q.isEmpty() || text.contains(q, ignoreCase = true)
+    val rows = likes.filter { item ->
+        shown(item.name) || item.topic?.byline?.let { b -> shown(b) } == true ||
+            item.topic?.categoryId?.let { c -> shown(CurioCategories.byId(c).displayName) } == true
+    }
+    if (rows.isEmpty()) {
+        item(key = "f-empty", span = { GridItemSpan(maxLineSpan) }, contentType = "empty") {
+            CurioDoodleEmptyState(
+                headline = if (likes.isEmpty()) "No liked topics yet" else "Nothing matches",
+                subtext = if (likes.isEmpty())
+                    "Like a topic from its reveal page and it lands here."
+                else "Try a different search."
+            )
+        }
+        return
+    }
+    rows.forEach { item ->
+        item(
+            key = "f|${item.topic?.categoryId?.name}|${item.name}",
+            span = { GridItemSpan(maxLineSpan) },
+            contentType = "member"
+        ) {
+            V2LikedTopicRow(item = item, onClick = { onOpenTopic(item) })
+        }
+    }
+}
+
+/** One LIKED TOPIC row (Favorites): a category-tinted glyph tile + the topic
+ *  name / byline / lane label, opening that topic's reveal (where the like
+ *  heart lives). Flat page surface with NO cover art, so a Favorites row can
+ *  never be mistaken for one of the Cupboard's media tiles. */
+@Composable
+private fun V2LikedTopicRow(
+    item: V2Liked,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val cat = item.topic?.categoryId?.let { CurioCategories.byId(it) }
+    val accent = cat?.themedAccent() ?: settingsRoseAccent()
+    Surface(
+        onClick = onClick,
+        shape = RoundedCornerShape(18.dp),
+        color = androidx.compose.ui.graphics.lerp(
+            cat?.categorySurface(MaterialTheme.colorScheme.surfaceContainerHigh)
+                ?: MaterialTheme.colorScheme.surfaceContainerHigh,
+            accent,
+            if (isCurioDarkTheme()) 0.10f else 0.16f
+        ),
+        modifier = modifier.fillMaxWidth()
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.padding(10.dp)
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(46.dp)
+                    .clip(RoundedCornerShape(14.dp))
+                    .background(accent.copy(alpha = 0.18f)),
+                contentAlignment = Alignment.Center
+            ) {
+                CurioIcon(
+                    name = cat?.iconGlyph ?: CurioIcons.AutoAwesome,
+                    contentDescription = null,
+                    tint = cat?.categoryInk() ?: accent,
+                    size = 22.dp
+                )
+            }
+            Spacer(Modifier.width(12.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = item.name,
+                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                    color = MaterialTheme.colorScheme.onSurface,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                val byline = item.topic?.byline
+                if (!byline.isNullOrBlank()) {
+                    Text(
+                        text = byline,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+                Spacer(Modifier.height(5.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Box(
+                        modifier = Modifier
+                            .size(6.dp)
+                            .clip(RoundedCornerShape(50))
+                            .background(accent.copy(alpha = 0.85f))
+                    )
+                    Spacer(Modifier.width(5.dp))
+                    Text(
+                        text = cat?.displayName ?: "Topic",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = cat?.categoryInk() ?: MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+            }
+            Spacer(Modifier.width(8.dp))
+            CurioIcon(
+                name = CurioIcons.ChevronRight,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                size = 20.dp
+            )
+        }
+    }
+}
+
+/** A VIRTUAL shelf detail (Saved entries / Notes) — liked rows + saved cards,
+ *  search-filtered like the other levels. The hero carries the shelf name and
+ *  count, so the list starts directly under it (v3xx43). */
+private fun LazyGridScope.v2VirtualShelfItems(
+    title: String,
+    likes: List<V2Liked>,
+    entries: List<CurioEntry>,
+    searchQuery: String,
+    selectedEntryIds: Set<String>,
+    selectionMode: Boolean,
+    onOpenLiked: (V2Liked) -> Unit,
+    onEntryLongClick: (String) -> Unit,
+    onEntryClick: (String) -> Unit,
+    // v3xx33 — the liked-row ⋮ (shelf toggles + cover source sheet).
+    onLikedMore: (V2Liked) -> Unit = {}
+) {
+    val q = searchQuery.trim()
+    fun shown(text: String): Boolean = q.isEmpty() || text.contains(q, ignoreCase = true)
+    val shownLikes = likes.filter { shown(it.name) || it.topic?.byline?.let { b -> shown(b) } == true }
+    val shownEntries = entries.filter {
+        shown(it.topic.name) || it.title?.let { t -> shown(t) } == true || it.tags.any { tag -> shown(tag) }
+    }
+    val total = shownLikes.size + shownEntries.size
+
+    // v3xx43 — NO in-page section header: the pinned hero already carries the
+    // shelf name and its count, so the old title + "N items" row below it was
+    // a straight duplicate. The list starts right under the hero now.
+    if (total == 0) {
+        item(key = "v-empty", span = { GridItemSpan(maxLineSpan) }, contentType = "empty") {
+            CurioDoodleEmptyState(
+                headline = when {
+                    likes.isEmpty() && entries.isEmpty() -> "Nothing here yet"
+                    else -> "Nothing matches"
+                },
+                subtext = when {
+                    likes.isEmpty() && entries.isEmpty() && title == "Notes" ->
+                        "Save a voice note, journal or field note and it lands here."
+                    likes.isEmpty() && entries.isEmpty() && title == "Saved entries" ->
+                        "Save a capture and it lands here."
+                    else -> "Try a different search."
+                }
+            )
+        }
+        return
+    }
+    shownLikes.forEach { item ->
+        item(
+            key = "v-l|${item.kind}|${item.name}",
+            span = { GridItemSpan(maxLineSpan) },
+            contentType = "member"
+        ) {
+            V2LikedRow(item = item, onClick = { onOpenLiked(item) }, onMore = { onLikedMore(item) })
+        }
+    }
+    v2EntryItems(
+        entries = shownEntries,
+        fullSpan = false,
+        selectionMode = selectionMode,
+        selectedEntryIds = selectedEntryIds,
+        onEntryLongClick = onEntryLongClick,
+        onEntryClick = onEntryClick
+    )
+}
+
+/** The collection-detail action strip: the "+ Add" pill + the kebab.
+ *  v3xx43 — the name/count block is GONE: the pinned hero already shows the
+ *  collection's name and item count, so printing them again here duplicated
+ *  the page title on every shelf ("Want to read" etc.). */
+@Composable
+private fun V2DetailHeader(
+    onAdd: () -> Unit,
+    onRename: () -> Unit,
+    onDelete: () -> Unit
+) {
+    var moreOpen by remember { mutableStateOf(false) }
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.End,
+        modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp)
+    ) {
+        // v3xx — the Add action is a LARGER labeled pill ("+ Add") — the
+        // style that will expand app-wide; the ⋮ sits in a slightly bigger
+        // circular button next to it (still an ANCHORED dropdown below).
+        Surface(
+            onClick = onAdd,
+            shape = RoundedCornerShape(50),
+            color = settingsRoseAccent().copy(alpha = 0.13f),
+            modifier = Modifier.height(46.dp)
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                modifier = Modifier.padding(horizontal = 20.dp)
+            ) {
+                CurioIcon(
+                    name = CurioIcons.Add,
+                    contentDescription = "Add saved captures",
+                    tint = settingsAccentInk(),
+                    size = 22.dp
+                )
+                Text(
+                    text = "Add",
+                    style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.ExtraBold),
+                    color = settingsAccentInk(),
+                    maxLines = 1
+                )
+            }
+        }
+        Spacer(Modifier.width(8.dp))
+        // v3xx — the collection ⋮ is an ANCHORED dropdown (Rename / Add
+        // captures / Delete) right under the dots — no center-screen overlay.
+        Box {
+            Surface(
+                onClick = { moreOpen = true },
+                shape = RoundedCornerShape(50),
+                color = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.75f),
+                modifier = Modifier.size(40.dp)
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    CurioIcon(
+                        name = CurioIcons.MoreVert,
+                        contentDescription = "Rename, add or delete collection",
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        size = 20.dp
+                    )
+                }
+            }
+            DropdownMenu(
+                expanded = moreOpen,
+                onDismissRequest = { moreOpen = false }
+            ) {
+                DropdownMenuItem(
+                    text = { Text("Rename", fontWeight = FontWeight.SemiBold) },
+                    leadingIcon = {
+                        CurioIcon(name = CurioIcons.Edit, contentDescription = null, tint = MaterialTheme.colorScheme.onSurface, size = 17.dp)
+                    },
+                    onClick = { moreOpen = false; onRename() }
+                )
+                DropdownMenuItem(
+                    text = { Text("Add captures", fontWeight = FontWeight.SemiBold) },
+                    leadingIcon = {
+                        CurioIcon(name = CurioIcons.Add, contentDescription = null, tint = MaterialTheme.colorScheme.onSurface, size = 17.dp)
+                    },
+                    onClick = { moreOpen = false; onAdd() }
+                )
+                DropdownMenuItem(
+                    text = { Text("Delete collection", color = MaterialTheme.colorScheme.error, fontWeight = FontWeight.SemiBold) },
+                    leadingIcon = {
+                        CurioIcon(name = CurioIcons.Delete, contentDescription = null, tint = MaterialTheme.colorScheme.error, size = 17.dp)
+                    },
+                    onClick = { moreOpen = false; onDelete() }
+                )
+            }
+        }
+    }
+}
+
+// ────────────────────────────────────────────────────────────────────────
+// Sheets
+// ────────────────────────────────────────────────────────────────────────
+
+/** New-collection / rename sheet — name field + Create/Rename, plus the
+ *  "From a moodboard…" list when creating. */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun V2CollectionNameSheet(
+    initialName: String,
+    initialTone: Int,
+    initialArt: Int,
+    initialIcon: String?,
+    moodboards: List<CurioEntry>,
+    showMoodboards: Boolean,
+    title: String,
+    confirmLabel: String,
+    onConfirm: (name: String, tone: Int, art: Int, icon: String?) -> Unit,
+    onMoodboard: (CurioEntry) -> Unit,
+    onDismiss: () -> Unit
+) {
+    var name by rememberSaveable(initialName) { mutableStateOf(initialName) }
+    // v3xx — custom card style (tone / art / icon): -1 / "" = Auto (the
+    // card cycles the palette); tap a selected option again to reset it.
+    var tone by rememberSaveable(initialTone) { mutableStateOf(initialTone) }
+    var art by rememberSaveable(initialArt) { mutableStateOf(initialArt) }
+    var icon by rememberSaveable(initialIcon ?: "") { mutableStateOf(initialIcon ?: "") }
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    ModalBottomSheet(
+        sheetMaxWidth = curioSheetMaxWidth(),
+        onDismissRequest = onDismiss,
+        sheetState = sheetState,
+        containerColor = curioSheetContainerColor(MaterialTheme.colorScheme.surface),
+        shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp)
+    ) {
+        CurioGlassWindowBlur()
+        Column(
+            verticalArrangement = Arrangement.spacedBy(14.dp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 20.dp)
+                .padding(bottom = 24.dp)
+        ) {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.ExtraBold),
+                color = MaterialTheme.colorScheme.onSurface
+            )
+            OutlinedTextField(
+                value = name,
+                onValueChange = { name = it },
+                singleLine = true,
+                label = { Text("Name") },
+                modifier = Modifier.fillMaxWidth()
+            )
+
+            // ── Card style — tone swatches, art previews, icon chips. All
+            // optional (left on Auto the card cycles the palette so every
+            // collection still looks hand-picked); tap again to reset.
+            Spacer(Modifier.height(2.dp))
+            Text(
+                text = "Card style",
+                style = MaterialTheme.typography.labelSmall.copy(
+                    fontWeight = FontWeight.ExtraBold,
+                    letterSpacing = 0.6.sp
+                ),
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Text(
+                text = "Pick a tone, art and icon — tap one again to go back to Auto.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f)
+            )
+
+            // Tone swatches.
+            LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                item(key = "style-t-auto") {
+                    StyleAutoChip(selected = tone < 0) { tone = -1 }
+                }
+                itemsIndexed(userShelfTones) { i, t ->
+                    val selected = tone == i
+                    val dark = isCurioDarkTheme()
+                    Box(
+                        modifier = Modifier
+                            .size(42.dp)
+                            .clip(RoundedCornerShape(21.dp))
+                            .background(if (dark) Color(t.dark) else Color(t.light))
+                            .then(
+                                if (selected)
+                                    Modifier.border(3.dp, settingsRoseAccent(), RoundedCornerShape(21.dp))
+                                else Modifier
+                            )
+                            .clickable { tone = if (selected) -1 else i },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        if (selected) {
+                            CurioIcon(
+                                name = CurioIcons.Check,
+                                contentDescription = null,
+                                tint = if (dark) Color(0xFFEAF3EC) else Color.White,
+                                size = 18.dp
+                            )
+                        }
+                    }
+                }
+            }
+
+            // Art previews (the drawn scene on its tone fill, exactly like
+            // the card wears it).
+            LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                item(key = "style-a-auto") {
+                    StyleAutoChip(selected = art < 0) { art = -1 }
+                }
+                itemsIndexed(userShelfArts) { i, a ->
+                    val selected = art == i
+                    val dark = isCurioDarkTheme()
+                    val t = userShelfTones[i % userShelfTones.size]
+                    Box(
+                        modifier = Modifier
+                            .size(width = 52.dp, height = 60.dp)
+                            .clip(RoundedCornerShape(14.dp))
+                            .background(if (dark) Color(t.dark) else Color(t.light))
+                            .then(
+                                if (selected)
+                                    Modifier.border(3.dp, settingsRoseAccent(), RoundedCornerShape(14.dp))
+                                else Modifier
+                            )
+                            .clickable { art = if (selected) -1 else i }
+                    ) {
+                        V2ShelfArt(
+                            art = a,
+                            dark = dark,
+                            modifier = Modifier.fillMaxSize().alpha(0.6f)
+                        )
+                        if (selected) {
+                            Box(
+                                modifier = Modifier
+                                    .align(Alignment.TopEnd)
+                                    .padding(4.dp)
+                                    .size(18.dp)
+                                    .clip(RoundedCornerShape(9.dp))
+                                    .background(settingsRoseAccent()),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                CurioIcon(
+                                    name = CurioIcons.Check,
+                                    contentDescription = null,
+                                    tint = settingsReadableInk(settingsRoseAccent()),
+                                    size = 12.dp
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Icon chips.
+            LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                item(key = "style-i-auto") {
+                    StyleAutoChip(selected = icon.isBlank()) { icon = "" }
+                }
+                itemsIndexed(collectionIconOptions) { _, glyph ->
+                    val selected = icon == glyph
+                    Box(
+                        modifier = Modifier
+                            .size(44.dp)
+                            .clip(RoundedCornerShape(14.dp))
+                            .background(
+                                if (selected) settingsRoseAccent().copy(alpha = 0.16f)
+                                else MaterialTheme.colorScheme.surfaceContainerHigh
+                            )
+                            .then(
+                                if (selected)
+                                    Modifier.border(2.dp, settingsRoseAccent(), RoundedCornerShape(14.dp))
+                                else Modifier
+                            )
+                            .clickable { icon = if (selected) "" else glyph },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        CurioIcon(
+                            name = glyph,
+                            contentDescription = null,
+                            tint = if (selected) settingsRoseAccent()
+                            else MaterialTheme.colorScheme.onSurfaceVariant,
+                            size = 21.dp
+                        )
+                    }
+                }
+            }
+
+            Surface(
+                onClick = {
+                    onConfirm(name.trim().ifBlank { "Collection" }, tone, art, icon.ifBlank { null })
+                },
+                shape = RoundedCornerShape(50),
+                color = settingsRoseAccent(),
+                modifier = Modifier.fillMaxWidth().height(46.dp)
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Text(
+                        text = confirmLabel,
+                        style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.ExtraBold),
+                        color = settingsReadableInk(settingsRoseAccent())
+                    )
+                }
+            }
+            if (showMoodboards && moodboards.isNotEmpty()) {
+                Spacer(Modifier.height(2.dp))
+                Text(
+                    text = "From a moodboard…",
+                    style = MaterialTheme.typography.labelSmall.copy(
+                        fontWeight = FontWeight.ExtraBold,
+                        letterSpacing = 0.6.sp
+                    ),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                moodboards.forEach { mb ->
+                    Surface(
+                        onClick = { onMoodboard(mb) },
+                        shape = RoundedCornerShape(16.dp),
+                        color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(10.dp),
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp)
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(34.dp)
+                                    .clip(RoundedCornerShape(9.dp))
+                                    .background(settingsRoseAccent().copy(alpha = 0.14f)),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                CurioIcon(
+                                    name = CurioIcons.Image,
+                                    contentDescription = null,
+                                    tint = settingsAccentInk(),
+                                    size = 16.dp
+                                )
+                            }
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = mb.title?.ifBlank { null } ?: mb.topic.name,
+                                    style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
+                                    color = MaterialTheme.colorScheme.onSurface,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                                Text(
+                                    text = "Moodboard · ${mb.topic.name}",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
+                            CurioIcon(
+                                name = CurioIcons.ChevronRight,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                                size = 16.dp
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+/** The leading "Auto" chip in each style-picker row — the collection card
+ *  cycles the tone/art/icon palette on its own when Auto is selected. */
+@Composable
+private fun StyleAutoChip(
+    selected: Boolean,
+    onClick: () -> Unit
+) {
+    Box(
+        modifier = Modifier
+            .height(44.dp)
+            .clip(RoundedCornerShape(14.dp))
+            .background(
+                if (selected) settingsRoseAccent().copy(alpha = 0.16f)
+                else MaterialTheme.colorScheme.surfaceContainerHigh
+            )
+            .then(
+                if (selected)
+                    Modifier.border(2.dp, settingsRoseAccent(), RoundedCornerShape(14.dp))
+                else Modifier
+            )
+            .clickable(onClick = onClick)
+            .padding(horizontal = 14.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Text(
+            text = "Auto",
+            style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
+            color = if (selected) settingsRoseAccent()
+            else MaterialTheme.colorScheme.onSurfaceVariant
+        )
+    }
+}
+
+/** v3xx33 — the "Curiying now" / "Want to read" shelf toggles for a liked
+ *  item (shown in the liked-item sheet — the Cabinet half of the toggle,
+ *  the reveal bottom sheets are the other half). */
+@Composable
+private fun V2ShelfToggleChips(
+    context: Context,
+    topicName: String,
+    categoryId: CategoryId,
+    modifier: Modifier = Modifier
+) {
+    val haptics = LocalHapticFeedback.current
+    val collections = AppPreferences.collectionsState
+    fun inShelf(id: String): Boolean = collections.firstOrNull { it.id == id }
+        ?.members?.any {
+            it.kind == CurioCollectionMember.MemberKind.TOPIC &&
+                it.categoryName == categoryId.name && it.refName == topicName
+        } == true
+    val accent = settingsRoseAccent()
+    val onSurface = MaterialTheme.colorScheme.onSurface
+    val surface = MaterialTheme.colorScheme.surfaceContainerHigh
+    @Composable fun chip(id: String, label: String, icon: String) {
+        val active = inShelf(id)
+        Surface(
+            onClick = {
+                haptics.performHapticFeedback(HapticFeedbackType.Confirm)
+                AppPreferences.toggleShelfTopic(context, id, categoryId, topicName)
+            },
+            shape = RoundedCornerShape(50),
+            color = if (active) accent.copy(alpha = 0.16f) else surface.copy(alpha = 0.7f)
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)
+            ) {
+                CurioIcon(
+                    name = icon,
+                    contentDescription = null,
+                    tint = if (active) accent else onSurface,
+                    size = 15.dp
+                )
+                Text(
+                    label,
+                    style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
+                    color = if (active) accent else onSurface
+                )
+            }
+        }
+    }
+    Row(
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        modifier = modifier.fillMaxWidth()
+    ) {
+        chip("shelf:currently-reading", "Curiying now", CurioIcons.PlayCircle)
+        chip("shelf:want-to-read", "Want to read", CurioIcons.Bookmark)
+    }
+}
+
+/** v3xx — the liked-item COVER SOURCE sheet: books / albums / series each
+ *  have two art providers; if the current cover isn't right, tapping the
+ *  other one re-resolves, persists, and re-downloads the bytes ("if you
+ *  didn't like that one, show the other"). Images stay in the cover cache. */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun V2CoverSourceSheet(
+    item: V2Liked,
+    onDismiss: () -> Unit
+) {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val kind = CabinetCoverCache.CoverKind.valueOf(item.kind.name)
+    val labels = when (kind) {
+        CabinetCoverCache.CoverKind.BOOK -> listOf("iTunes Search", "Open Library")
+        CabinetCoverCache.CoverKind.ALBUM -> listOf("iTunes", "MusicBrainz")
+        CabinetCoverCache.CoverKind.SERIES -> listOf("TVMaze", "iTunes")
+    }
+    val title = when (item.kind) {
+        V2Kind.BOOK -> "Book cover"
+        V2Kind.ALBUM -> "Album artwork"
+        V2Kind.SERIES -> "Series poster"
+    }
+    var busy by remember { mutableStateOf(false) }
+    ModalBottomSheet(
+        sheetMaxWidth = curioSheetMaxWidth(),
+        onDismissRequest = onDismiss,
+        sheetState = sheetState,
+        containerColor = curioSheetContainerColor(MaterialTheme.colorScheme.surface),
+        shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp)
+    ) {
+        CurioGlassWindowBlur()
+        Column(
+            verticalArrangement = Arrangement.spacedBy(6.dp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 20.dp)
+                .padding(bottom = 26.dp)
+        ) {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.ExtraBold),
+                color = MaterialTheme.colorScheme.onSurface
+            )
+            Text(
+                text = item.name,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis
+            )
+            Spacer(Modifier.height(10.dp))
+            // v3xx33 — the Cabinet shelf toggles (Curiying now / Want to
+            // read), live from the liked-item sheet.
+            V2ShelfToggleChips(
+                context = context,
+                topicName = item.name,
+                categoryId = item.topic?.categoryId ?: item.kind.categoryId()
+            )
+            Spacer(Modifier.height(10.dp))
+            Text(
+                text = "Cover source",
+                style = MaterialTheme.typography.labelSmall.copy(
+                    fontWeight = FontWeight.ExtraBold,
+                    letterSpacing = 0.6.sp
+                ),
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            labels.forEachIndexed { index, label ->
+                Surface(
+                    onClick = {
+                        if (busy) return@Surface
+                        busy = true
+                        scope.launch {
+                            val url = CabinetCoverCache.resolveWithProvider(
+                                context,
+                                kind,
+                                item.name,
+                                item.topic?.byline,
+                                item.topic?.imageUrl,
+                                index
+                            )
+                            if (!url.isNullOrBlank()) {
+                                when (kind) {
+                                    CabinetCoverCache.CoverKind.BOOK ->
+                                        AppPreferences.setBookCoverUrl(context, item.name, url)
+                                    else -> AppPreferences.setSheetArtUrl(
+                                        context,
+                                        "${kind.stateKey}|${item.name}",
+                                        url
+                                    )
+                                }
+                                CabinetCoverCache.ensureLocalCover(
+                                    context,
+                                    kind,
+                                    item.name,
+                                    item.topic?.byline,
+                                    item.topic?.imageUrl,
+                                    redownload = true
+                                )
+                            }
+                            busy = false
+                            onDismiss()
+                        }
+                    },
+                    shape = RoundedCornerShape(16.dp),
+                    color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(11.dp),
+                        modifier = Modifier.padding(horizontal = 13.dp, vertical = 12.dp)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(30.dp)
+                                .clip(RoundedCornerShape(9.dp))
+                                .background(settingsRoseAccent().copy(alpha = 0.13f)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            CurioIcon(
+                                name = when (index) {
+                                    0 -> CurioIcons.PhotoLibrary
+                                    1 -> CurioIcons.Shuffle
+                                    else -> CurioIcons.AutoAwesome
+                                },
+                                contentDescription = null,
+                                tint = settingsAccentInk(),
+                                size = 16.dp
+                            )
+                        }
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = label,
+                                style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
+                                color = MaterialTheme.colorScheme.onSurface,
+                                maxLines = 1
+                            )
+                            Text(
+                                text = if (index == 0) "First choice — usually matches best"
+                                else "Alternate source — try this one if the cover is off",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                maxLines = 2
+                            )
+                        }
+                        if (busy) {
+                            CircularProgressIndicator(
+                                strokeWidth = 2.dp,
+                                modifier = Modifier.size(16.dp)
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+// ── Add-to-shelf model (v3xx34) ────────────────────────────────────────
+
+/** What the add sheet targets: a real collection (topic + capture members)
+ *  or the Favorites virtual shelf (favorites mode — topics only). */
+private sealed interface AddTarget {
+    data class Collection(val collection: CurioCollection) : AddTarget
+    data object Favorites : AddTarget
+}
+
+/** The add-sheet's lightweight saved-capture row — id + display text +
+ *  format glyph. Projected ONCE in the parent so the picker never carries
+ *  full [CurioEntry] objects (their capture payloads are what made the old
+ *  sheet lag on big archives). */
+private data class AddOption(
+    val id: String,
+    val name: String,
+    val subtitle: String,
+    val glyph: String
+)
+
+/** A liked item as a collection TOPIC member. */
+private fun likedToMember(liked: V2Liked): CurioCollectionMember =
+    CurioCollectionMember(
+        kind = CurioCollectionMember.MemberKind.TOPIC,
+        categoryName = liked.kind.categoryId().name,
+        refName = liked.name
+    )
+
+/** Whether a liked item sits in the favorites sets right now. */
+private fun isLikedFavorite(liked: V2Liked, context: Context): Boolean = when (liked.kind) {
+    V2Kind.BOOK -> AppPreferences.bookFavoritesState.contains(liked.name)
+    V2Kind.SERIES -> AppPreferences.seriesFavoritesState.contains(liked.name)
+    V2Kind.ALBUM -> AppPreferences.albumFavTracksState.containsKey(liked.name)
+}
+
+/** Save / un-save a liked item (favorites-mode add). Albums save their
+ *  first authored track — the reveal hearts per-track, so this keeps the
+ *  album inside the favorites sets the same way. */
+private fun toggleLikedFavorite(liked: V2Liked, context: Context) {
+    when (liked.kind) {
+        V2Kind.BOOK -> AppPreferences.toggleBookFavorite(context, liked.name)
+        V2Kind.SERIES -> AppPreferences.toggleSeriesFavorite(context, liked.name)
+        V2Kind.ALBUM -> {
+            val track = liked.topic?.tracks?.firstOrNull()?.title ?: liked.name
+            AppPreferences.toggleAlbumFavoriteTrack(context, liked.name, track)
+        }
+    }
+}
+
+/** With no query the saved-capture list renders at most this many rows —
+ *  search finds the rest. Keeps opening the picker instant on big archives. */
+private const val ADD_OPTION_CAP = 100
+
+/** v3xx34 — the redesigned add sheet: a search field over topics
+ *  (favorites + saved captures + one catalog fallback), a favorites
+ *  quick-pick list, and the saved-captures multi-pick. [target] decides
+ *  the mode: [AddTarget.Collection] adds topic/entry members;
+ *  [AddTarget.Favorites] saves / un-saves topics. */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun V2AddToShelfSheet(
+    target: AddTarget,
+    likes: List<V2Liked>,
+    addOptions: List<AddOption>,
+    onAddEntries: (List<String>) -> Unit,
+    onToggleTopic: (V2Liked) -> Unit,
+    onDismiss: () -> Unit
+) {
+    val context = LocalContext.current
+    val haptics = LocalHapticFeedback.current
+    var query by rememberSaveable { mutableStateOf("") }
+    var picked by rememberSaveable { mutableStateOf<Set<String>>(emptySet()) }
+    val isFavorites = target is AddTarget.Favorites
+    val collection = (target as? AddTarget.Collection)?.collection
+
+    val existingTopicKeys = remember(collection) {
+        collection?.members?.filter { it.kind == CurioCollectionMember.MemberKind.TOPIC }
+            ?.map { "${it.categoryName}|${it.refName}" }?.toSet() ?: emptySet()
+    }
+    val existingEntryIds = remember(collection) {
+        collection?.members?.filter { it.kind == CurioCollectionMember.MemberKind.ENTRY }
+            ?.map { it.refName }?.toSet() ?: emptySet()
+    }
+
+    val q = query.trim()
+    fun shown(text: String): Boolean = q.isEmpty() || text.contains(q, ignoreCase = true)
+
+    // Favorite quick-pick pool — liked books/series/albums, search-filtered.
+    val shownLikes = remember(q, likes) {
+        likes.filter { shown(it.name) || it.topic?.byline?.let { b -> shown(b) } == true }
+    }
+    // Saved-capture pool — the lightweight projection; already-added hidden.
+    val availableOptions = remember(q, addOptions, existingEntryIds) {
+        addOptions.filterNot { it.id in existingEntryIds }
+            .filter { shown(it.name) || shown(it.subtitle) }
+    }
+    // Catalog fallback — one best topic match when the pools come up empty
+    // (cached lanes only, never a full catalog load — stays O(1) per
+    // keystroke).
+    val catalogHit = remember(q, shownLikes, availableOptions) {
+        if (q.length >= 2 && shownLikes.isEmpty() && availableOptions.isEmpty()) {
+            TopicCatalog.findByName(q)?.let { V2Liked(it.name, topicKind(it), it) }
+        } else null
+    }
+    // Lag guard: cap the rendered capture list when idle; search finds more.
+    val cappedOptions = if (q.isEmpty() && availableOptions.size > ADD_OPTION_CAP)
+        availableOptions.take(ADD_OPTION_CAP) else availableOptions
+
+    fun inTarget(liked: V2Liked): Boolean =
+        if (isFavorites) isLikedFavorite(liked, context)
+        else "${liked.kind.categoryId().name}|${liked.name}" in existingTopicKeys
+
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    ModalBottomSheet(
+        sheetMaxWidth = curioSheetMaxWidth(),
+        onDismissRequest = onDismiss,
+        sheetState = sheetState,
+        containerColor = curioSheetContainerColor(MaterialTheme.colorScheme.surface),
+        shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp)
+    ) {
+        CurioGlassWindowBlur()
+        LazyColumn(
+            verticalArrangement = Arrangement.spacedBy(2.dp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .heightIn(max = 620.dp)
+                .padding(horizontal = 20.dp)
+                .padding(bottom = 26.dp)
+        ) {
+            item(key = "title") {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.fillMaxWidth().padding(top = 2.dp, bottom = 6.dp)
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = if (isFavorites) "Add to Favorites"
+                            else "Add to ${collection?.name ?: ""}",
+                            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.ExtraBold),
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Text(
+                            text = if (isFavorites) "Search topics to save them here"
+                            else "Search topics, or pick from favorites & saved captures",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    if (!isFavorites && picked.isNotEmpty()) {
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(50))
+                                .background(settingsRoseAccent().copy(alpha = 0.13f))
+                                .padding(horizontal = 10.dp, vertical = 5.dp)
+                        ) {
+                            Text(
+                                text = "${picked.size} picked",
+                                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.ExtraBold),
+                                color = settingsAccentInk()
+                            )
+                        }
+                    }
+                }
+            }
+
+            item(key = "search") {
+                AddSearchField(
+                    query = query,
+                    onQueryChange = { query = it },
+                    placeholder = if (isFavorites) "Search topics to add…" else "Search topics or captures…"
+                )
+            }
+
+            if (shownLikes.isNotEmpty()) {
+                item(key = "likes-label") {
+                    AddSectionLabel(if (isFavorites) "Your favorites — tap to remove" else "From favorites")
+                }
+                items(shownLikes.size, key = { "lk-$it" }) { index ->
+                    val liked = shownLikes[index]
+                    AddTopicPickRow(
+                        liked = liked,
+                        added = inTarget(liked),
+                        favoritesMode = isFavorites,
+                        onClick = {
+                            haptics.performHapticFeedback(HapticFeedbackType.Confirm)
+                            onToggleTopic(liked)
+                        }
+                    )
+                }
+            }
+
+            if (!isFavorites && availableOptions.isNotEmpty()) {
+                item(key = "entries-label") {
+                    AddSectionLabel("Saved captures")
+                }
+                items(cappedOptions.size, key = { "en-${cappedOptions[it].id}" }) { index ->
+                    val opt = cappedOptions[index]
+                    AddEntryPickRow(
+                        option = opt,
+                        checked = opt.id in picked,
+                        onCheckedChange = { on ->
+                            picked = if (on) picked + opt.id else picked - opt.id
+                        }
+                    )
+                }
+                if (cappedOptions.size < availableOptions.size) {
+                    item(key = "entries-more") {
+                        Text(
+                            text = "…and ${availableOptions.size - cappedOptions.size} more — search to find them",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(start = 53.dp, top = 4.dp, bottom = 4.dp)
+                        )
+                    }
+                }
+            }
+
+            if (catalogHit != null) {
+                item(key = "catalog-label") {
+                    AddSectionLabel("Search results")
+                }
+                item(key = "catalog-hit") {
+                    AddTopicPickRow(
+                        liked = catalogHit,
+                        added = inTarget(catalogHit),
+                        favoritesMode = isFavorites,
+                        onClick = {
+                            haptics.performHapticFeedback(HapticFeedbackType.Confirm)
+                            onToggleTopic(catalogHit)
+                        }
+                    )
+                }
+            }
+
+            if (shownLikes.isEmpty() && availableOptions.isEmpty() && catalogHit == null) {
+                item(key = "empty") {
+                    Text(
+                        text = "Nothing matches — try a different search.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(vertical = 14.dp)
+                    )
+                }
+            }
+
+            if (!isFavorites && picked.isNotEmpty()) {
+                item(key = "add") {
+                    Surface(
+                        onClick = { onAddEntries(picked.toList()) },
+                        shape = RoundedCornerShape(50),
+                        color = settingsRoseAccent(),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(46.dp)
+                            .padding(top = 6.dp)
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Text(
+                                text = if (picked.size == 1) "Add 1 capture" else "Add ${picked.size} captures",
+                                style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.ExtraBold),
+                                color = settingsReadableInk(settingsRoseAccent())
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+/** The add sheet's frosted search field (the hub's frosted-tile language). */
+@Composable
+private fun AddSearchField(
+    query: String,
+    onQueryChange: (String) -> Unit,
+    placeholder: String
+) {
+    val dark = isCurioDarkTheme()
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(16.dp))
+            .background(if (dark) Color.White.copy(alpha = 0.08f) else Color(0xFFF2E8DC))
+            .padding(horizontal = 14.dp, vertical = 11.dp)
+    ) {
+        CurioIcon(
+            name = CurioIcons.Search,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            size = 18.dp
+        )
+        Spacer(Modifier.width(9.dp))
+        Box(modifier = Modifier.weight(1f)) {
+            if (query.isEmpty()) {
+                Text(
+                    text = placeholder,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                    maxLines = 1
+                )
+            }
+            BasicTextField(
+                value = query,
+                onValueChange = onQueryChange,
+                singleLine = true,
+                textStyle = MaterialTheme.typography.bodyMedium.copy(color = MaterialTheme.colorScheme.onSurface),
+                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                modifier = Modifier.fillMaxWidth()
+            )
+        }
+        if (query.isNotEmpty()) {
+            Box(
+                modifier = Modifier
+                    .size(24.dp)
+                    .clip(CircleShape)
+                    .clickable { onQueryChange("") }
+            ) {
+                CurioIcon(
+                    name = CurioIcons.Close,
+                    contentDescription = "Clear search",
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    size = 16.dp,
+                    modifier = Modifier.align(Alignment.Center)
+                )
+            }
+        }
+    }
+}
+
+/** A small settings-style section label inside the add sheet. */
+@Composable
+private fun AddSectionLabel(label: String) {
+    Text(
+        text = label,
+        style = MaterialTheme.typography.labelSmall.copy(
+            fontWeight = FontWeight.ExtraBold,
+            letterSpacing = 0.5.sp
+        ),
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier.padding(top = 12.dp, bottom = 4.dp, start = 2.dp)
+    )
+}
+
+/** One liked-item pick row: kind tile + name/byline + the target state
+ *  (check = already in the collection; bookmark = already in favorites). */
+@Composable
+private fun AddTopicPickRow(
+    liked: V2Liked,
+    added: Boolean,
+    favoritesMode: Boolean,
+    onClick: () -> Unit
+) {
+    val accent = settingsRoseAccent()
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(14.dp))
+            .clickable(onClick = onClick)
+            .padding(vertical = 8.dp)
+    ) {
+        Box(
+            modifier = Modifier
+                .size(40.dp)
+                .clip(RoundedCornerShape(12.dp))
+                .background(accent.copy(alpha = 0.12f)),
+            contentAlignment = Alignment.Center
+        ) {
+            CurioIcon(
+                name = when (liked.kind) {
+                    V2Kind.BOOK -> CurioIcons.Books
+                    V2Kind.ALBUM -> CurioIcons.Album
+                    V2Kind.SERIES -> CurioIcons.Movie
+                },
+                contentDescription = null,
+                tint = accent,
+                size = 20.dp
+            )
+        }
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = liked.name,
+                style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Bold),
+                color = MaterialTheme.colorScheme.onSurface,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+            Text(
+                text = liked.topic?.byline?.ifBlank { null } ?: when (liked.kind) {
+                    V2Kind.BOOK -> "Book"
+                    V2Kind.ALBUM -> "Album"
+                    V2Kind.SERIES -> "Series"
+                },
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
+        // The state glyph: collection mode = a check when already added;
+        // favorites mode = a filled bookmark when already saved.
+        CurioIcon(
+            name = if (favoritesMode) {
+                if (added) CurioIcons.Bookmark else CurioIcons.BookmarkBorder
+            } else {
+                if (added) CurioIcons.Check else CurioIcons.Add
+            },
+            contentDescription = null,
+            tint = if (added) accent else MaterialTheme.colorScheme.onSurfaceVariant,
+            size = 20.dp
+        )
+    }
+}
+
+/** One saved-capture pick row: format tile + name/subtitle + checkbox. */
+@Composable
+private fun AddEntryPickRow(
+    option: AddOption,
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit
+) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(14.dp))
+            .clickable { onCheckedChange(!checked) }
+            .padding(vertical = 8.dp)
+    ) {
+        Box(
+            modifier = Modifier
+                .size(40.dp)
+                .clip(RoundedCornerShape(12.dp))
+                .background(MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.55f)),
+            contentAlignment = Alignment.Center
+        ) {
+            CurioIcon(
+                name = option.glyph,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                size = 20.dp
+            )
+        }
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = option.name,
+                style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Bold),
+                color = MaterialTheme.colorScheme.onSurface,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+            Text(
+                text = option.subtitle,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
+        Checkbox(checked = checked, onCheckedChange = onCheckedChange)
+    }
+}
+
+/** v3xx43 — the CUPBOARD's Add sheet: search the CATALOG (books / albums /
+ *  series) and pin the picked media onto the wall. The wall IS the liked-media
+ *  set, so pinning turns the item's cover heart on, and tapping something
+ *  that is already on the wall takes it back off. With an empty query the
+ *  sheet lists what is on the wall, so it doubles as the wall's manager. */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun V2CupboardAddSheet(
+    likes: List<V2Liked>,
+    onToggle: (V2Liked) -> Unit,
+    onDismiss: () -> Unit
+) {
+    var query by rememberSaveable { mutableStateOf("") }
+    val q = query.trim()
+    val onWall = remember(likes) { likes.map { "${it.kind.name}|${it.name}" }.toSet() }
+    // Catalog hits come straight from the warm lane pools (sync — no
+    // coroutine, no disk), so typing filters instantly.
+    val results: List<V2Liked> = remember(q, likes) {
+        if (q.isEmpty()) {
+            likes.sortedWith(compareBy({ it.kind.name }, { it.name.lowercase() }))
+        } else {
+            listOf(CategoryId.BOOKS, CategoryId.ALBUMS, CategoryId.SERIES)
+                .flatMap { lane ->
+                    TopicJsonLoader.cached(lane).orEmpty()
+                        .filter { t ->
+                            t.name.contains(q, ignoreCase = true) ||
+                                t.byline?.contains(q, ignoreCase = true) == true
+                        }
+                        .map { V2Liked(it.name, topicKind(it), it) }
+                }
+                .distinctBy { "${it.kind.name}|${it.name}" }
+                .sortedBy { it.name.lowercase() }
+                .take(40)
+        }
+    }
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    ModalBottomSheet(
+        sheetMaxWidth = curioSheetMaxWidth(),
+        onDismissRequest = onDismiss,
+        sheetState = sheetState,
+        containerColor = curioSheetContainerColor(MaterialTheme.colorScheme.surface),
+        shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp)
+    ) {
+        CurioGlassWindowBlur()
+        LazyColumn(
+            verticalArrangement = Arrangement.spacedBy(2.dp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .heightIn(max = 620.dp)
+                .padding(horizontal = 20.dp)
+                .padding(bottom = 26.dp)
+        ) {
+            item(key = "cp-title") {
+                Text(
+                    text = "Add to the Cupboard",
+                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.ExtraBold),
+                    color = MaterialTheme.colorScheme.onSurface,
+                    modifier = Modifier.padding(top = 2.dp, bottom = 10.dp)
+                )
+            }
+            item(key = "cp-search") {
+                AddSearchField(
+                    query = query,
+                    onQueryChange = { query = it },
+                    placeholder = "Search books, albums & series…"
+                )
+            }
+            item(key = "cp-label") {
+                AddSectionLabel(if (q.isEmpty()) "On your wall" else "Results")
+            }
+            if (results.isEmpty()) {
+                item(key = "cp-empty") {
+                    Text(
+                        text = if (q.isEmpty()) "Nothing on the wall yet."
+                        else "Nothing matches — try a different search.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(vertical = 14.dp)
+                    )
+                }
+            } else {
+                items(
+                    count = results.size,
+                    key = { i -> "cp-${results[i].kind.name}-${results[i].name}" }
+                ) { index ->
+                    val liked = results[index]
+                    AddTopicPickRow(
+                        liked = liked,
+                        added = "${liked.kind.name}|${liked.name}" in onWall,
+                        favoritesMode = false,
+                        onClick = { onToggle(liked) }
+                    )
+                }
+            }
+        }
+    }
+}
+
+// ────────────────────────────────────────────────────────────────────────
+// Member / liked helpers
+// ────────────────────────────────────────────────────────────────────────
+
+private sealed interface PillTarget {
+    data class Member(val collectionId: String, val index: Int) : PillTarget
+}
+
+private fun moveMember(context: android.content.Context, c: CurioCollection, index: Int, delta: Int) {
+    val to = index + delta
+    if (to !in c.members.indices) return
+    val members = c.members.toMutableList()
+    val m = members.removeAt(index)
+    members.add(to, m)
+    AppPreferences.addOrReplaceCollection(context, c.copy(members = members))
+}
+
+private fun removeMember(context: android.content.Context, c: CurioCollection, index: Int) {
+    val members = c.members.toMutableList()
+    if (index !in members.indices) return
+    members.removeAt(index)
+    AppPreferences.addOrReplaceCollection(context, c.copy(members = members))
+}
+
+/** Resolve a collection member to a [V2Liked] (for collage art + rows). */
+private fun memberLiked(
+    m: CurioCollectionMember,
+    entriesById: Map<String, CurioEntry>
+): V2Liked? = when (m.kind) {
+    CurioCollectionMember.MemberKind.TOPIC -> {
+        val cat = m.categoryName?.let { n -> runCatching { CategoryId.valueOf(n) }.getOrNull() }
+        val t = if (cat != null) {
+            TopicJsonLoader.cached(cat)?.firstOrNull {
+                it.matchesSavedNameStrict(m.refName) || it.matchesSavedName(m.refName)
+            } ?: TopicCatalog.findByName(m.refName)
+        } else {
+            TopicCatalog.findByName(m.refName)
+        }
+        t?.let { V2Liked(it.name, topicKind(it), it) }
+    }
+    CurioCollectionMember.MemberKind.ENTRY -> {
+        val e = entriesById[m.refName]
+        e?.let { V2Liked(it.topic.name, topicKind(it.topic), it.topic) }
+    }
+}
+
+/** One liked item — books / series / albums all live by NAME (the identity
+ *  the reveal heart toggles store). The topic is resolved tolerantly; null
+ *  = the name has not resolved yet (cold start before the lane pools warm)
+ *  or no longer resolves (legacy / renamed) — the row still renders with a
+ *  plain plate and STILL opens via the kind's canonical lane. */
+private data class V2Liked(
+    val name: String,
+    val kind: V2Kind,
+    val topic: CurioTopic?
+) {
+    fun open(navController: NavController) {
+        // The reveal resolves by category (Room-backed), so the target
+        // ALWAYS opens its real page: use the resolved topic's lane when
+        // known, else the canonical lane for the kind (books → books,
+        // albums → albums, series → series — the lane the heart lives on).
+        val t = topic
+        val slug = t?.categoryId?.routeSlug ?: when (kind) {
+            V2Kind.BOOK -> CategoryId.BOOKS.routeSlug
+            V2Kind.ALBUM -> CategoryId.ALBUMS.routeSlug
+            V2Kind.SERIES -> CategoryId.SERIES.routeSlug
+        }
+        navController.navigate(
+            CurioRoutes.revealFor(slug, t?.name ?: name)
+        ) { launchSingleTop = true }
+    }
+}
+
+private enum class V2Kind { BOOK, ALBUM, SERIES }
+
+/** The canonical lane for a liked kind (the lane where the reveal hearts
+ *  live) — maps liked items to collection TOPIC members and to the
+ *  favorites sets. */
+private fun V2Kind.categoryId(): CategoryId = when (this) {
+    V2Kind.BOOK -> CategoryId.BOOKS
+    V2Kind.ALBUM -> CategoryId.ALBUMS
+    V2Kind.SERIES -> CategoryId.SERIES
+}
+
+/** Kind-aware topic resolution for liked rows. Books/series/albums are
+ *  hearted on their CANONICAL lane (BOOKS / SERIES / ALBUMS — that's where
+ *  the heart lives in the reveal sheets), so that lane is searched FIRST: a
+ *  global [TopicCatalog.findByName] walks lanes in enum order and would hand
+ *  "Animal Farm" (the book) to "Animal Farm (1954)" (the animated film)
+ *  because ANIMATED_MOVIES precedes BOOKS. The global search stays as the
+ *  fallback for legacy / renamed names — but it is CANONICAL-LANE
+ *  GUARDED: a liked book must NEVER resolve to a series, film, album or
+ *  author that merely shares its name (the "wrong entry opens" bug — the
+ *  saved book opening the wrong lane's reveal). Only a global hit that
+ *  lives on the SAME canonical lane is accepted; anything else falls
+ *  through to the canonical-lane open, which resolves by name within the
+ *  right lane at reveal time. */
+private fun findLikedTopic(kind: V2Kind, name: String): CurioTopic? {
+    val lane = when (kind) {
+        V2Kind.BOOK -> CategoryId.BOOKS
+        V2Kind.ALBUM -> CategoryId.ALBUMS
+        V2Kind.SERIES -> CategoryId.SERIES
+    }
+    TopicJsonLoader.cached(lane)?.firstOrNull {
+        it.matchesSavedNameStrict(name) || it.matchesSavedName(name)
+    }?.let { return it }
+    return TopicCatalog.findByName(name)?.takeIf { it.categoryId == lane }
+}
+
+/** Best-fitting jacket shape for a suggested topic's lane. */
+private fun topicKind(t: CurioTopic): V2Kind = when (t.categoryId) {
+    CategoryId.BOOKS, CategoryId.AUTHORS -> V2Kind.BOOK
+    CategoryId.SERIES, CategoryId.ANIME, CategoryId.MANGA, CategoryId.MANHWA,
+    CategoryId.FILMS, CategoryId.DIRECTORS, CategoryId.ANIMATED_MOVIES -> V2Kind.SERIES
+    else -> V2Kind.ALBUM
+}
+
+/** A fallback kind for an unresolvable TOPIC member (the detail row still
+ *  renders its plate + name). */
+private fun topicKindForMember(m: CurioCollectionMember): V2Kind = when (m.kind) {
+    CurioCollectionMember.MemberKind.TOPIC -> V2Kind.BOOK
+    CurioCollectionMember.MemberKind.ENTRY -> V2Kind.BOOK
+}
+
+/** The full-width liked row: contain-fit jacket art + name / byline +
+ *  category + chevron. Tap opens the reveal page (where the heart lives);
+ *  optional long-press opens a "more" pill (used in collection details). */
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun V2LikedRow(
+    item: V2Liked,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    onLongClick: (() -> Unit)? = null,
+    // v3xx33 — the row's ⋮ opens the liked-item sheet (shelf toggles +
+    // cover source), so the shelf toggles are reachable from Cabinet rows.
+    onMore: (() -> Unit)? = null
+) {
+    val context = LocalContext.current
+    val cat = item.topic?.categoryId?.let { CurioCategories.byId(it) }
+    val fallbackAccent = cat?.themedAccent() ?: settingsRoseAccent()
+    // v3xx — the row wears ITS OWN color: the dominant color extracted from
+    // its cover art (fallback = category accent while the cover is still
+    // downloading). Re-keys when the cover cache warms a file.
+    val accent = remember(item.name, item.kind, CabinetCoverCache.version.intValue) {
+        CabinetCoverCache.dominantCoverColor(
+            context,
+            CabinetCoverCache.CoverKind.valueOf(item.kind.name),
+            item.name,
+            fallbackAccent
+        )
+    }
+    Surface(
+        modifier = modifier
+            .fillMaxWidth()
+            .combinedClickable(onClick = onClick, onLongClick = onLongClick),
+        shape = RoundedCornerShape(18.dp),
+        color = androidx.compose.ui.graphics.lerp(
+            cat?.categorySurface(MaterialTheme.colorScheme.surfaceContainerHigh)
+                ?: MaterialTheme.colorScheme.surfaceContainerHigh,
+            accent,
+            if (isCurioDarkTheme()) 0.10f else 0.16f
+        )
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.padding(10.dp)
+        ) {
+            V2JacketArt(
+                item = item,
+                accent = accent,
+                modifier = Modifier
+                    .width(54.dp)
+                    .aspectRatio(if (item.kind == V2Kind.ALBUM) 1f else 0.667f)
+            )
+            Spacer(Modifier.width(12.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = item.name,
+                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                    color = MaterialTheme.colorScheme.onSurface,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                val byline = item.topic?.byline
+                if (!byline.isNullOrBlank()) {
+                    Text(
+                        text = byline,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+                Spacer(Modifier.height(5.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Box(
+                        modifier = Modifier
+                            .size(6.dp)
+                            .clip(RoundedCornerShape(50))
+                            .background(accent.copy(alpha = 0.85f))
+                    )
+                    Spacer(Modifier.width(5.dp))
+                    Text(
+                        text = when (item.kind) {
+                            V2Kind.BOOK -> "Book"
+                            V2Kind.ALBUM -> "Album"
+                            V2Kind.SERIES -> "Series"
+                        } + (cat?.let { " · ${it.displayName}" } ?: ""),
+                        style = MaterialTheme.typography.labelSmall,
+                        // The category INK (not the accent): the row wears a
+                        // category-tinted surface, so the raw accent text
+                        // blended into the same hue. categoryInk resolves the
+                        // readable deep/light twin for the active theme.
+                        color = cat?.categoryInk() ?: MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+            }
+            Spacer(Modifier.width(8.dp))
+            if (onMore != null) {
+                // v3xx — the app-wide kebab: a slightly bigger 40dp circle.
+                Box(
+                    modifier = Modifier
+                        .size(40.dp)
+                        .clip(RoundedCornerShape(50))
+                        .background(MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.75f))
+                        .clickable(onClick = onMore),
+                    contentAlignment = Alignment.Center
+                ) {
+                    CurioIcon(
+                        name = CurioIcons.MoreVert,
+                        contentDescription = "Curiying now / Want to read / cover source",
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f),
+                        size = 20.dp
+                    )
+                }
+            } else {
+                CurioIcon(
+                    name = CurioIcons.ChevronRight,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                    size = 20.dp
+                )
+            }
+        }
+    }
+}
+
+/** Contain-fit jacket art for a liked item: book = half-book jacket with a
+ *  spine + sheen, album = square, series = poster — the artwork is always
+ *  FIT (never stretched) inside its plate, exactly like the reveal pages.
+ *  Cover sources mirror the reveal: the stored/hub URL first (books), the
+ *  authored imageUrl, then the keyless resolver when the matching fetch
+ *  consent toggle is on. */
+@Composable
+private fun V2JacketArt(
+    item: V2Liked,
+    accent: Color,
+    modifier: Modifier = Modifier,
+    // v3xx — how the art fits its tile: Fit preserves the cover (letterboxed
+    // when the tile isn't its aspect), Crop fills every corner of the tile
+    // (the Everything masonry wall, so no space shows below a cover).
+    contentScale: ContentScale = ContentScale.Fit
+) {
+    val context = LocalContext.current
+    val topic = item.topic
+    // v3xx — the COVER CACHE's local file first: when the bytes are already
+    // on disk (the warmer or a sheet visit saved them) the cover loads
+    // INSTANTLY — no URL, no Coil miss, no flash of the gradient plate.
+    // Keyed on the cache version so a tile that composed BEFORE its cover
+    // downloaded re-checks the moment the warmer saves the file.
+    var cached by remember(item.name, item.kind, CabinetCoverCache.version.intValue) {
+        mutableStateOf(
+            CabinetCoverCache.localCoverFile(
+                context,
+                CabinetCoverCache.CoverKind.valueOf(item.kind.name),
+                item.name
+            )
+        )
+    }
+    val stored = if (item.kind == V2Kind.BOOK) {
+        AppPreferences.bookCoverUrlsState[item.name]?.takeIf { it.isNotBlank() }
+    } else null
+    // Albums / series: the artwork the reveal sheets ALREADY resolved and
+    // persisted (sheetArtUrlsState keyed "album|<name>" / "series|<name>") —
+    // real covers appear instantly after a sheet visit, no re-fetch.
+    val sheetArt = if (item.kind != V2Kind.BOOK) {
+        AppPreferences.sheetArtUrlsState["${item.kind.name.lowercase()}|${item.name}"]
+            ?.takeIf { it.isNotBlank() }
+    } else null
+    val authored = topic?.imageUrl?.takeIf { it.isNotBlank() }
+    val candidates = remember(item.name, topic, stored, sheetArt, authored) {
+        val list = mutableListOf<String>()
+        if (!stored.isNullOrBlank()) list.add(stored)
+        if (!sheetArt.isNullOrBlank() && sheetArt != stored) list.add(sheetArt)
+        if (!authored.isNullOrBlank() && authored != stored && authored != sheetArt) list.add(authored)
+        if (item.kind == V2Kind.BOOK) {
+            // v407 — the stored URL, the authored URL, then Open Library's
+            // bare title. iTunes is NOT added here: it is a SEARCH, not a URL,
+            // so it is resolved by the live cascade below (which now runs for
+            // books too) instead of being guessed at composition time.
+            list.add(BookCoverFetch.coverUrlFor(item.name, ""))
+        }
+        list.distinct()
+    }
+    var coverIndex by remember(item.name, candidates) { mutableIntStateOf(0) }
+    var resolved by remember(item.name) { mutableStateOf<String?>(null) }
+    var liveDone by remember(item.name) { mutableStateOf(false) }
+    // v3xx51 — the per-tile live resolve now honours the MERGED cover-fetch
+    // consent. It used to be ALWAYS armed ("the cover cache is always-on by
+    // design"), which is exactly why artwork downloaded even with every
+    // Settings fetch toggle OFF. With consent ON the behaviour is unchanged:
+    // albums / series cascade BOTH providers (iTunes then MusicBrainz /
+    // TVMaze then iTunes) and the winner is persisted to the same sheetArt
+    // store the reveal reads. With consent OFF nothing here touches the
+    // network (the tile serves only bytes already on disk).
+    val fetchConsent = AppPreferences.coverFetchEnabledState
+    LaunchedEffect(item.name, item.kind, coverIndex, liveDone, fetchConsent) {
+        if (fetchConsent && !liveDone && coverIndex >= candidates.size) {
+            val coverKind = CabinetCoverCache.CoverKind.valueOf(item.kind.name)
+            var found: String? = null
+            // v407 — BOOKS CASCADE TOO (user: "many book covers doesnt load,
+            // can u use the itune fallback for loading book covers"). They
+            // used to be excluded here — the stored URL, the authored URL and
+            // Open Library's bare title were the only shots — so a book whose
+            // three candidates all missed landed on its blank plate and was
+            // never resolved again. Every kind now walks its OWN provider
+            // cascade: books iTunes Search then Open Library, albums iTunes
+            // then MusicBrainz, series TVMaze then iTunes.
+            for (p in 0 until CabinetCoverCache.providerCount(coverKind)) {
+                val u = CabinetCoverCache.resolveWithProvider(
+                    context,
+                    coverKind,
+                    item.name,
+                    topic?.byline,
+                    authored,
+                    p
+                )
+                if (!u.isNullOrBlank()) { found = u; break }
+            }
+            resolved = found
+            if (!found.isNullOrBlank()) {
+                // The cache downloads AND verifies the bytes, and only then
+                // persists the URL — so a provider that answers with nothing
+                // usable can no longer leave a dead record behind.
+                CabinetCoverCache.ensureLocalCover(
+                    context,
+                    coverKind,
+                    item.name,
+                    topic?.byline,
+                    authored
+                )
+                if (item.kind != V2Kind.BOOK) {
+                    AppPreferences.setSheetArtUrl(
+                        context,
+                        "${coverKind.stateKey}|${item.name}",
+                        found
+                    )
+                }
+            }
+            liveDone = true
+        }
+    }
+    val local = cached?.toURI()?.toString()
+    // v3xx51 — with the cover-fetch consent OFF the URL cascade is skipped
+    // entirely (every candidate is a network fetch, including Coil's own
+    // load), so the tile shows the cached file or its plate and nothing else.
+    val url = if (fetchConsent) resolved ?: candidates.getOrNull(coverIndex) else null
+    val corner = if (item.kind == V2Kind.ALBUM) 10.dp else 8.dp
+    val plate = Brush.verticalGradient(
+        listOf(
+            androidx.compose.ui.graphics.lerp(accent, Color.White, if (isCurioDarkTheme()) 0.16f else 0.5f),
+            androidx.compose.ui.graphics.lerp(accent, Color.Black, 0.42f)
+        )
+    )
+    // v3xx35 — the accent plate is only the LOADING placeholder now: once a
+    // cover is on screen (local cache or network) the art renders straight
+    // on the page — no colored wash peeking around the fitted image (the
+    // "background behind the album" look).
+    Box(
+        modifier = modifier
+            .clip(RoundedCornerShape(corner))
+            .then(
+                if (url == null && local == null) Modifier.background(plate)
+                else Modifier
+            )
+    ) {
+        Box(Modifier.fillMaxSize().clip(RoundedCornerShape(corner))) {
+            CurioIcon(
+                name = when (item.kind) {
+                    V2Kind.BOOK -> CurioIcons.MenuBook
+                    V2Kind.ALBUM -> CurioIcons.Album
+                    V2Kind.SERIES -> CurioIcons.Movies
+                },
+                contentDescription = null,
+                tint = Color.White.copy(alpha = if (url == null && local == null) 0.7f else 0f),
+                size = 20.dp
+            )
+            // v3xx — the local cache file wins (instant, offline); network
+            // URLs only when the bytes aren't on disk yet.
+            if (local != null) {
+                AsyncImage(
+                    model = ImageRequest.Builder(context)
+                        .data(cached)
+                        .crossfade(true)
+                        .build(),
+                    contentDescription = "Cover art for ${item.name}",
+                    contentScale = contentScale,
+                    onError = {
+                        // A stale local file — drop it and fall back to the
+                        // URL cascade.
+                        runCatching { cached?.delete() }
+                        cached = null
+                    },
+                    modifier = Modifier.fillMaxSize()
+                )
+            } else if (url != null) {
+                AsyncImage(
+                    model = ImageRequest.Builder(context)
+                        .data(url)
+                        .crossfade(true)
+                        .build(),
+                    contentDescription = "Cover art for ${item.name}",
+                    contentScale = contentScale,
+                    onError = {
+                        if (coverIndex < candidates.size) coverIndex++
+                        else { resolved = null; liveDone = true }
+                    },
+                    modifier = Modifier.fillMaxSize()
+                )
+            }
+            // v3xx — PURE cover art: no fake spine strip, no gradient wash
+            // (the "overlay or background" on book covers). The art renders
+            // edge-to-edge with a whisper of rounded corners and nothing
+            // else on top.
+        }
+    }
+}

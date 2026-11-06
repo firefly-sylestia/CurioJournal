@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<paths>
+    <cache-path name="share_images" path="share/" />
+    <!-- v25 — in-app updater: downloaded release APKs live in cache/downloads/. -->
+    <cache-path name="apk_downloads" path="downloads/" />
+    <!-- v424 — journal exports (PDF / text / Markdown) handed to the share sheet. -->
+    <cache-path name="personal_exports" path="exports/" />
+</paths>

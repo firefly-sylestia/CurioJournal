@@ -1,0 +1,661 @@
+package com.curio.app.features.settings
+
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.GridItemSpan
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
+import androidx.navigation.NavController
+import com.curio.app.data.AppPreferences
+import com.curio.app.data.CategoryFamily
+import com.curio.app.data.CategoryId
+import com.curio.app.data.CurioCategories
+import com.curio.app.data.CurioCategory
+import com.curio.app.data.CurioTopic
+import com.curio.app.data.TopicIndexEntry
+import com.curio.app.data.TopicJsonLoader
+import com.curio.app.data.searchTopicIndex
+import com.curio.app.ui.adaptive.isWide
+import com.curio.app.ui.adaptive.wideContentEdgePadding
+import com.curio.app.ui.adaptive.windowWidthSizeClass
+import com.curio.app.ui.components.CurioSearchField
+import com.curio.app.ui.components.CurioVerticalScrollIndicator
+import com.curio.app.ui.components.CurioWatermarkBackdrop
+import com.curio.app.ui.components.ShareCardAspect
+import com.curio.app.ui.components.ShareCardStyle
+import com.curio.app.ui.components.signatureClassicAvailable
+import com.curio.app.ui.components.TopicShareCard
+import com.curio.app.ui.theme.CurioIcon
+import com.curio.app.ui.theme.CurioIcons
+import com.curio.app.ui.theme.categoryInk
+import com.curio.app.ui.theme.themedAccent
+import com.kyant.backdrop.backdrops.layerBackdrop
+import com.kyant.backdrop.backdrops.rememberLayerBackdrop
+
+/**
+ * v1 — the Share Hub: browse EVERY share-card design as full previews in a
+ * grid, pick a design, search + pick any topic from the catalog, then share
+ * that topic as a card in the chosen design (the TopicShareSheet experience,
+ * unbound from a specific reveal — the whole catalog is searchable here).
+ *
+ * - The design grid renders every [ShareCardStyle] (Signature twice: the
+ *   current + the restored classic designs), previewed with the picked topic
+ *   (or a sample "Curiosity" card before any topic is chosen).
+ * - The topic search filters the full topic index ([TopicJsonLoader.loadIndex])
+ *   the same way the Topic Database does (title-first ranking).
+ * - Share is enabled once a design AND a topic are picked; it exports the
+ *   full-size card through [shareComposableCard] exactly like the share sheet.
+ */
+@Composable
+fun ShareHubScreen(navController: NavController) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val gridState = rememberLazyGridState()
+    val glassBackdrop = rememberLayerBackdrop()
+    var query by rememberSaveable { mutableStateOf("") }
+    var pickedTopicId by rememberSaveable { mutableStateOf<String?>(null) }
+    var pickedDesign by rememberSaveable { mutableStateOf<Int?>(null) }
+    var aspect by rememberSaveable { mutableStateOf(ShareCardAspect.PORTRAIT) }
+    // v229d — the floating Share pill opens the full TopicShareSheet (not a
+    // one-shot export); this flag hosts it.
+    var hubShareOpen by rememberSaveable { mutableStateOf(false) }
+
+    // Full catalog index — loaded once, reused by the search below.
+    val index by produceState<List<TopicIndexEntry>?>(null) {
+        value = runCatching { TopicJsonLoader.loadIndex() }.getOrNull()
+    }
+
+    val needle = query.trim()
+    val results = remember(index, needle) {
+        // v389 — the ONE index search (data/TopicSearch.kt): the hub used to
+        // filter by substring and then sort purely alphabetically, so a weak
+        // hit could outrank the topic whose NAME matched the words. It now
+        // ranks exactly like the composer's chooser and the note page.
+        if (needle.isEmpty()) emptyList()
+        else searchTopicIndex(index.orEmpty(), needle, 40)
+    }
+
+    // v389 — the merged index carries a topic's identity and search keys, not
+    // the topic object (a warm index used to pin every topic in the heap, which
+    // is why a memory trim freed nothing). The picked topic is therefore
+    // RESOLVED: its lane pool answers immediately when it is resident, and a
+    // cold lane parses once, off the UI thread.
+    var pickedTopic by remember { mutableStateOf<CurioTopic?>(null) }
+    LaunchedEffect(index, pickedTopicId) {
+        val id = pickedTopicId
+        pickedTopic = if (id == null) null else {
+            index.orEmpty().firstOrNull { it.id == id }?.let { entry ->
+                TopicJsonLoader.topicForEntry(entry)
+            }
+        }
+    }
+
+    // Preview parameters — the picked topic, or a sample Curiosity card so the
+    // grid always renders something before a topic is chosen.
+    val wildcardCat = CurioCategories.byId(CategoryId.WILDCARD)
+    val preview = pickedTopic?.let { topic ->
+        val cat = CurioCategories.byId(topic.categoryId)
+        ShareHubPreview(
+            topicName = topic.name,
+            categoryName = cat.displayName,
+            glyph = cat.iconGlyph,
+            accent = cat.themedAccent(),
+            fact = if (cat.id == CategoryId.QUOTES) topic.name else topic.teaser,
+            family = cat.family,
+            byline = topic.byline
+        )
+    } ?: ShareHubPreview(
+        topicName = "Curiosity",
+        categoryName = wildcardCat.displayName,
+        glyph = wildcardCat.iconGlyph,
+        accent = wildcardCat.themedAccent(),
+        fact = "A little curiosity, every day.",
+        family = CategoryFamily.WILDCARD,
+        byline = ""
+    )
+
+    val sharer = AppPreferences.getDisplayName(context).ifBlank { "" }
+    val authority = remember { "${context.packageName}.fileprovider" }
+
+    val wide = windowWidthSizeClass().isWide
+    // v428 — THE GRID IS BUILT FOR THE PICKED CATEGORY. The Classic Signature is
+    // only offered where it still exists (GAMES and FILMS — see
+    // [signatureClassicAvailable]); every other lane browses the one Signature
+    // design it has, so the grid never shows a design the editor would refuse to
+    // open. The list is derived once per category (its indices are what
+    // `pickedDesign` stores, so it must not be rebuilt on every recomposition).
+    val designs = remember(preview.categoryName) {
+        hubDesigns(classicSignature = signatureClassicAvailable(preview.categoryName))
+    }
+    // Where the per-category cells begin — found by the cells themselves rather
+    // than by a hard-coded count, so the heading cannot drift when a design is
+    // added or removed above them.
+    val categorySectionStart = remember(designs) {
+        designs.indexOfFirst { it.categoryOverrideId != null }
+    }
+    val selectedDesign = pickedDesign?.takeIf { it in designs.indices }?.let { designs[it] }
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(
+                heroPageBackground(
+                    androidx.compose.ui.graphics.lerp(MaterialTheme.colorScheme.background, settingsRoseAccent(), 0.10f)
+                )
+            )
+    ) {
+        if (!wide) {
+            CurioWatermarkBackdrop(
+                activeCat = CurioCategories.byId(CategoryId.WILDCARD),
+                alphaScale = 0.45f
+            )
+        }
+        LazyVerticalGrid(
+            state = gridState,
+            columns = if (wide) GridCells.Adaptive(minSize = 170.dp) else GridCells.Fixed(2),
+            modifier = Modifier.layerBackdrop(glassBackdrop).fillMaxSize(),
+            contentPadding = PaddingValues(
+                start = wideContentEdgePadding(),
+                end = wideContentEdgePadding(),
+                // v-tablet — wide (landscape tablet): the torn hero scrolls
+                // as the grid's first row, so no fixed top reservation.
+                top = if (wide) 0.dp else SettingsHeroTotalHeight,
+                bottom = 24.dp
+            ),
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            // v-tablet — wide windows: the torn hero leads the grid and
+            // scrolls away with it (not pinned); phones keep the overlay.
+            if (wide) {
+                item(key = "hero", span = { GridItemSpan(maxLineSpan) }, contentType = "hero") {
+                    SettingsHeroHeader(
+                        title = "Share hub",
+                        subtitle = "Browse every design, pick a topic, share a card",
+                        onBack = { navController.popBackStack() }
+                    )
+                }
+            }
+            // v3xx — the shared settings nav rail: switch sections without
+            // going back to the hub (the open page sits in the 2nd slot).
+            item(key = "settings-nav", span = { GridItemSpan(maxLineSpan) }, contentType = "settings-nav") {
+                SettingsNavRail(
+                    active = "share",
+                    onSelect = { navigateToSettingsSection(navController, it) },
+                    navController = navController
+                )
+            }
+            // ── Topic search ────────────────────────────────────────────
+            item(span = { GridItemSpan(maxLineSpan) }) {
+                CurioSearchField(
+                    query = query,
+                    onQueryChange = { query = it },
+                    placeholder = "Search any topic…"
+                )
+            }
+            // Search results while typing
+            if (needle.isNotEmpty()) {
+                if (results.isEmpty()) {
+                    item(span = { GridItemSpan(maxLineSpan) }) {
+                        Text(
+                            "No topics match \"$query\"",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            textAlign = TextAlign.Center,
+                            modifier = Modifier.fillMaxWidth().padding(vertical = 10.dp)
+                        )
+                    }
+                } else {
+                    item(span = { GridItemSpan(maxLineSpan) }) {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(18.dp))
+                                .background(MaterialTheme.colorScheme.surfaceContainerHigh)
+                                .padding(vertical = 4.dp)
+                        ) {
+                            results.forEachIndexed { i, entry ->
+                                val cat = CurioCategories.byId(entry.categoryId)
+                                if (i > 0) androidx.compose.material3.HorizontalDivider(
+                                    modifier = Modifier.padding(horizontal = 14.dp),
+                                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)
+                                )
+                                Surface(
+                                    onClick = {
+                                        pickedTopicId = entry.id
+                                        query = ""
+                                    },
+                                    color = Color.Transparent,
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Row(
+                                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                                    ) {
+                                        CurioIcon(
+                                            name = cat.iconGlyph,
+                                            contentDescription = null,
+                                            tint = cat.themedAccent(),
+                                            size = 18.dp
+                                        )
+                                        Column(modifier = Modifier.weight(1f)) {
+                                            Text(
+                                                entry.name,
+                                                style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Bold),
+                                                color = MaterialTheme.colorScheme.onSurface,
+                                                maxLines = 1,
+                                                overflow = TextOverflow.Ellipsis
+                                            )
+                                            Text(
+                                                listOfNotNull(
+                                                    entry.byline.ifBlank { null },
+                                                    cat.displayName
+                                                ).joinToString(" · "),
+                                                style = MaterialTheme.typography.bodySmall,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                maxLines = 1,
+                                                overflow = TextOverflow.Ellipsis
+                                            )
+                                        }
+                                        CurioIcon(
+                                            name = if (entry.id == pickedTopicId) CurioIcons.Check else CurioIcons.ChevronRight,
+                                            contentDescription = null,
+                                            tint = if (entry.id == pickedTopicId) MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.onSurfaceVariant,
+                                            size = 18.dp
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            // Picked topic chip. `pickedTopic` is a delegated property, so it
+            // can NEVER be smart-cast: hoist it into a local first (the same
+            // rule the share sheet below follows).
+            val picked = pickedTopic
+            if (picked != null) {
+                item(span = { GridItemSpan(maxLineSpan) }) {
+                    val cat = CurioCategories.byId(picked.categoryId)
+                    Surface(
+                        shape = RoundedCornerShape(50),
+                        color = cat.themedAccent().copy(alpha = 0.16f),
+                        border = BorderStroke(1.dp, cat.themedAccent().copy(alpha = 0.35f)),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 14.dp, vertical = 9.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            CurioIcon(name = cat.iconGlyph, contentDescription = null, tint = cat.categoryInk(), size = 16.dp)
+                            Text(
+                                "${picked.name} · ${cat.displayName}",
+                                style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
+                                color = cat.categoryInk(),
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.weight(1f)
+                            )
+                            Surface(
+                                onClick = { pickedTopicId = null },
+                                shape = CircleShape,
+                                color = Color.Transparent
+                            ) {
+                                CurioIcon(
+                                    name = CurioIcons.Close,
+                                    contentDescription = "Clear topic",
+                                    tint = cat.categoryInk().copy(alpha = 0.7f),
+                                    size = 18.dp,
+                                    modifier = Modifier.padding(4.dp)
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+
+            // ── Design grid ─────────────────────────────────────────────
+            item(span = { GridItemSpan(maxLineSpan) }) {
+                SettingsSectionHeading(
+                    if (picked != null) "Designs · ${picked.name}" else "Designs · preview with any topic"
+                )
+            }
+            designs.forEachIndexed { i, design ->
+                // The per-category signature cells come after the base styles —
+                // show a section label before the first of them.
+                if (i == categorySectionStart) {
+                    item(span = { GridItemSpan(maxLineSpan) }) {
+                        SettingsSectionHeading("Per-category signature designs")
+                    }
+                }
+                item {
+                    HubDesignCell(
+                        design = design,
+                        selected = i == pickedDesign,
+                        preview = preview,
+                        sharer = sharer,
+                        aspect = aspect,
+                        onSelect = { pickedDesign = i }
+                    )
+                }
+            }
+
+            // ── Aspect ──────────────────────────────────────────────────
+            item(span = { GridItemSpan(maxLineSpan) }) {
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    HubPill("9:16", aspect == ShareCardAspect.PORTRAIT) { aspect = ShareCardAspect.PORTRAIT }
+                    HubPill("3:4", aspect == ShareCardAspect.CLASSIC) { aspect = ShareCardAspect.CLASSIC }
+                }
+            }
+        }
+        CurioVerticalScrollIndicator(
+            state = gridState.scrollIndicatorState,
+            onScrollBy = { gridState.dispatchRawDelta(it) },
+            modifier = Modifier
+                .align(Alignment.CenterEnd)
+                .fillMaxHeight()
+                .padding(top = 10.dp, bottom = 16.dp)
+        )
+        // v-tablet — pinned overlay is phone-only (wide windows scroll the
+        // hero as the grid's first row instead). compact = wide resolves to
+        // false here, i.e. the phone-size banner on phones — unchanged.
+        if (!wide) {
+            SettingsHeroHeader(
+                title = "Share hub",
+                subtitle = "Browse every design, pick a topic, share a card",
+                onBack = { navController.popBackStack() },
+                compact = wide,
+                glassBackdrop = glassBackdrop
+            )
+        }
+
+        // v229d — FLOATING Share pill: the old full-width button sat at the
+        // bottom of a long scroll ("all the way down in share hub"); the
+        // share action now floats above the grid edge so it's always in
+        // reach. Tapping it opens the EXACT TopicShareSheet with the picked
+        // topic + picked design preselected (Customise, hold-to-edit and
+        // Share-as-text all come along) instead of doing a silent one-shot
+        // export.
+        val canShare = selectedDesign != null && pickedTopic != null
+        val hubShareLabel = when {
+            selectedDesign == null -> "Pick a design"
+            pickedTopic == null -> "Pick a topic"
+            else -> "Share ${pickedTopic?.name ?: ""}"
+        }
+        Surface(
+            onClick = { if (canShare) hubShareOpen = true },
+            shape = RoundedCornerShape(50),
+            color = if (canShare) MaterialTheme.colorScheme.secondary
+                    else MaterialTheme.colorScheme.surfaceContainerHigh,
+            contentColor = if (canShare) MaterialTheme.colorScheme.onSecondary
+                           else MaterialTheme.colorScheme.onSurfaceVariant,
+            shadowElevation = 8.dp,
+            modifier = Modifier
+                .align(Alignment.BottomEnd)
+                .navigationBarsPadding()
+                .padding(end = 20.dp, bottom = 24.dp)
+        ) {
+            Row(
+                modifier = Modifier.padding(horizontal = 18.dp, vertical = 12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(7.dp)
+            ) {
+                CurioIcon(
+                    name = CurioIcons.Share,
+                    contentDescription = null,
+                    tint = if (canShare) MaterialTheme.colorScheme.onSecondary
+                           else MaterialTheme.colorScheme.onSurfaceVariant,
+                    size = 16.dp
+                )
+                Text(
+                    hubShareLabel,
+                    style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+        }
+
+        // ── The sheet — the exact same TopicShareSheet as Topic Reveal ──
+        // v389 — hoisted into a local before the check: `pickedTopic` is mutable
+        // state now (it is resolved, not read off the index), and a delegated
+        // property cannot smart-cast.
+        val sheetTopic = pickedTopic
+        if (hubShareOpen && selectedDesign != null && sheetTopic != null) {
+            val design = selectedDesign
+            val topic = sheetTopic
+            val resolvedCat = CurioCategories.byId(topic.categoryId)
+            val ovCat = design.categoryOverrideId?.let { CurioCategories.byId(it) }
+            val isQuotes = resolvedCat.id == CategoryId.QUOTES
+            val catName = ovCat?.displayName ?: resolvedCat.displayName
+            val glyph = ovCat?.iconGlyph ?: resolvedCat.iconGlyph
+            val theAccent = ovCat?.themedAccent() ?: resolvedCat.themedAccent()
+            val fam = ovCat?.family ?: resolvedCat.family
+            // The hub's design list is its own ordering — map the chosen
+            // style back into the sheet's per-family style index so the
+            // sheet opens on exactly the picked design.
+            val styleIndex = com.curio.app.ui.components.availableStylesForFamily(fam, topic.name)
+                .indexOf(design.style).coerceAtLeast(0)
+            com.curio.app.ui.components.TopicShareSheet(
+                topicName = topic.name,
+                categoryName = catName,
+                categoryGlyph = glyph,
+                accent = theAccent,
+                quickFact = if (isQuotes) topic.name else topic.teaser,
+                authority = authority,
+                context = context,
+                onDismiss = { hubShareOpen = false },
+                categoryFamily = fam,
+                topicByline = topic.byline,
+                // v371 — album/series topics get the cover-fetch flow in the
+                // share editor too (artwork resolves via iTunes → MusicBrainz
+                // / TVMaze → iTunes, same as the reveal posters).
+                isAlbumTopic = resolvedCat.id == CategoryId.ALBUMS,
+                isSeriesTopic = resolvedCat.id == CategoryId.SERIES,
+                // v383 — LINK share: albums/artists/songs post the music
+                // service the user picked; everything else posts Google.
+                shareLinkUrl = { com.curio.app.data.shareLinkForTopic(topic) },
+                initialStyle = styleIndex,
+                initialClassicSignature = design.classic
+            )
+        }
+    }
+}
+
+/** One design cell in the grid — a full mini preview of [TopicShareCard].
+ *  When [design] has a [categoryOverride], the preview renders that
+ *  category's signature design (background, glyph, accent, family) while
+ *  keeping the picked topic's name/fact/byline. */
+@Composable
+private fun HubDesignCell(
+    design: HubDesign,
+    selected: Boolean,
+    preview: ShareHubPreview,
+    sharer: String,
+    aspect: ShareCardAspect,
+    onSelect: () -> Unit
+) {
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(6.dp)
+    ) {
+        // When a category override is set, the cell renders with the
+        // overridden category's params — so the user sees that category's
+        // signature design, not the picked topic's own category.
+        val ovCat = design.categoryOverrideId?.let { CurioCategories.byId(it) }
+        val cellCategoryName = ovCat?.displayName ?: preview.categoryName
+        val cellGlyph = ovCat?.iconGlyph ?: preview.glyph
+        val cellAccent = ovCat?.themedAccent() ?: preview.accent
+        val cellFamily = ovCat?.family ?: preview.family
+        val isQuotes = preview.categoryName == "Quotes"
+        Surface(
+            onClick = onSelect,
+            shape = RoundedCornerShape(10.dp),
+            color = Color.Transparent,
+            border = BorderStroke(
+                if (selected) 3.dp else 1.dp,
+                if (selected) MaterialTheme.colorScheme.secondary
+                else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+            ),
+            modifier = Modifier
+                .fillMaxWidth()
+                .aspectRatio(aspect.widthDp.toFloat() / aspect.heightDp.toFloat())
+                .shadow(if (selected) 6.dp else 2.dp, RoundedCornerShape(10.dp))
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .clip(RoundedCornerShape(8.dp))
+            ) {
+                TopicShareCard(
+                    topicName = preview.topicName,
+                    categoryName = cellCategoryName,
+                    categoryGlyph = cellGlyph,
+                    accent = cellAccent,
+                    factText = preview.fact,
+                    sharerName = sharer,
+                    aspect = aspect,
+                    style = design.style,
+                    categoryFamily = cellFamily,
+                    quoteText = if (isQuotes) preview.fact else null,
+                    quoteAuthor = if (isQuotes) preview.byline.ifBlank { null } else null,
+                    byline = preview.byline,
+                    classicSignature = design.classic
+                )
+            }
+        }
+        Text(
+            design.label,
+            style = MaterialTheme.typography.labelMedium.copy(
+                fontWeight = if (selected) FontWeight.ExtraBold else FontWeight.Bold,
+                color = if (selected) MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.onSurfaceVariant
+            ),
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
+    }
+}
+
+/** Small round pill (the share sheet's [Pill] language, local copy). */
+@Composable
+private fun HubPill(label: String, selected: Boolean, onClick: () -> Unit) {
+    Surface(
+        onClick = onClick,
+        shape = RoundedCornerShape(50),
+        color = if (selected) MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.surfaceContainerHigh,
+        modifier = Modifier.height(38.dp)
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 16.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                label,
+                style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
+                color = if (selected) MaterialTheme.colorScheme.onSecondary else MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center
+            )
+        }
+    }
+}
+
+/** Resolved preview parameters for one topic (or the sample card). */
+private data class ShareHubPreview(
+    val topicName: String,
+    val categoryName: String,
+    val glyph: String,
+    val accent: Color,
+    val fact: String,
+    val family: CategoryFamily,
+    val byline: String
+)
+
+/** One design entry in the grid — a style plus its Signature variant flag.
+ *
+ *  [categoryOverrideId] — when non-null, this cell renders a Signature design
+ *  using the OVERRIDDEN category's background (that category's
+ *  signatureDesign) instead of the picked topic's own category. This lets
+ *  every per-category signature background be browsed and applied to any
+ *  topic. The topic name/fact/byline still come from the picked topic. */
+private data class HubDesign(
+    val label: String,
+    val style: ShareCardStyle,
+    val classic: Boolean = false,
+    val categoryOverrideId: CategoryId? = null
+)
+
+/**
+ * Every share-card design, including the Signature variants and one cell per
+ * category's signature background.
+ *
+ * v428 — [classicSignature] is the CALLER's answer now, not a fixed entry: the
+ * Classic Signature exists only for the lanes that kept it (see
+ * [signatureClassicAvailable]), so a Books topic no longer browses a design its
+ * own editor has no toggle for.
+ */
+private fun hubDesigns(classicSignature: Boolean): List<HubDesign> = buildList {
+    // ── Base styles (available for every topic) ──
+    add(HubDesign("Paper", ShareCardStyle.PAPER))
+    add(HubDesign("Vinyl", ShareCardStyle.VINYL))
+    add(HubDesign("Collage", ShareCardStyle.COLLAGE))
+    add(HubDesign("Clean", ShareCardStyle.NEUMORPHIC))
+    add(HubDesign("Editorial", ShareCardStyle.EDITORIAL))
+    add(HubDesign("Minimal", ShareCardStyle.MINIMAL))
+    add(HubDesign("Signature", ShareCardStyle.SIGNATURE))
+    if (classicSignature) {
+        add(HubDesign("Signature · Classic", ShareCardStyle.SIGNATURE, classic = true))
+    }
+    add(HubDesign("Custom", ShareCardStyle.CUSTOM))
+    // ── Per-category Signature designs — every category's signature
+    //    background is browseable and pickable for any topic. Skips
+    //    coming-soon lanes (they'd just show the fallback). Wildcard is
+    //    first, then alphabetical by display name.
+    CurioCategories.all
+        .filter { it.isReady }
+        .sortedWith(
+            compareBy<CurioCategory>({ it.id != CategoryId.WILDCARD }, { it.displayName.lowercase() })
+        )
+        .forEach { cat ->
+            add(HubDesign(
+                label = "${cat.displayName} signature",
+                style = ShareCardStyle.SIGNATURE,
+                categoryOverrideId = cat.id
+            ))
+        }
+}

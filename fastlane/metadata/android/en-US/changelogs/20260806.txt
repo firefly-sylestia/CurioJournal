@@ -1,0 +1,7 @@
+• Smoother detail scrolling and reliable voice-note saves
+• Quote cards capped at 280 characters and 5 ruled lines
+• Compact Paper/Style/Color editing controls
+• Redesigned Profile, Settings, and Experiments
+• Smart Density labels compile-proof
+• Rewrote GitHub issue, feature, and pull-request templates for Curio
+• Rebuilt CI and release workflows with focused validation and mandatory release signing

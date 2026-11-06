@@ -1,0 +1,575 @@
+package com.curio.app.features.settings
+
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.navigation.NavController
+import com.curio.app.data.AppPreferences
+import com.curio.app.data.CategoryId
+import com.curio.app.data.CurioCategories
+import com.curio.app.data.CurioTopic
+import com.curio.app.data.TopicJsonLoader
+import com.curio.app.features.settings.SettingsHeroHeader
+import com.curio.app.features.settings.SettingsHeroTotalHeight
+import com.curio.app.features.settings.SettingsSectionHeading
+import com.curio.app.features.settings.heroPageBackground
+import com.curio.app.ui.adaptive.isWide
+import com.curio.app.ui.adaptive.wideContentEdgePadding
+import com.curio.app.ui.adaptive.windowWidthSizeClass
+import com.curio.app.ui.components.CurioWatermarkBackdrop
+import com.curio.app.ui.components.liquidglass.CurioGlassWindowBlur
+import com.curio.app.ui.components.rememberCurioControlTick
+import androidx.compose.ui.draw.alpha
+import com.curio.app.ui.theme.CurioIcon
+import com.curio.app.ui.theme.CurioIcons
+import com.curio.app.ui.theme.curioPillTintLift
+import com.curio.app.ui.theme.curioRoseInk
+import com.curio.app.ui.theme.isCurioDarkTheme
+import com.kyant.backdrop.backdrops.layerBackdrop
+import com.kyant.backdrop.backdrops.rememberLayerBackdrop
+
+/**
+ * v320 — the BOOK COVERS & RATINGS HUB: pick a cover provider (Open Library
+ * or Google Books), bulk-fetch every cover into the shared disk cache (one
+ * by one, with a live counter + Cancel), RETRY only the previously-failed
+ * books, and — without any API key — fetch Google Books average ratings that
+ * the reveal shows as star chips. Failed book names persist across restarts.
+ */
+@Composable
+fun BookCoverHubScreen(navController: NavController) {
+    val context = LocalContext.current
+    var providerName by remember { mutableStateOf(AppPreferences.bookCoverProviderState) }
+    // v356 — iTunes is the default source. LibraryThing only applies when its
+    // free key is configured (BuildConfig.LIBRARY_THING_API_KEY); without a
+    // key a stored LIBRARY_THING pick silently falls back to iTunes.
+    val provider = runCatching { BookCoverFetch.BookCoverProvider.valueOf(providerName) }
+        .getOrDefault(BookCoverFetch.BookCoverProvider.ITUNES)
+        .let { p ->
+            if (p == BookCoverFetch.BookCoverProvider.LIBRARY_THING &&
+                com.curio.app.BuildConfig.LIBRARY_THING_API_KEY.isBlank()
+            ) BookCoverFetch.BookCoverProvider.ITUNES else p
+        }
+
+    // v360 — fetch state lives in BookCoverFetchSession (a process-lifetime
+    // scope), NOT here: leaving the hub page no longer cancels the run, and
+    // re-entering shows the live progress. The screen only starts/cancels it.
+    val busy = BookCoverFetchSession.busy
+    val jobLabel = BookCoverFetchSession.label
+    val done = BookCoverFetchSession.done
+    val total = BookCoverFetchSession.total
+    val failed = BookCoverFetchSession.failed
+
+    // TopicJsonLoader.load is suspend — load the count off the main thread.
+    val books by produceState(initialValue = emptyList<CurioTopic>()) {
+        value = runCatching { TopicJsonLoader.load(CategoryId.BOOKS) }.getOrDefault(emptyList())
+    }
+    val bookCount = books.size
+    // Reactive reads — prefs state updates as fetches complete.
+    val failedList = AppPreferences.bookCoverFailedState
+    val ratedCount = AppPreferences.bookRatingsState.size
+    // v361 — Clear-covers confirm dialog.
+    var showClearConfirm by remember { mutableStateOf(false) }
+
+    fun start(kind: String) {
+        // v320b — fetching is OPT-OUT by default: nothing downloads until
+        // the user flips the toggle below.
+        BookCoverFetchSession.start(context, provider, kind, AppPreferences.bookFetchEnabledState)
+    }
+
+    // v3xx — the settings-family chrome: torn-rose hero + watermark
+    // backdrop + frosted option cards (was a plain header on a flat surface).
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(heroPageBackground())
+    ) {
+        if (!windowWidthSizeClass().isWide) {
+            CurioWatermarkBackdrop(
+                activeCat = CurioCategories.byId(CategoryId.WILDCARD),
+                alphaScale = 0.45f
+            )
+        }
+        val wide = windowWidthSizeClass().isWide
+        val glassBackdrop = rememberLayerBackdrop()
+        LazyColumn(
+            modifier = Modifier
+                .layerBackdrop(glassBackdrop)
+                .fillMaxSize(),
+            contentPadding = androidx.compose.foundation.layout.PaddingValues(
+                start = wideContentEdgePadding(),
+                end = wideContentEdgePadding(),
+                top = if (wide) 0.dp else SettingsHeroTotalHeight,
+                bottom = 28.dp
+            ),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            if (wide) {
+                item(key = "hero", contentType = "hero") {
+                    SettingsHeroHeader(
+                        title = BookCoverFetch.TITLE,
+                        subtitle = "Choose a source · retry failures · fetch ratings",
+                        onBack = { navController.popBackStack() }
+                    )
+                }
+            }
+            // v3xx — the shared settings nav rail: switch sections without
+            // going back to the hub (drill-in page — no chip highlighted).
+            item(key = "settings-nav", contentType = "settings-nav") {
+                SettingsNavRail(
+                    active = null,
+                    onSelect = { navigateToSettingsSection(navController, it) },
+                    navController = navController
+                )
+            }
+            // ── Opt-in / opt-out master switch (v320b) ─────────────────
+            item(key = "master") {
+                val fetchOn = AppPreferences.bookFetchEnabledState
+                val dark = isCurioDarkTheme()
+                Surface(
+                    shape = RoundedCornerShape(20.dp),
+                    color = if (dark) MaterialTheme.colorScheme.surfaceContainerHigh
+                            else MaterialTheme.colorScheme.surfaceContainerLow,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp)
+                    ) {
+                        // Frosted icon tile — the settings row language.
+                        Box(
+                            modifier = Modifier
+                                .size(40.dp)
+                                .clip(RoundedCornerShape(13.dp))
+                                .background(
+                                    if (dark) Color.White.copy(alpha = 0.09f)
+                                    else Color(0xFFF2E8DC)
+                                ),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            CurioIcon(
+                                if (fetchOn) CurioIcons.Download else CurioIcons.MenuBook, null,
+                                tint = if (dark) Color(0xFFD7B8A9) else Color(0xFF755647),
+                                size = 20.dp
+                            )
+                        }
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                // v3xx51 — one merged consent now covers
+                                // books, albums and series (the per-category
+                                // toggles were merged).
+                                "Cover fetching",
+                                style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Bold),
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                            Text(
+                                if (fetchOn)
+                                    "ON · book covers, ratings, album art and series posters can download"
+                                else
+                                    "OFF by default · nothing downloads until you turn this on",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        // v3xx46 — the switch ticks as it flips.
+                        val tick = rememberCurioControlTick()
+                        Switch(
+                            checked = fetchOn,
+                            onCheckedChange = { wanted ->
+                                tick { AppPreferences.setBookFetchEnabled(context, wanted) }
+                            }
+                        )
+                    }
+                }
+            }
+
+            // ── Provider picker ────────────────────────────────────────
+            item(key = "provider") {
+                SettingsSectionHeading("Cover source", "\u2726")
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    // v356 — LibraryThing needs its free key (BuildConfig);
+                    // without one the row is hidden rather than failing every
+                    // fetch. iTunes is listed first (the default source).
+                    val providers = BookCoverFetch.BookCoverProvider.entries.filter { p ->
+                        p != BookCoverFetch.BookCoverProvider.LIBRARY_THING ||
+                            com.curio.app.BuildConfig.LIBRARY_THING_API_KEY.isNotBlank()
+                    }
+                    providers.forEach { p ->
+                        val selected = p == provider
+                        val providerDark = isCurioDarkTheme()
+                        Surface(
+                            onClick = {
+                                providerName = p.name
+                                AppPreferences.setBookCoverProvider(context, p.name)
+                            },
+                            shape = RoundedCornerShape(20.dp),
+                            color = if (selected) MaterialTheme.colorScheme.secondaryContainer.copy(alpha = if (providerDark) 0.45f else 0.9f)
+                                    else if (providerDark) MaterialTheme.colorScheme.surfaceContainerHigh
+                                    else MaterialTheme.colorScheme.surfaceContainerLow,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                                modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp)
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(18.dp)
+                                        .background(
+                                            if (selected) settingsRoseAccent()
+                                            else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.35f),
+                                            CircleShape
+                                        ),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    if (selected) {
+                                        CurioIcon(
+                                            CurioIcons.Check, null,
+                                            tint = settingsReadableInk(settingsRoseAccent()),
+                                            size = 12.dp
+                                        )
+                                    }
+                                }
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        p.label,
+                                        style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Bold),
+                                        color = MaterialTheme.colorScheme.onSurface
+                                    )
+                                    Text(
+                                        p.description,
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // ── Stats ──────────────────────────────────────────────────
+            item(key = "stats") {
+                val statsDark = isCurioDarkTheme()
+                Surface(
+                    shape = RoundedCornerShape(20.dp),
+                    color = if (statsDark) MaterialTheme.colorScheme.surfaceContainerHigh
+                            else MaterialTheme.colorScheme.surfaceContainerLow,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        modifier = Modifier.padding(14.dp)
+                    ) {
+                        StatCell("$bookCount", "books", modifier = Modifier.weight(1f))
+                        StatCell("${failedList.size}", "failed covers", modifier = Modifier.weight(1f))
+                        StatCell("$ratedCount", "rated", modifier = Modifier.weight(1f))
+                    }
+                }
+            }
+
+            // ── Actions ────────────────────────────────────────────────
+            item(key = "actions") {
+                val fetchOn = AppPreferences.bookFetchEnabledState
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    HubButton(
+                        label = "Fetch all covers",
+                        glyph = CurioIcons.Download,
+                        emphasize = true,
+                        enabled = fetchOn && !busy,
+                        onClick = { start("covers") }
+                    )
+                    val retryEnabled = fetchOn && !busy && failedList.isNotEmpty()
+                    HubButton(
+                        label = if (failedList.isEmpty()) "Retry failed covers" else "Retry failed (${failedList.size})",
+                        glyph = CurioIcons.Refresh,
+                        emphasize = false,
+                        enabled = retryEnabled,
+                        onClick = { start("failed") }
+                    )
+                    HubButton(
+                        label = "Fetch ratings (keyless)",
+                        glyph = CurioIcons.Star,
+                        emphasize = false,
+                        enabled = fetchOn && !busy,
+                        onClick = { start("ratings") }
+                    )
+                    // v361 — clear every stored/verified/failed cover record AND
+                    // the disk cache so the next fetch starts fresh: makes A/B
+                    // testing providers easy (the old provider's verified URLs
+                    // would otherwise keep winning the candidate order).
+                    HubButton(
+                        label = "Clear all covers",
+                        glyph = CurioIcons.Delete,
+                        emphasize = false,
+                        enabled = !busy && (AppPreferences.bookCoverUrlsState.isNotEmpty() ||
+                            failedList.isNotEmpty() || AppPreferences.bookCoverDoneState.isNotEmpty()),
+                        onClick = { showClearConfirm = true }
+                    )
+                    if (!fetchOn) {
+                        Text(
+                            "Fetching is off. Turn the switch above on to download covers and ratings.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+            }
+
+            // ── Progress / cancel ──────────────────────────────────────
+            if (busy) {
+                item(key = "progress") {
+                    val progressDark = isCurioDarkTheme()
+                    Surface(
+                        shape = RoundedCornerShape(20.dp),
+                        color = if (progressDark) MaterialTheme.colorScheme.surfaceContainerHigh
+                                else MaterialTheme.colorScheme.surfaceContainerLow,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(14.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text(
+                                    jobLabel + (if (total > 0) " $done / $total" else ""),
+                                    style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
+                                    color = MaterialTheme.colorScheme.onSurface,
+                                    modifier = Modifier.weight(1f)
+                                )
+                                Surface(
+                                    onClick = { BookCoverFetchSession.cancel() },
+                                    shape = RoundedCornerShape(50),
+                                    color = curioPillTintLift()
+                                ) {
+                                    Text(
+                                        "Cancel",
+                                        style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
+                                        color = curioRoseInk(),
+                                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp)
+                                    )
+                                }
+                            }
+                            if (total > 0) {
+                                LinearProgressIndicator(
+                                    progress = { done.toFloat() / total },
+                                    modifier = Modifier.fillMaxWidth()
+                                )
+                            }
+                            if (failed > 0) {
+                                Text(
+                                    "$failed failed so far",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.error
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+
+            // ── Failed list ────────────────────────────────────────────
+            if (failedList.isNotEmpty()) {
+                item(key = "failed-header") {
+                    SettingsSectionHeading("Failed covers — tap to retry one", "\u2726")
+                }
+                items(failedList, key = { it }) { name ->
+                    val failedDark = isCurioDarkTheme()
+                    Surface(
+                        shape = RoundedCornerShape(16.dp),
+                        color = if (failedDark) MaterialTheme.colorScheme.surfaceContainerHigh
+                                else MaterialTheme.colorScheme.surfaceContainerLow,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(10.dp),
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp)
+                        ) {
+                            CurioIcon(
+                                CurioIcons.Close, null,
+                                tint = MaterialTheme.colorScheme.error.copy(alpha = 0.8f),
+                                size = 14.dp
+                            )
+                            Text(
+                                name,
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurface,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.weight(1f)
+                            )
+                            if (!busy && AppPreferences.bookFetchEnabledState) {
+                                Surface(
+                                    onClick = {
+                                        // v360 — per-row retry runs through the
+                                        // shared session (survives leaving the page).
+                                        BookCoverFetchSession.start(
+                                            context, provider, "failed",
+                                            AppPreferences.bookFetchEnabledState
+                                        )
+                                    },
+                                    shape = RoundedCornerShape(50),
+                                    color = if (failedDark) Color(0xFF815947) else curioRoseInk()
+                                ) {
+                                    Text(
+                                        "Retry",
+                                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                                        color = Color(0xFFFFF9F1),
+                                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // v3xx — the horizontal "All covers" strip is GONE: the full
+            // catalogue moved to Settings → Experiments → Content tools →
+            // "Book browser" (a scrollable line-by-line list).
+        }
+
+        // v361 — Clear-covers confirm: wiping stored URLs + the disk cache is
+        // irreversible, so it always asks first.
+        if (showClearConfirm) {
+            AlertDialog(
+                onDismissRequest = { showClearConfirm = false },
+                title = { Text("Clear all book covers?") },
+                text = {
+                    Text(
+                        "Removes every stored/verified cover, the failed list and " +
+                        "the downloaded cover images, so the next Fetch starts " +
+                        "fresh (useful when comparing providers). Ratings are kept."
+                    )
+                },
+                confirmButton = {
+                    CurioGlassWindowBlur()
+                    TextButton(onClick = {
+                        showClearConfirm = false
+                        BookCoverFetch.clearAllCovers(context)
+                    }) { Text("Clear") }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showClearConfirm = false }) { Text("Cancel") }
+                }
+            )
+        }
+        // Sticky hero — phone-only: wide windows scroll the hero as the
+        // list's first item instead (v-tablet).
+        if (!wide) {
+            SettingsHeroHeader(
+                title = BookCoverFetch.TITLE,
+                subtitle = "Choose a source · retry failures · fetch ratings",
+                onBack = { navController.popBackStack() },
+                glassBackdrop = glassBackdrop
+            )
+        }
+    }
+}
+
+/** Small stat cell for the hub's stats card — the caller supplies the
+ *  RowScope weight so the three cells share the card width evenly. */
+@Composable
+private fun StatCell(value: String, label: String, modifier: Modifier = Modifier) {
+    Column(modifier = modifier) {
+        Text(
+            value,
+            style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.ExtraBold),
+            color = settingsAccentInk()
+        )
+        Text(
+            label,
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
+    }
+}
+
+/** One action button in the hub — the settings-family action language:
+ *  the primary action wears the warm rose fill (cream ink), the secondary
+ *  actions the frosted rose-glass pills (the same family as the nav rail's
+ *  chips and quick tools). Disabled buttons dim to a whisper. */
+@Composable
+private fun HubButton(
+    label: String,
+    glyph: String,
+    emphasize: Boolean,
+    enabled: Boolean,
+    onClick: () -> Unit
+) {
+    val dark = isCurioDarkTheme()
+    Surface(
+        onClick = onClick,
+        enabled = enabled,
+        shape = RoundedCornerShape(50),
+        color = if (emphasize) {
+            // Dark: the nav rail's selected-chip brown-rose (cream ink stays
+            // readable); light: the deep brand coral.
+            if (dark) Color(0xFF815947) else curioRoseInk()
+        } else {
+            curioPillTintLift()
+        },
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(46.dp)
+            .alpha(if (enabled) 1f else 0.5f)
+    ) {
+        Row(
+            horizontalArrangement = Arrangement.Center,
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.fillMaxSize(),
+        ) {
+            CurioIcon(
+                glyph, null,
+                tint = if (emphasize) Color(0xFFFFF9F1) else curioRoseInk(),
+                size = 16.dp
+            )
+            Spacer(Modifier.size(6.dp))
+            Text(
+                label,
+                style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
+                color = if (emphasize) Color(0xFFFFF9F1) else curioRoseInk()
+            )
+        }
+    }
+}

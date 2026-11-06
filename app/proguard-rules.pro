@@ -1,0 +1,142 @@
+# Curio release R8 rules.
+#
+# R8 is enabled for production releases. Keep the field names and model
+# members used by Gson's reflective backup/capture serialization; otherwise
+# obfuscation can make an exported backup unreadable by a later app version.
+# Keep the data model package narrow so the rest of the app still benefits
+# from shrinking and obfuscation.
+
+# Gson may deserialize classes without invoking Kotlin constructors and reads
+# fields reflectively. Preserve model names and fields in the data package.
+-keep class com.curio.app.data.CaptureData { *; }
+-keep class com.curio.app.data.CaptureData$* { *; }
+-keep class com.curio.app.data.CaptureEntity { *; }
+-keep class com.curio.app.data.BackupPayload { *; }
+-keep class com.curio.app.data.PrefEntry { *; }
+-keep class com.curio.app.data.FieldMindMetadata { *; }
+-keep class com.curio.app.data.FieldMindSpecies { *; }
+-keep enum com.curio.app.data.CaptureFormat { *; }
+-keep enum com.curio.app.data.NotePaperStyle { *; }
+-keep enum com.curio.app.data.NotePaperColor { *; }
+-keep enum com.curio.app.data.JournalMood { *; }
+
+# v389d — INCURSION, and the one Gson model that reads JSON THIS APP DID NOT
+# WRITE. The viewing order lives in `assets/incursion/{marvel,sony,xmen}.json`
+# and is parsed with plain Gson, so the files' keys have to match the model's
+# field names at RUNTIME. Without this, R8 renames every field in the release
+# build, Gson matches no key at all, and each studio arrives as an empty shell:
+# the page rendered with nothing in it, and Marvel (130 of the 163 rows) was
+# gone first because the destination falls back to Essentials when its own tab
+# has no content. The debug build was flawless, which is what made it look like
+# a data problem for so long.
+-keep class com.curio.app.data.IncursionStudio { *; }
+-keep class com.curio.app.data.IncursionGroup { *; }
+-keep class com.curio.app.data.IncursionEntry { *; }
+
+# The same reflection over data this app WRITES: the Room type converters keep a
+# book's chapters, an album's tracks and a series' episodes as Gson JSON, so a
+# build whose obfuscation map differs from the one that wrote the row reads the
+# lists back empty (a book losing its chapter names after an update, a lookup
+# that suddenly finds nothing). Keeping the field names makes what one build
+# stored readable by every later one.
+-keep class com.curio.app.data.BookChapter { *; }
+-keep class com.curio.app.data.AlbumTrack { *; }
+-keep class com.curio.app.data.SeriesEpisode { *; }
+
+# Preserve Gson's generic signatures and annotations used by reflective model
+# parsing. R8 still shrinks unrelated implementation code.
+-keepattributes Signature
+-keepattributes *Annotation*
+
+# Room's generated implementation and schema annotations are resolved through
+# generated code/annotations; retain annotations but do not keep the entire
+# application package.
+-keep class com.curio.app.data.CurioDatabase { *; }
+-keep class com.curio.app.data.CurioDatabase_Impl { *; }
+-keep @androidx.room.Database class * { *; }
+
+# JNA (transitively pulled in by vosk-android for the offline voice-to-text
+# model): JNA binds native functions reflectively at runtime, so R8 must not
+# strip/obfuscate its classes (the standard JNA Android keep rules).
+-keep class com.sun.jna.** { *; }
+-keepclassmembers class * extends com.sun.jna.** { *; }
+-keep class * implements com.sun.jna.Callback { *; }
+-keepclassmembers class * implements com.sun.jna.Callback { *; }
+-keepclassmembers class * implements com.sun.jna.Structure { *; }
+
+# v126 — JNA's desktop-only AWT interop (com.sun.jna.Native$AWT references
+# java.awt.Component / GraphicsEnvironment / HeadlessException / Window,
+# which don't exist on Android) tripped R8's missing-class check on the
+# release build. These are never used on-device — silence the missing-class
+# warnings (the standard JNA-Android rules).
+-dontwarn java.awt.**
+-dontwarn java.beans.**
+-dontwarn javax.swing.**
+-dontwarn java.applet.**
+-dontwarn java.nio.file.**
+
+# Vosk's own binding classes extend com.sun.jna.PointerType and are resolved
+# through JNA reflection — keep them whole too.
+-keep class org.vosk.** { *; }
+
+# v465c — SHERPA-ONNX (the FULL edition's neural read-aloud voice packs). Same
+# class of rule as JNA and Vosk above, and this one was VERIFIED rather than
+# assumed: `jni/arm64-v8a/libsherpa-onnx-jni.so` inside the vendored AAR carries
+# the literal field names `vits`, `matcha`, `kokoro`, `kitten`, `model`, `tokens`,
+# `voices`, `dataDir`, `lexicon`, `numThreads`, `ruleFsts`, `ruleFars`,
+# `maxNumSentences`, `silenceScale`, `noiseScale`, `lengthScale`, `lang`,
+# `provider` and `debug` — the native side reaches its config through
+# `GetFieldID(..., "vits", ...)` and builds the class from the Kotlin object it
+# was handed, so R8 renaming either the classes or their fields breaks it AT
+# RUNTIME with no compile error and no build warning. The debug build is
+# unobfuscated, so it would have kept working: the release APK would be the only
+# one with a silent voice, which is the same "flawless in debug" shape the
+# Incursion rule above was written for.
+#
+# The package is small (classes.jar is ~239 KB) and the whole of it is a
+# binding surface, so it is kept whole rather than field-by-field.
+-keep class com.k2fsa.sherpa.onnx.** { *; }
+-keepclassmembers class com.k2fsa.sherpa.onnx.** { *; }
+
+# Apache Commons Compress (the pack downloader's BZIP2 + TAR reader, the same
+# full-only dependency as above) declares THREE optional compression backends as
+# `optional=true` dependencies — XZ, Zstandard and Brotli — which means they are
+# deliberately NOT on the classpath, while the library's own code still names
+# their classes. That is precisely the PdfBox/JP2 shape further down this file:
+# R8 finds the reference, cannot find the class, and fails the RELEASE build's
+# missing-class check for a code path nothing here calls. A `.tar.bz2` pack needs
+# none of the three. Same treatment, same reason.
+-dontwarn org.tukaani.xz.**
+-dontwarn com.github.luben.zstd.**
+-dontwarn org.brotli.dec.**
+
+# The JNI entry points are `external fun`s on those classes; AGP's default
+# proguard file already carries `-keepclasseswithmembernames class * { native
+# <methods>; }`, so no native-method rule is needed here — recorded so the next
+# reader does not add a redundant one.
+
+# v339 — Share hub crash fix (on-device VerifyError). R8's optimizer
+# outlines repeated code from the giant share-card composables into shared
+# synthetic methods; for these files the outline ended up with ~60 parameters
+# and more registers than ART's verifier allows, so opening the Share hub
+# (which composes every card style as a preview cell) crashed with
+# "Verifier rejected class … register v3 has type Undefined". Keeping the
+# file-level classes preserves their original bytecode — R8 still shrinks
+# and obfuscates the rest of the app, these files just skip the outlining.
+-keep class com.curio.app.ui.components.TopicShareCardKt { *; }
+-keep class com.curio.app.features.settings.ShareHubScreenKt { *; }
+
+# v389 — PdfBox-Android's JPEG2000 filter. The library ships the filter and
+# expects an optional JP2 decoder (`com.gemalto.jp2.JP2Decoder`) that it does
+# not depend on, because a PDF only needs it when a page embeds a JPEG2000
+# image. R8 found the reference and failed the RELEASE build's missing-class
+# check (`minifyReleaseWithR8`), which is a build break for every PDF reader
+# user even though no code path we call touches it.
+#
+# Silenced rather than pulled in on purpose: the decoder is a whole extra
+# native library for a filter almost no book uses, and the library's own
+# documented advice is exactly this rule. A PDF that DOES use JPX will let
+# PdfRenderer draw the page as it always has (the text layer is PDFBox's, the
+# picture has never been), so the only consequence is that such a page's words
+# do not come back from the extractor.
+-dontwarn com.gemalto.jp2.**

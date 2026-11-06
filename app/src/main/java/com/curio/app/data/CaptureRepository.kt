@@ -1,0 +1,212 @@
+package com.curio.app.data
+
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.Dispatchers
+import java.util.UUID
+
+/**
+ * Repository wrapping Room DAO for capture CRUD operations.
+ *
+ * Provides coroutine-friendly APIs and handles entity ↔ domain model conversion.
+ */
+class CaptureRepository(
+    private val dao: CaptureDao,
+    private val cachedTopicDao: CachedTopicDao
+) {
+
+    // v38 — decode cache: Room re-emits the FULL list on every insert, so a
+    // large Cabinet re-ran Gson decoding (and fresh Gson allocations) for
+    // EVERY entry on each save — the GC pauses behind that are what froze
+    // the app while adding several entries in a row. Entries are cached by
+    // a signature of their mutable stored fields, so only new/changed rows
+    // decode; unchanged ones are returned from the map. The map is only
+    // touched from the flow's (single) collection dispatcher.
+    private val decodeCache = HashMap<String, Pair<String, CurioEntry>>()
+
+    // v3xx37 — the light list's own cache (same contract as [decodeCache],
+    // keyed on the light signature so repeated emissions don't re-run the
+    // topic lookups either).
+    private val lightDecodeCache = HashMap<String, Pair<String, CurioEntry>>()
+
+    // v3xx43 — the LAST light list this repository emitted, kept so a screen
+    // can paint its FIRST frame with the real archive instead of an empty
+    // list (the Cabinet used to show a loading/empty flash on every open).
+    // Written only from the light flow's own collector.
+    @Volatile
+    private var lightSnapshot: List<CurioEntry> = emptyList()
+
+    /**
+     * v3xx43 — synchronous peek at the most recent light emission ([observeLight]).
+     * Empty before the first emission of the process; a screen uses it as its
+     * `produceState` initial value so revisiting the Cabinet renders the saved
+     * captures on the very first frame (no loading state).
+     */
+    fun peekLight(): List<CurioEntry> = lightSnapshot
+
+    /** Observe all captures as [CurioEntry] flow for reactive UI updates. */
+    fun observeAll(): Flow<List<CurioEntry>> =
+        // Entity → domain conversion includes Gson decoding and topic lookup;
+        // keep that work off the Compose/main collector so opening Cabinet
+        // stays responsive even with a large restored FieldMind archive.
+        dao.getAllFlow()
+            .map { entities ->
+                entities.map { entity ->
+                    // Fast signature — cheap string hashing, no JSON parsing.
+                    val sig = entity.id + "|" + entity.format + "|" +
+                        entity.capturedAtMillis + "|" + entity.formatDataJson.hashCode() +
+                        "|" + entity.tagsJson.hashCode() + "|" + entity.sessionNote +
+                        "|" + entity.sessionScreenshotsJson.hashCode() +
+                        "|" + entity.deletedAt
+                    val cached = decodeCache[entity.id]
+                    if (cached != null && cached.first == sig) {
+                        cached.second
+                    } else {
+                        val entry = entity.toEntry()
+                        decodeCache[entity.id] = sig to entry
+                        entry
+                    }
+                }
+            }
+            .flowOn(Dispatchers.Default)
+
+    /**
+     * v3xx37 — the LIGHT list flow for the Cabinet grids: reads ONLY the
+     * light columns (see [CaptureEntityLight]) so the big payload JSON blobs
+     * are never re-read/allocated on emission — that churn (megabytes of
+     * fresh Strings on every DB write with a large archive) is what made
+     * the Cabinet lag. Entries decode once per signature and are cached,
+     * exactly like [observeAll]'s v38 cache. Detail pages keep using
+     * [observeById] (full payload) and the recycle bin keeps its own flow.
+     */
+    fun observeLight(): Flow<List<CurioEntry>> =
+        dao.getLightFlow()
+            .map { rows ->
+                rows.map { row ->
+                    // Light signature — mirrors the full one minus the heavy
+                    // columns; formatDataJsonLight covers ReelNotes reviews.
+                    val sig = row.id + "|" + row.format + "|" +
+                        row.capturedAtMillis + "|" + row.tagsJson.hashCode() +
+                        "|" + row.title + "|" + row.isLegacy + "|" +
+                        row.sessionTimeMillis + "|" + (row.formatDataJsonLight?.hashCode() ?: 0)
+                    val cached = lightDecodeCache[row.id]
+                    if (cached != null && cached.first == sig) {
+                        cached.second
+                    } else {
+                        val entry = row.toEntry()
+                        lightDecodeCache[row.id] = sig to entry
+                        entry
+                    }
+                }.also { lightSnapshot = it }
+            }
+            .flowOn(Dispatchers.Default)
+
+    /** Get all captures (one-shot). */
+    suspend fun getAll(): List<CurioEntry> =
+        dao.getAll().map { it.toEntry() }
+
+    /** Get captures filtered by category. */
+    suspend fun getByCategory(categoryId: CategoryId): List<CurioEntry> =
+        dao.getByCategory(categoryId.name).map { it.toEntry() }
+
+    /** Save a new capture. Also caches the full topic data so the entry
+     *  survives topic deletion from JSON assets. Returns nothing. */
+    suspend fun save(entry: CurioEntry) {
+        dao.insert(entry.toEntity())
+        // v294 — cache the full topic so the entry persists even if the
+        // topic is later removed from bundled JSON or Room's topics table.
+        runCatching {
+            cachedTopicDao.upsert(CachedTopicEntity.fromCurioTopic(entry.topic))
+        }
+    }
+
+    /** Get a single capture by ID. */
+    suspend fun getById(id: String): CurioEntry? =
+        dao.getById(id)?.toEntry()
+
+    /**
+     * v3xx — observe ONE capture by ID as a reactive [CurioEntry] flow.
+     * The entry-detail screen uses this instead of collecting the whole
+     * table + linear scan, so opening a saved entry (and reflecting edits
+     * while it's open) is O(1) per emission instead of a full-table decode.
+     */
+    fun observeById(id: String): Flow<CurioEntry?> =
+        dao.getByIdFlow(id)
+            .map { it?.toEntry() }
+            .flowOn(Dispatchers.Default)
+
+    /** Look up the cached topic data for an entry's topic ID. Returns null
+     *  if the topic was never cached (e.g. legacy entries). */
+    suspend fun getCachedTopic(topicId: String): CurioTopic? {
+        return runCatching { cachedTopicDao.getById(topicId)?.toCurioTopic() }.getOrNull()
+    }
+
+    /** Permanently delete a capture by ID (recycle-bin purge / import cleanup). */
+    suspend fun deleteById(id: String) {
+        dao.deleteById(id)
+    }
+
+    /** Permanently delete several captures (recycle-bin purge). */
+    suspend fun deleteByIds(ids: Collection<String>) {
+        if (ids.isNotEmpty()) dao.deleteByIds(ids.toList())
+    }
+
+    // ── Recycle bin (v5) ───────────────────────────────────────────────────
+
+    /** Move a capture to the recycle bin — it stays recoverable. */
+    suspend fun softDeleteById(id: String) {
+        dao.softDeleteById(id, System.currentTimeMillis())
+    }
+
+    /** Move several captures to the recycle bin in one statement. */
+    suspend fun softDeleteByIds(ids: Collection<String>): Int {
+        if (ids.isEmpty()) return 0
+        return dao.softDeleteByIds(ids.toList(), System.currentTimeMillis())
+    }
+
+    /** Observe recycled captures (newest-deleted first) as [CurioEntry]s. */
+    fun observeTrashed(): Flow<List<CurioEntry>> =
+        dao.getTrashedFlow()
+            .map { entities -> entities.map { it.toEntry() } }
+            .flowOn(Dispatchers.Default)
+
+    /** One-shot snapshot of every recycled capture (for the expiry sweep). */
+    suspend fun getTrashed(): List<CurioEntry> =
+        dao.getTrashed().map { it.toEntry() }
+
+    /** Get one recycled capture by ID (null when not in the bin). */
+    suspend fun getTrashedById(id: String): CurioEntry? =
+        dao.getTrashedById(id)?.toEntry()
+
+    /** Restore a capture from the recycle bin back into the Cabinet. */
+    suspend fun restoreById(id: String) {
+        dao.restoreById(id)
+    }
+
+    /** Restore every recycled capture at once. */
+    suspend fun restoreAll() {
+        dao.restoreAll()
+    }
+
+    /** Permanently delete one recycled capture. */
+    suspend fun purgeById(id: String) {
+        dao.purgeById(id)
+    }
+
+    /** Permanently delete every recycled capture. Returns the deleted count. */
+    suspend fun purgeTrashed(): Int = dao.purgeTrashed()
+
+    /** Count captures currently in the recycle bin. */
+    suspend fun countTrashed(): Int = dao.countTrashed()
+
+    /** Count total captures (live entries only). */
+    suspend fun count(): Int = dao.count()
+
+    /** Wipe every capture (restore-from-backup). Returns deleted count. */
+    suspend fun clearAll(): Int = dao.clearAll()
+
+    companion object {
+        fun createId(): String = UUID.randomUUID().toString()
+    }
+}

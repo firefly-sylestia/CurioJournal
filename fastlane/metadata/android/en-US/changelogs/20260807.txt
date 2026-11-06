@@ -1,0 +1,13 @@
+• Security hardening: HTTPS-only network policy, release R8 shrinking/obfuscation, and safer backup/archive restore handling.
+• Maximum-quality promo and mood-board exports: lossless PNG output, sharper high-resolution rendering, and safer memory handling.
+• Refined promo rose-plum colors and dark non-pastel hero cards with deeper fills and midnight frosted surfaces.
+• Refined the Detail hero tear with a narrower paper lip and more reliable seeded wave shape.
+• Polished onboarding spacing: a larger Curio wordmark and roomier, lower intro controls.
+• Refined Topic Reveal’s done action and corrected vertical alignment for Material Symbol icons.
+• Kept torn-paper hero under-layers bright white across dark Profile, Settings, Cabinet, drawer, and intro surfaces.
+• Corrected the dice's optical vertical position on narrow Home and Shuffle controls, including the animated Spin state.
+• Polished Profile's narrow-screen controls and merged XP, quests, and achievements into one readable card; corrected Detail category scrolling and the paper-colored tear seam.
+• Made Topic Reveal feel continuous with Spin: the landed ticket expands into the reveal hero for both automatic and manual opens.
+• Darkened the shared rose hero-card family in dark mode across Home, Profile, Settings, Cabinet, Onboarding, and Quests while preserving light mode and category colors.
+• Improved Material Symbol optical centering in compact pills and normalized the dice affordance alignment across Home and Spin.
+• 100 new modern music topics — 50 contemporary artists (The 1975, Sabrina Carpenter, Harry Styles, Hozier, Lana Del Rey, Travis Scott, Playboi Carti, Kali Uchis, Tems, Ice Spice…) and 50 of their defining albums (Short n' Sweet, Harry's House, Norman Fucking Rockwell!, Utopia, Currents…)

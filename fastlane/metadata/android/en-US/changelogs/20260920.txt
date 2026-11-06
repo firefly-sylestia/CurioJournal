@@ -1,0 +1,340 @@
+FIX: Compile errors from the sticky-back rollout (misplaced pills, missing imports).
+REVERT: Liquid glass and Clear glass stay OFF by default (the v256 default flip is undone).
+NEW: Glass tuning preview is a REAL draggable capsule over a collage - what you drag is how nav pills render.
+FIX: The detail page's glass more-menu is blurry by default now (was near-zero blur).
+FIX: Pet overlay companion compiles (missing imports).
+FIX: Scrolling heroes were inset from the screen sides - every settings-family banner is full-bleed again.
+ADD: The back pill returns as a sticky floating control (with the glass morph) once a scrolling hero moves up.
+FIX: Explore bubble expand is smooth now - the panel has a fixed width so the overlay window resizes in one step instead of fighting itself.
+NEW: Redesigned explore bubble panel - big chronometer readout, labeled Pause/Hide/Cancel controls, note field and Finish action.
+FIX: Pet Designer - the bare background strip behind the studio capsule is gone; the page runs edge-to-edge to the bottom.
+ADD: Pet outside the app - an opt-in overlay companion that floats over other apps (Pet Designer > Settings; drag, tap to hop, long-press to send home).
+ADD: Explore bubble wears the simulated liquid-glass pane when Liquid glass is on.
+CHANGE: Liquid glass and Clear glass are now ON by default.
+CHANGE: Below Android 12 the simulated glass is limited to the bottom nav and Topic Reveal - every other pill keeps its classic solid look (the faux-blur pills read badly there).
+FIX: Pill icons sat a touch too high - a small optical bias now seats glyph mass just below center in round buttons.
+FIX: Glass tuning dialog compiles again (missing imports).
+CHANGE: Every torn-hero page (Settings hub & sub-pages, Experiments, Backup, Support, Updates, Promo, Quests, Recycle bin, Recents, Manage categories) now scrolls its hero away with the page like Home & Profile - no more pinned tear.
+FIX: Home & Profile hero tears scroll away again - the v251 pinned-tear change is reverted.
+ADD: Explore bubble rests as a small icon-only pill and docks into the screen edge after idling (touch to slide it back out).
+IMPROVE: Explore bubble expands smoothly now; an untouched panel folds itself back up so it never keeps covering what you're watching.
+FIX: Pet hide-and-seek peeks on all screen sides, not just corners.
+FIX: Star-catch stars fall faster and stop piling up; taps no longer cancel a running game.
+IMPROVE: Glass tuning moves into a live-preview dialog; indicator-shadow slider removed.
+ADD: Sticky hero tear on Home & Profile - content slides under the pinned tear like Settings.
+ADD: iOS-style search field - flat gray capsule, Cancel while focused.
+FIX: Blob doubles killed per mode; full-content refraction restored under the finger.
+ADD: Detail page more-menu morphs open from its pill as liquid glass (iOS-style bloom), scrim dismiss.
+FIX: Mood-board quote slips use the m3-layout-sweep sizing (editor + saved view).
+ADD: Classic active indicator experiment - transparent refracting blob style returns as an opt-in.
+FIX: Mood-board quote slips hug their text instead of always rendering at max size.
+FIX: Active blob is now solid white/black at rest (theme ink stays crisp); gentle press-glass refraction only while held.
+IMPROVE: Apple-style pill press animation — crisp press-in, springy release.
+ADD: Liquid glass on Cabinet & Topic DB category chips, single theme ink.
+FIX: Active tab icon + label stay visible under the glass blob (untinted sample).
+FIX: Pill icons self-center at any font size; press shrink + refraction bloom returns.
+FIX: Mood-board quote slips grow with text plus one spare line.
+ADD
+- Pet Designer: with Liquid glass on, the studio bar is now the SAME draggable glass tab bar as the bottom nav - one refracting capsule with the damped-drag blob, velocity squash and specular sheen.
+
+- Liquid glass on older phones: devices below Android 12 now get a simulated glass look (frosted veil, sheen and rim) when the toggle is on - no one is left out, they just miss the live refraction.
+
+- Liquid glass: a new "Indicator shadow" slider tunes the draggable active pill's shadow strength.
+- Liquid glass: the active pill no longer tints the tab icons and labels with the category color - your chosen ink shows true.
+
+FIX
+- Glass parallax tilt: the cue is now the capsules' OUTER glow - it shifts around the glass as you tilt the phone instead of the wrong painted-on arc inside the capsule. Nothing else about the glass changed.
+
+- Navigation: returning to Cabinet (or leaving the topic reveal) no longer replays the blob flying in from Home - the pill snaps to the live tab instead of animating from a stale one.
+- Liquid glass on pre-Android-12: the simulated glass is much clearer now (light veil, stronger sheen + rim) and the Blur slider shapes the veil too, so it reads like a clear pane instead of milk.
+
+- Home: the drawer-menu and avatar pills really turn into liquid glass on scroll now - a duplicate scroll-state declaration was keeping the morph permanently at zero.
+- Liquid glass nav: the active pill is now fully transparent at rest and wears the exact same blur/refraction recipe as the other glass capsules - the colored ghost icons that re-tinted the labels when the blob settled are gone.
+- Floating pills (Home menu/profile, entry back/more, Profile search) are slightly larger (44dp) so the icons sit centered at every system font size.
+
+- Home: the drawer-menu and avatar pills now actually render liquid glass (a capture guard was flattening every in-screen pill on each scroll frame).
+- Navigation: opening an entry from Cabinet/Spin no longer flies the active blob back to Home before collapsing - it stays on the tab you left.
+- Navigation: fast-drags the active blob on the right side of Cabinet no longer behave erratically (drag sensitivity is uniform across the bar).
+
+- Appearance: "Liquid glass" moved here from Experiments and merged into ONE switch (the nav bar and all floating pills now share it), with an inline "Clear glass" option and live sliders for Reflection, Refraction and Blur so you can tune the glass recipe yourself.
+- Liquid glass nav: dark mode uses pure white ink for the active tab's icon and label.
+
+- Liquid glass: the clear style is clearer still - the frost blur and milky tint are cut further, so glass reads crisp instead of foggy.
+- Liquid glass nav: the active tab's icon and label are now pure black in light mode (white in dark) - no more category tint fighting the glass.
+
+- Liquid glass: a new "In-screen glass" experiment - the Home menu/profile pills, Profile's back/search pills, the detail page's back/more pills and the Pet Designer studio bar become real refracting, fully clear liquid glass once you scroll (each samples only what sits behind it, so the old crash is impossible by construction).
+- Liquid glass: the parallax tilt cue now draws a light arc hugging each capsule's TOP edge that slides as you tilt the phone - never a full circle, invisible when the phone is level.
+
+- Liquid glass: new "Clear glass" option - much less frost and a lighter tint, so the bar reads like clear refracting glass instead of milky.
+- Liquid glass: parallax tilt now moves the rim EDGE GLOW across the glass as you tilt the phone, not the whole pane.
+- Liquid glass: active tab text is much easier to read in light mode.
+- Fixed floating pill icons (menu/profile avatar and friends) sitting off-center on phones with non-default font sizes.
+- Bottom nav: the liquid-glass bar no longer squishes - tabs keep their full icon and label, always expanded.
+- Liquid glass: new "Glass parallax tilt" experiment - the glass pills sway against the phone's tilt for a floating depth effect.
+- Mood board: floating quote slips are smaller and can no longer stretch across the whole collage.
+- Drawer constellation: tapping a star now truly centers it on any screen shape.
+- Liquid glass: the Home menu/profile pills and the detail back/more pills now start as a solid hero-colored fill and morph into real refracting glass as you scroll (experiment toggle; profile keeps its photo off glass).
+- Drawer: the curiosity constellation is now true Material style — theme-colored lines and stars that are finally visible in light mode, bigger explored-lane stars with a gentle twinkle, a pulse ring on the tapped star, and the map now actually centers the star you tap.
+- Splash: bigger logo with a calm breathing motion instead of the odd up-down movement, plus a real progress bar that fills as your topics load — everything is ready the moment the app opens.
+- Appearance: a new "Material hero tears" option rides Material theme - the torn heroes wear the theme's own container color instead of the app's rose.
+- Spin: Main card shadow, Nav-style buttons, Top-lit deck cards, Tinted deck edges and Roomier deck titles are now always on - they won their experiments.
+- Drawer: a new Experiments toggle — "Drawer constellation" (off by default) — brings back the curiosity-map stars at the top of the drawer, now drawn as just the constellation pattern with no painted sky behind it.
+- Drawer: by default the top slot is now a small Material-style stat strip — day streak, level and saved count in one clean card; tap it to open your stats.
+- Constellation: redesigned as the real Corvus (The Crow) star pattern — the mythological symbol of curiosity. Space aesthetic with deep void background, faint nebula, gossamer constellation lines, and small bright stars. The brain mesh is gone.
+- Drawer: the planet footer now sits flush above the gesture bar — the art is no longer cut off behind the system nav area, and the footer SVG is trimmed 44 units from the bottom so it reads as one clean band.
+- Paper: the hole-ring coil is mirrored to match the reference art — the wire now starts inside the hole on the right, arches over, and the left leg dives past the card's left edge to an open end.
+- Reveal: the Like/Dislike pill now vanishes the instant you tap back (it no longer lingers through the exit transition), while still floating ABOVE the collapsing nav pill when you arrive.
+- Stats: the constellation's stars are smaller — a real size limit keeps the dots neat instead of ballooning with high knowledge scores.
+- Reveal: the Like/Dislike pill now floats ABOVE the collapsing nav pill (it slides in on top of it, overlapping) and the nav bar vanishes at the exact moment the pill lands — the handoff reads smooth instead of two pills fighting for space.
+- Paper: the hole-ring coil now matches the latest reference — the wire starts at the paper's left edge, arches over the top, and its right leg dives down through the hole and ends open below it (no more blunt mid-air stop).
+- Stats: a new "Your Brain Profile" card on the "Your Curiosity" page — six real cognitive dimensions (Knowledge, Memory, Expression, Focus, Consistency, Curiosity) scored from your actual activity (lanes explored, saves, words you've written, streaks, daily quests), each with a level and a science-based tip for growing it, plus your lifetime words-written line.
+- Drawer + Stats: constellation stars are now sized by KNOWLEDGE built in each lane (explores + saves + words written there) instead of just saved count — the drawer's star popover shows "N knowledge" — and a gentler sqrt scale keeps small lanes distinguishable.
+- Splash: the Curio wordmark is bigger now and wears a theme-aware gradient (bright mint → butter on the dark sky, deep rose → gold on the light cream), the tagline is larger and warmer in both themes, and a soft warm ground band fades in at the bottom of the screen.
+- Topics: a new Animated Movies lane — non-anime animation (Disney, Pixar, DreamWorks, Illumination, Aardman, Laika, classic 80s/90s, stop-motion, international, franchise DTV) split out of Films and expanded with real films and quick facts.
+- Drawer: the curiosity map is now the SAME brain-shaped constellation as the "Your Curiosity" page — explored lanes in the two-lobe layout, star size = saved count, all-time glow, connected web + gold fissure (the drawer's own grid map is gone), with the richer per-lane passport panel on tap.
+- Settings: a new opt-in Appearance toggle — "Material theme" redoes the whole color system per Material 3 (dynamic Material You palette, neutral surfaces, the 36 category lanes collapse into 6 muted families). Default OFF — the current look is untouched.
+- Navigation: the bottom pill bar's morph is even calmer now — the width, fill, icon tint and label glide ~40% slower (still zero overshoot), the pills are a touch taller (52dp) and wider (64/136dp), the inactive pills breathe with more space between them, and the tab labels wear the new chunky Changa One display font.
+- Stats: the "Your Curiosity" constellation now links every star to its two closest neighbours in a connected web — the old faint lines were invisible in light mode, so the links are theme-aware now (deep slate in light, bright blue in dark) with the gold fissure bridging the two halves.
+- Spin: the category picker has no footer below the cards anymore — the "Manage categories" pill is gone. Mix + Cancel now float over the grid as nav-bar-style controls (no background capsule) and only appear in multi-select.
+- Spin: the picker hero's watermark icons are visible now — the small twin was hidden under the status bar and the large one behind the preset chips; both are repositioned into free corner space.
+- Pet Designer: the studio's bottom pill bar is theme-aware now — the active tab wears the same muted container + ink as the main nav bar (the old solid butter read as a stray yellow), and the "What do you want to edit?" card is a solid opaque container instead of a translucent tint.
+- Pet Designer: the header's torn banner now bleeds full-width — the list padding used to inset it, cutting the tear at both sides.
+- Stats: the "Your Curiosity" page's header banner is now the same sky artwork as the drawer hero — the night sky in dark mode, the day sky in light mode (the header's design is unchanged, only the banner art).
+- Drawer: the curiosity map's constellation lines and stars are clearly visible in light mode now — deeper slate inks on white instead of the faint blue that vanished — and every star is linked into a connected grid web so the constellation reads as one mesh.
+- Drawer: tap the moon in the night sky (or the sun in the day sky) on the hero to flip the theme between light and dark.
+- Drawer: the hero's sky is now hand-drawn artwork — a night sky with stars and a crescent moon in dark mode, a day sky with sun, clouds and birds in light mode (no watermark glyphs on the banner).
+- Drawer: the curiosity map now lives on the plain drawer surface — no card box, title or range selector. ALL your lanes show as solid stars; explored lanes glow with their icon, and tapping one opens that lane's real passport data (spins, peeked, explores, saved, last explored).
+- Drawer: the banner's sky now runs all the way to the torn edge (a sky tear), and the stars/moon are visible in light mode too.
+- Drawer: the footer is a new hand-drawn planet illustration that sits FLAT at the very bottom edge of the drawer (no box or shadow) and fades into the surface, with the version + "Made with curiosity" reading inside the fade.
+- Stats: the "Your Curiosity" header's stars/moon are tuned for light mode.
+- Offline voice-to-text: recorded voice notes transcribe straight on your device (Vosk) — a Transcribe button on the entry page and the transcript lives in its own box below the recording with an Expand button for the full text.
+- Offline model: Settings → Recording lets you pick a model by quality and size (English / multilingual / Indian English), download it in-app with a progress bar, and delete it anytime — no internet needed while transcribing.
+- Offline model: the Large English (~128 MB) tier is the top pick in Settings → Recording now — a real accuracy step up from the smalls, still phone-friendly (the server-grade Full models are gone: they lagged and crashed phones).
+- Dictation: a floating mic now rides EVERY note and quote text box in Save your take (Field notes' sections, the journal, the film review, the sound bite note, the gallery caption and every quote card) — tap it to dictate in a dialog with a live preview, tap Stop when you're done, and Insert drops the text into the box (still editable). It only stops when you say so.
+- Quick title: the title field is a clean plain input now (no more paper/tear slip), and on the saved entry it sits right below the quick fact on a neat pill.
+- Navigation: the bottom bar is now a floating pill — the tabs show as icons, and the active tab smoothly expands to reveal its label (the indicator covers the whole pill) in every theme, including dark and AMOLED.
+- Drawer: the topic-browsing rows (Topic History, Manage Categories, Browse Topics) fold under a collapsible "Your Curiosity" section, and Support & diagnostics + Replay intro group under "About" — both collapsed by default.
+- New Curio icon: a cosmic mark — a mint planet with a pink moon over gold waves on a midnight sky (launcher, round, themed and notification icons, plus the splash).
+- Updates page: a dedicated sub-page (Settings → Updates) with your version, a check for updates with release notes, direct APK download & install, and the opt-in Update checker toggle — the background check is off by default to save data.
+- Auto backup: pick a save location once and Curio backs up your captures and settings there automatically about once a day (opt-in).
+- Dark mode reimagined: pitch-black pages, dark same-hue heroes, reversed buttons and One UI-style inner glow on pills, plus the Light / Dark / System theme picker.
+- Paper stat cards on by default across Home, Profile and the detail page.
+- Edit profile: name and tagline in one dialog, a profile photo picker, and a manual crop editor — every pick opens the crop first, so you frame the square (no squished portrait shots).
+- Category picker: Original/New tabs and quick-mix presets ride the tear hero; the filter sheet search matches the Cabinet hero search.
+- Music service icons: the explore "Watch in" / "Listen in" pill and the Music service picker show the real brand logos (Apple Music, Spotify, YouTube, YouTube Music).
+- Spin: weighted shuffle deck (tiered picks, liked topics 2×), peek cards, 3D shuffle, category mixes and quick presets.
+- 30+ category lanes and 17,000+ hand-curated topics with quick facts, tags and explore actions.
+- Songs lane expanded to 1,000 real songs from the 1960s to today — half of them 2000s and newer, each with a real backstory.
+- Topic Reveal: hero ticket, quick fact, tag chips, pin, Like/Dislike and reading/watching progress.
+- Explore sessions: timed real-world research flow with your search engine, floating timer, reminders and a shared session note.
+- Save your take: Voice, Review, Journal + quotes, Mood board and Field notes; multiple takes per topic, custom tags, moods, note-paper styling, voice notes and image attachments.
+- Cabinet: saved discoveries with search, category filters, multi-select and delete; Recycle bin with auto-expiry.
+- Topic Database: browse every topic by lane with an A–Z rail, speed-scroll, search and filters.
+- Profile: streak, XP, levels, badges, tagline and lane shortcuts.
+- Curie pet: evolving companion with moods, games, three voices, 150+ reactions and a full Pet Designer.
+- Quests: daily and journey quests, path chains, medals and a badge shelf.
+- Backup & restore: streamed in-app backup of entries, media, preferences and pet designs.
+- Liquid-glass nav: the active tab expands like the classic pill - icon with the label beside it in accent ink - and the indicator now wears a faint accent glow.
+
+ADD
+- Stats page: a new "Your Curiosity" screen that turns the drawer's observatory into a full page — a celestial sky header, an INTERACTIVE constellation where every star is a lane you've explored (bigger = more saved there, glowing when active this week, tap a star for its stats), your streak + level with XP progress, lifetime totals (spins, explores, saves, quotes, pins, likes, dislikes, daily quests), journey badges and a per-lane breakdown. Reached from the drawer (tap the curiosity map or "Stats & insights") and from Profile.
+- Stats: the "This Week ˅" selector on the drawer's curiosity map is LIVE now — pick This Week / This Month / All Time and the stats constellation (star sizes, saved counts, lane glow and the per-lane list) filters to that window; the same selector rides the stats page's constellation card, and the two stay in sync.
+- Drawer: redesigned as a tiny personal observatory — the hero banner is a dreamy pre-dawn sky (pale seafoam gradient, scattered stars, a crescent moon, faint constellation lines and a soft cream rolling horizon under your profile), a new "Your Curiosity Map" shows a constellation shaped like a brain with your REAL stats orbiting it (streak, saved, explored, topics, questions and overall curiosity score), the three nav rows got soft tinted icon chips with subtitles, and a hand-drawn planetary landscape with a telescope now sits at the bottom behind the version + "Made with curiosity".
+- Drawer: the curiosity constellation actually responds to your activity — stars grow brighter and bigger where you've liked, saved and pinned more, and the more connections you've made (quotes, pins, likes) the more lines bridge the brain's two halves; the sky also gets a whisper of paper grain.
+
+ADD
+- Explore: cancelling is no longer forever — a cancelled session shows on Home as a resumable card (banked time continues where it stopped), and the floating bubble got its own Cancel button.
+
+ADD
+- Experiments: "Liquid glass pills" (off by default) now matches the reference exactly - the bottom nav becomes ONE refracting glass capsule with equal-width tabs and a DRAGGABLE active pill (drag between tabs with velocity stretch, press-scale and a touch-following specular sheen); the reveal and pet-studio bars get the frosted treatment.
+- Explore: on Android 16+ the running explore session posts a genuine Live Update notification - a system-styled progress bar wearing your lane's color that can promote to a status-bar chip; earlier versions keep the current look.
+
+FIX
+- Explore live notification on Android 16 now actually requests Live Update promotion (status-bar chip), styles the bar by progress, and a permission dialog appears when notifications were permanently turned off for Curio.
+- Crash fix: Pet Designer (and the Reveal bar) could crash the whole app with a render-thread stack overflow when the Liquid glass pills experiment is on - glass pills no longer sample their own capture layer.
+- Auto backup: pick how often it runs - Daily, Every 3 days or Weekly - and it now also fires on schedule while the app stays in memory (not just on a fresh launch).
+- Detail page: opening an entry no longer shows a blank gap before the quick fact and body appear - the content fades in immediately.
+- Updates: the in-app update notice is now a proper themed dialog with Open Updates / Later actions instead of a corner pill.
+- Cabinet: entry cards no longer get chopped at a hard line above the bottom nav - the grid scrolls full-bleed under the floating pill now, with only the last row lifted clear.
+- Explore: closing the app auto-pauses the running session so the timer stops counting while you're away.
+- Explore: the notification's inner timer text no longer lags behind — the shade's own live chronometer IS the timer now (the stale text is gone).
+- Explore: the "Done exploring?" prompt shows once per session instead of nagging every time you return to the app; Home's button reads "Express yourself" with a properly styled Keep-exploring pill.
+- Topic Reveal: the category pill now expands just enough to fit its name instead of always stretching to the max width.
+- Topic Reveal: the Favorite pill plays its expand animation when you open an already-favorited topic (it used to sit there already expanded).
+- Cabinet: no more background strip behind the floating nav pills - the bar blends into the page like on Home.
+- Progress editor: the top corner shows and edits the pages/episodes TOTAL (not the progress number), in a cleaner chip, with a tick button to confirm while editing.
+- Drawer: the planet footer now sits in normal flow below the drawer's rows — it never floats, and expanding the About / Your Curiosity sections scrolls them above the footer instead of hiding them behind it.
+- Paper: the hole-ring coil's protruding left end now curves like a wire wrapping around the card edge (a small hook) instead of ending blunt — still fully visible past the card.
+- Navigation: the pill bar's collapse is even calmer still — the tab pills glide at ~20% slower pace, with the same smooth motion on the Like/Dislike pill and the Pet Studio bar.
+- Topic Reveal: the Like/Dislike capsule now matches the nav bar's exact height — same segment size AND same capsule padding, so the two pills read identical.
+- Stats: a standalone sun (light) / crescent moon (dark) now floats just below the status bar on the "Your Curiosity" page — just the celestial body, separate from the sky artwork.
+- App size: the APK is ~20MB smaller — the release build no longer bundles the x86/x86_64 native libraries (emulator-only legacy; every real device is arm64), which nearly halves the bundled offline speech engine.
+- Save your take: the Save entry / Save changes button is text-only now — the leading check tick is gone.
+- Drawer: the planet footer now sits FLAT at the very bottom edge of the drawer (it used to float above the bottom when the drawer content was short), and the "v·version · Made with curiosity" credits are visible again in dark mode (warm parchment ink instead of the dark khaki that vanished).
+- Stats: the back pill on the "Your Curiosity" header is gone — the system back gesture handles it, so the redundant circle button is removed.
+- Drawer + Stats: the curiosity constellation is now a human brain — a real side-profile silhouette (frontal lobe, cerebrum dome, cerebellum) with the dots scattered randomly across the whole shape instead of rigid left/right rings, and a light neural web instead of the dense mesh.
+- Build: the topic validator now accepts hyphenated category files — the Animated Movies lane (animated-movies.json → ANIMATED_MOVIES) validates instead of failing the build.
+- Paper: the "Hole rings" coil now shows FULLY — it peeks out of the card's left edge without being cut (the card surface no longer clips its own drawing), so the spiral binding reads complete.
+- Navigation: the pill bar's collapse is even calmer and cinches tighter now — the tab pills glide ~40% slower and pull in below their idle size while leaving a page, and the Like/Dislike pill + Pet Designer studio bar match the nav bar's exact size and Changa One labels.
+- Topic opening: tapping "Flow" in Films no longer opens "Flower Boy" (an album) — topics now resolve in the lane they were tapped in, and exact/base-name matches always beat loose word matches across lanes (same fix protects the capture page).
+- Topic Browser: the selected category and the expanded category chips now stay put when you leave and reopen the browser — they persist until the app restarts.
+- Category picker: it compiles again on wide screens — the tap-to-open rework dropped the wide-window flag the tile grid used, so the grid broke the build (now restored).
+- Home + Recents: the "Unexplored" / "Resumed" tag pills now wear a shaded version of the category color they sit on — solid shaded chips on the tinted cards in light mode (the old pale blend vanished) and visibly tinted pills in dark mode (the old fill read transparent).
+- Material theme: the Spin Categories/Mixed button, the Filter button, the filter-sheet chips and the Cabinet/Topic-History filter chips now use the same muted family colors as the category cards — the rose-family buttons no longer paint amber (scheme secondary), green lanes no longer paint mint (tertiary), neutral lanes are no longer translucent, and a MIXED deck's button now matches the deck's primary color exactly.
+- Material theme: category text and icons (Home row arrows, tag pills, unselected chip labels) now use the lane's own muted family ink instead of the off-hue scheme companions.
+- Paper: the "Hole rings" coil is redrawn from the revised reference — a clean arch over the hole (no bottom curl) that now PEEKS OUT of the card's left edge like a real spiral binding instead of sitting entirely inside.
+- Category picker: it always opens in tap-to-open mode now — tap a category to open it (even when the deck is a mix), and only tap-and-hold enters mix selection (the old auto-tick forced every tap to toggle the mix).
+- Category picker: pressing Cancel and leaving via back now applies the cancellation — the mixed deck clears back to a single category instead of the sheet closing with the old mix intact.
+- Category picker: changing away from a mixed deck (from the Home shuffle) and opening a topic no longer brings the mix back when you return — the new category sticks.
+- Drawer + Stats: the curiosity constellation's brain mesh now reads whole — decorative filler neurons fill both hemispheres and join the neural web, so the brain shows its full shape even when few lanes are explored (the real explored-lane neurons stay the tappable ones).
+- Navigation: leaving a tab for the Topic Reveal now fully collapses the nav pill — the reveal no longer keeps the Shuffle pill popped open during the close, and the bar's collapse-hold is shorter so it doesn't linger.
+- Detail: the saved-entry hero's tear edge now reads the same as every other screen — the warm paper-colored band under the seam is gone, replaced by the same subtle dark hairline the Home, Profile, Cabinet and Settings heroes use.
+- Paper: the "Title cut lines" under headers are shorter and sit to the right of the title text — a partial right-side underline.
+- Paper: the "Hole rings" are redrawn as the real spiral-coil binding wire from the reference SVG — a foreshortened metal coil drawn over the punched holes with a tuned steel gradient and specular (the old rounded ring look is gone).
+- Navigation: leaving a tab (opening Profile, a settings page, the Topic Reveal…) now glides the selected pill closed with the same spring it expands with — the pill no longer vanishes the instant the page opens.
+- Spin: the shuffle card no longer shows the topic's year pill — the year reads only on the Topic Reveal page (the byline pill stays on the card).
+- Drawer: the curiosity constellation is now a brain neural web — explored lanes sit as neurons in two hemisphere lobes, linked by curved synaptic connections with inter-hemispheric bridges, instead of the old flat scatter.
+- Drawer: tapping a neuron shows a small floating card with the lane and its saved count (the big panel below is gone), and the drawer is a touch wider so the brain has room to breathe.
+- Material theme: in pastel mode the deck's main card and fills now soften to pastels like the rest of the app (the material family colors were staying full-strength).
+- Material theme: a mixed deck now wears the theme's single primary color instead of a blended mix color.
+- Material theme: the light-mode adaptive hero reads crisp again — the banner wears the rich material family color with dark title text and glyphs instead of the washed-out pale look.
+- Material theme: the nav bar now uses proper Material 3 colors — a neutral container with a soft indicator instead of the muddy per-lane pill.
+- Navigation: switching tabs now gives a light haptic tick — on the bottom pill bar, the wide-window rail, the Topic Reveal Like/Dislike pill and the Pet Designer studio bar.
+- Spin: the picker's Mix + Cancel now sit in ONE floating capsule styled like the bottom nav bar (page-tint lift, rounded, soft shadow), and popping the sheet back (swipe / scrim / back) APPLIES the mix instead of silently dropping your selection — the filter sheet does the same: pop back with chips ticked applies the filters.
+- Drawer: the footer planet art is slimmer (150dp vs 210dp) so it reads as a small bottom band instead of a big block.
+- Spin: the Filter button only shows its count when filters are actually selected — the badge used the always-non-zero matching-topics number, so it read "Filter · N" permanently even with nothing ticked.
+- Drawer: opening it no longer crashes on devices with 29 lanes — the constellation web's link guards now respect the actual node count (the last row of a non-rectangular grid was indexing past the end).
+- Pet Designer: the header's full-bleed banner no longer crashes with "Padding must be non-negative" — the full-width bleed is done with an offset + forced width instead of illegal negative padding.
+- Spin filters: the Apply / Show all button now floats over the sheet as the same raised accent pill (no full-width bar below the chips), with extra bottom clearance so it never covers the last row of chips.
+- Backup & restore: your profile photo now survives a restore — the avatar file is bundled into the backup (previously only its path was, so a restored app pointed at a file that didn't exist and showed a blank avatar).
+- Navigation: the pill bar's morph is even slower and calmer now — the tab pills glide at half the previous pace (still zero bounce), and the Topic Reveal Like/Dislike pill and the Pet Designer studio bar move with the exact same slowed motion.
+- Navigation: Cabinet's "All" tab no longer turns yellow — the active pill now wears the same accent as the Spin screen ("whatever the spin screen color have set"), falling back to the coral brand when Spin hasn't been opened yet.
+- Mood board: resizing a quote card now scales the WHOLE note — the text grows and shrinks with the card (it used to only stretch the width with fixed-size text), and the saved/shared card renders at the same relative size and spot as the editor (the old editor-only display cap that made exported cards look bigger or misplaced is gone).
+- Share: the entry share card is a 3:4 portrait now (was square) and it carries your own touches — your display name, the session note you added, and the attached photo when one exists — with a quieter format · date line and the Curio branding below.
+- Dialogs: in light mode every dialog now wears the theme-aware elevated container (the warm surface tone the pills and chips use) instead of the old cream-white panel.
+- Edit profile: the dialog is restructured with clear sections — "Your name" and "Bio" headings (bold, larger, with icons), the name field below each; the tagline field is now the Bio, and the "Tagline" label, the "Use automatic tagline" button and both helper texts are gone (leaving it empty still falls back to the automatic streak line). The Profile photo label is a touch bigger and the layout breathes more.
+- Category picker: "Manage categories" is now a proper floating capsule (content-sized and centered — the old full-width bar is gone), it wears the same dynamic theme-aware container as the nav pill, and it's text only — the little drag-handle glyph is gone.
+- Filters: the Apply / Show all topics button is text only now — the leading check tick is gone (same as the Manage pill).
+- Progress dialog: the count is now a single number in the top corner — tap it and the inline field opens right there, Enter saves it, and a small replay icon resets it to the default; the "0 / pages" line and the "Edit total" chip are gone.
+- Topic Reveal: the Like/Dislike pill's capsule now wears the page's dynamic tint like the nav bar — it follows the topic's category wash in light mode instead of sitting on a static grey plate.
+- Navigation: tapping a nav pill no longer flashes the grey ripple circle — the tabs respond without the touch "shadow" effect.
+- Navigation: the pill bar's collapse is calmer now — the tab pills glide at a slower, critically damped pace (no snap, no bounce), and the exact same motion runs on the Topic Reveal Like/Dislike pill and the Pet Designer studio bar so every animated pill moves as one.
+- Navigation: the active tab's bright accent colors are muted — the pill wears a softened same-hue tone instead of the loud saturated lane colors, and on plain pages (Cabinet's "All" view) the active pill uses the theme's default soft container instead of the bright pink/coral (the old fallback matched the spin shuffle brand pink).
+- Dark mode: the Shared session note editor in Save your take is no longer a bright cream sheet on the black page — it renders on a dark elevated sheet with readable light text, and the typed text, placeholder and borders always show clearly in both themes.
+- Page openings: screens that pop open (saved entries, settings sub-pages, the category pickers, Support/Promo/Topic History) now lift in with a gentler, zero-overshoot motion — the modal pop's zoom is half what it was, and every spring-based entrance (dialog/quote editor, grids, page slides) runs critically damped so nothing bounces or snaps on the way in.
+- Explore bubble: the session note box now keeps a readable width — the text you type stays visible in the field instead of collapsing into a sliver.
+- Dark mode: the hairline borders on the floating surfaces are all gone — the nav bar, the detail page's quick-fact plate, the tour dock, the Topic Reveal Like/Dislike pill, the category picker's Manage pill, and the pet designer's studio bar + action capsule now read defined by their own fill (no more thin outlines in dark mode).
+- Pet Designer: the studio bottom bar is a compact centered capsule now (the old full-width capsule read stretched), the Save / Undo / Redo / Share actions float in one pill pinned to the top of the screen (it stays while you scroll), and the torn rose banner is part of the scrolling page — the tear rides away as you scroll down.
+- Navigation: the floating pill bar's background now actually shows the page's tint in light mode (the old lifted capsule washed it out to a plain parchment), and the tab pills glide smoother — the active fill fades in with the pill's expansion instead of snapping, the icon tint crossfades, and the width spring no longer bounces on settle.
+- Navigation: the pill bar's tab labels (Home · Spin · Cabinet) now render in the bold Material text style — they read proper and match the reveal Like/Dislike labels and the pet studio bar.
+- Navigation: the tab-switch motion's one-spring lockstep now compiles cleanly on every build (the springs are typed per animated value — width, fill, icon tint and the label's slide all keep the exact same physics).
+- Badges: the icons inside the quest badge medals are no longer squished — the heavy bold glyphs that crowded the medal's inner ring now render at normal weight with clean outlined strokes and room to breathe (earned glyphs, locked silhouettes and the tiny earned check).
+- Mood board + quote editor: the full-screen board and the floating quote dialog now fade (and softly scale) in when they open instead of popping in with zero animation — the same treatment for the expanded board on a saved mood-board entry. The collapse is smoother too now: the deselected tab's label glides out as the pill shrinks (it used to vanish instantly while the pill slowly deflated), the whole bar settles ~2x faster, and the same smoothing landed on the Topic Reveal Like/Dislike pill and the Pet Designer studio bar. The tab-switch motion now runs as ONE piece — the pill width, its fill fade, the icon tint and the label's slide-out all share the exact same spring, so nothing finishes early or lags behind when you switch tabs (before, the label and icon ran their own faster tweens and the fill used a slower spring, so the parts moved out of step).
+- Navigation: the active tab no longer turns yellow on Cabinet's "All" view (the plain page fell back to the butter secondary) — plain pages now use the theme's coral primary, and the wide-window rail wears the same page-accent colors as the phone pill bar.
+- Navigation: the bottom pill bar is bigger (60dp pills, 128dp expanded) so the tabs read proper and the active label has real room — the Topic Reveal Like/Dislike pill matches it. Both pills are also slimmer now (48dp tall — the length stays, the bar just reads shorter).
+- Navigation: the floating pill bar is now theme-aware and dynamic — the bar's container follows each page's tint (the Spin lane's wash, the Cabinet's filter wash, Home's rose) and the active tab wears the page's category color with readable ink.
+- Tour + Pet Designer: the tour Skip/Next dock and the Pet Designer studio bar share the same dynamic container and dark-mode rim as the nav bar.
+- Topic Reveal: the floating Like/Dislike pill now animates like the nav bar — both rest as icons, and the active segment springs wider and slides its label out (like/unlike) while the other collapses back.
+- Category picker: "Manage categories" is now a floating pill over the sheet's bottom (rounded, elevated capsule) instead of a flat full-width button.
+- Saved entries: the Share action now opens a proper share sheet — a live preview of the card, an Image card / Text format picker, and one Share button (no more blind share straight from the menu).
+- Progress: the progress dialog is back to the ring design — the stepper-first redesign was reverted; the page-count total is now edited through an explicit "Edit total" chip under the count (the old hidden tappable count is gone), and the slider snap fix stays.
+- Pet Designer: the studio's bottom bar (Pets / Editor / Settings) now animates exactly like the main nav bar — the tabs rest as icons and the active tab springs wider and slides its label out while the previous one collapses back (same spring morph, same solid amber active pill).
+- Drawer: the menu drawer now truly floats ABOVE the bottom nav bar — it slides its sheet and scrim over the bar, which stays composed underneath (the bar no longer disappears and pops back when the drawer opens and closes).
+- Topic Reveal: the year pill ("1851") no longer sits in the hero's top corner where the progress badge covered it on long-byline topics — it now rides next to the category chip in the top bar, and the hero keeps just the byline pill for a clean morph.
+- Mood board (full-screen): quote cards are now fully independent from the small board — rearranging or resizing a card in the full-screen editor never changes the small board's cards (and vice versa), so each view keeps its own arrangement.
+- Mood board: resizing a quote card now scales the whole note (height follows width at the paper aspect) instead of just stretching it wider, with a size limit — a card can't balloon past 60% of the board.
+- Mood board PNG: saved/shared images keep quote cards at their exact size and spot now — the old render shrank resized cards and sat them out of place against the collage.
+- Mood board: the full-screen view shows resized quote cards at their real size too (it used the small card's shrink cap, so what you arranged wasn't what you saw).
+- Mood board: the Clear board button now also removes every quote card (on-board and below-board) with a confirm that says so — one action resets the whole board.
+- Mood board: on an empty full-screen board the Quote chip sits at the bottom, and once you add content it moves up above the Clear board button.
+- Tour: the Skip/Next controls are now a floating pill bar (rounded capsule hovering above the gesture bar) instead of the old full-width opaque dock — the page shows through around them, matching the app's bottom nav; the main nav bar hides while the tour is up so the two pills never stack.
+- Pet Designer: the studio's bottom bar is now the app's floating pill bar (rounded elevated container, solid amber active tab with readable ink — the old stock Material bar is gone), and the page opens with the same smooth fade as the Topic Reveal instead of the mechanical zoom.
+- Manage Categories: the page runs full-bleed to the bottom edge now — no reserved strip under the content, it clears the gesture bar itself (same treatment as the Topic Reveal).
+- First run: Home's "Pick a lane" now opens the Spin screen's own category picker (the lane chips + Mix presets the deck uses) instead of a separate picker page.
+- Topic Reveal: opening a topic morphs more smoothly — the "Director · Nolan" pill now sits in the SAME top-left corner on the Spin ticket and the reveal hero (instead of the reveal swapping it for a "Watch for ~25 min" badge), so the pill stays put while the card grows; the action pill moved to the hero's bottom row with the subtype.
+- Shuffle card + reveal: a topic's year no longer lives inside the title — "Moby-Dick (1851)" reads "Moby-Dick" with a small year pill in the top corner (the two titles match during the morph).
+- Offline model picker: every model carries a quality-tier badge with an accuracy hint — Small · fast & light, Large · more accurate — tinted per tier (green / gold) so the accuracy ladder reads at a glance.
+- Offline model: the Full server-grade models (~1–2.3 GB) are gone from Settings → Recording — they lagged and crashed phones, so the picker only offers phone-friendly sizes (any already-downloaded Full model is cleaned up automatically). (Vosk has no "medium" tier — the ladder is Small ~40 MB / Large ~128 MB / server-grade 1–2.3 GB.)
+- Offline model picker: downloaded models show their real on-disk usage (e.g. "Downloaded · 41.2 MB"), and a big download (Large/Full tiers) confirms first — the dialog shows the storage it needs vs what's free, in red when it won't fit.
+- Offline model downloads: leaving the picker no longer cancels a download — transfers keep running in the background (the Settings row shows the progress), you can pause / resume a model anytime (it continues from where it stopped) or cancel it for good, and several models can download at once.
+- Offline model downloads: deleting a model removes only that model and its cached file — the others stay put (with a safety guard so the shared model folder can never be wiped).
+- Detail page: the Transcribe button and transcript box no longer appear on a saved voice take that has no recording — only takes with an actual voice note get transcription options.
+- Offline model picker: the list now opens as a full-height sheet that scrolls — all seven models fit with breathing room, and nothing is cut off below (the old fixed-size dialog squeezed the rows and clipped the bottom). — a big count with −/+ steppers, an explicit "of N pages" line with an edit pencil, a progress bar, and a slider that stays responsive on 1,000-page books (the old slider stuttered against non-integer steps on big totals).
+- Saved entries from before the book dedupe no longer hang on "Loading…" — old names like "The Odyssey" now resolve to the current entry ("The Odyssey (c. 8th century BCE)") automatically.
+- Topic Reveal: all of a topic's tags now show as chips (no more 3-chip cap, wrapping to multiple rows), plus a derived decade chip (e.g. "1940s") when the year is recoverable.
+- Topic Database: the category icon tiles use the current theme-aware look — the glyph and its tile stay visible in dark mode too.
+- Drawer: it now opens above the floating nav bar (the bar hides while it's up), the collapsible sections got a raised header with a clear toggle badge, and the expanded rows appear in a grouped card — opening a section visibly grows the drawer instead of rows silently appearing.
+- Drawer: your full name reads on one line under the greeting — the middle and last names no longer wrap onto separate lines.
+- App icon: the cosmic mark now fills about three-quarters of the icon tile instead of half — the ring of background around it reads as a slim border, and it looks properly sized on the App Info screen too.
+- Topic Reveal: the Like/Dislike pair now floats in a pill over the page — it slides out of the way while you scroll down and slides back in when you scroll up (the old fixed bottom strip is gone).
+- Topic Reveal: the tag chips sit directly below the hero again, and the hero's pills (verb + duration, author, subtype) now match the Spin card's pills in light and dark.
+- Dictation: taking a pause no longer wipes what you already said — the transcript keeps building, and each pause becomes a full stop (so speak, pause, speak again flows as two sentences).
+- Dictation: the floating mic now sits in the note box's own tool row above the field, so it stays visible above the keyboard instead of hiding below the page.
+- Dark mode: the option-card row labels on Profile, Settings and every settings sub-page (plus Support, Updates, Experiments, Quests, Backup and onboarding cards) were black and unreadable on the dark cards — they now render in the theme's readable ink.
+- Data: the same duplicate-collapse now covers every other lane that had it — 178 duplicate topics across Authors (38, e.g. Herman Melville twice), Astronomy (89), Songs (26), Geology (11), Animals (10), Technologies (3) and Chemistry (1) are now single entries, each keeping the richer description with both tag sets merged and marquee status preserved — old saved entries keep resolving by name.
+- Data: the ~55 books that appeared twice in the Books lane (e.g. The Odyssey listed with and without its year, Moby-Dick under two titles) are now single entries — each keeps the richer description, merges both tag sets, and stays marquee where it was.
+- App icon: the launcher icon is no longer a tiny card inside the icon — the art fills the icon properly now, matching the bigger splash logo, and the splash dropped the old white border (both use the new cosmic mark).
+- Progress: tap the count in the progress dialog to fix the total — the pages/episodes target is editable per topic now, so a wrong total stays corrected everywhere (the pill, the cards and the editor).
+- Data: anime season entries no longer show the whole series' episode count — season-1 entries now carry just their season (Mob Psycho 100 12, One Punch Man 12, Attack on Titan 25, My Hero Academia 13, and more), and books with wildly different editions (Iliad, War and Peace, Moby-Dick, Ulysses, Count of Monte Cristo) show a second "or N pages · Edition" pill you can tap to use that edition's count.
+- Data: more classics show their alternate-edition pill now — Don Quixote, Les Misérables, Anna Karenina, Crime and Punishment and Wuthering Heights join the list (real translation gaps run 8–16%, so the pill threshold came down to match).
+- Navigation: the floating pill bar floats right on the page now — no band behind it at all (light or dark), and switching tabs expands the new pill while the old one shrinks in perfect sync, so the bar no longer squeezes and re-centers.
+- Navigation: the floating pill bar is a touch bigger (52dp pills, longer active label) and the active tab's indicator is now a solid amber pill with readable ink in light and dark.
+- Navigation: switching pages no longer dims mid-fade — the app's own background shows through page transitions again instead of the dark navy window color that flashed through after the old bottom-bar container was removed.
+- Dictation: the mic is back on EVERY note and quote text box in Save your take (the v125 single-mic rule is retired) — same shared flow, one recognizer session per field, and each box stays fully editable after Insert.
+- Tour: skipping the tour on the Spin page no longer breaks the Home tab — the tour's tab stops now navigate like real tab switches, so Home works right after a skip.
+- Drawer: the "Spin it. Explore it. Capture it." line is gone — your full name reads there instead, first name in the greeting and the middle + last names on their own lines below.
+- Curie: random long teleports now burst a poof instead of snapping, the chameleon game poofs and hops to a fresh spot before camouflaging, and the idle auto-flow only starts hide-and-seek or chameleon (no surprise 10-second star rounds).
+- Drawer: the profile avatar is bigger and sits a touch higher, and a long display name now shrinks to fit instead of being cut off.
+- Tour: the guide's speech bubble no longer covers the Next button on the bottom dock — the Cabinet stop keeps its anchor even when empty, and the bubble/pet stay above the dock.
+- Curie's dialogue: every line the pet can say — events, moods, streak milestones, evolution, touch reactions, games, welcome-backs, memory lines, the first-run tour and the baby's Curie-isms — now matches the canonical dialog doc (tiny curious creature voice).
+- Curie's games: rounds now always play to completion (nothing interrupts them), hide-and-seek poofs to a corner for up to 5s (tap to find it, sad face if missed), and the star catch is a 10s round of falling stars — tap a star or drag Curie into one, with the score spoken at the end.
+- Curie now chats its mood lines every ~20-40s of idle, long-press starts a game mode that cycles through all three games (one round, then it ends), and it starts random games on its own at random times.
+- Home: the profile button on the top bar now shows your avatar photo, and the drawer's avatar and greeting text are bigger.
+- Support & diagnostics: a direct "Updates" row opens the update page (check, release notes & install).
+- Support & diagnostics: the Updates entry moved to the bottom of the page and is no longer repeated — the duplicate "Open Updates" row and its placeholder header are gone.
+- Dark mode dialogs now match the settings cards — the dialog background is the same near-black option-card glass as the rest of the theme.
+- Profile photo: portrait and tall images no longer get squished — every pick opens a crop editor first, so you frame the square (pan + pinch) before it saves.
+- Edit profile dialog: a clean photo preview with pill-style photo actions — picking a photo opens the crop editor before anything is applied.
+- Detail screen: the torn hero's edge now runs out cleanly at the screen edges — some entries' tears used to notch the hero's corners and look cut.
+- Detail screen: the quick-fact box is a proper theme-aware plate now (no more washed-out white box in light or bright sheet in dark), and the "…more / …less" words became a tidy "…" toggle that still expands and folds the fact.
+- Updates page: the release notes are now saved on your device, so they show instantly when you open the page instead of reloading from the internet — and they render properly (headers, bullets, bold) instead of raw text.
+- Updates page: a new status header shows your version chip and check state, and an update-available banner makes the download action front and center.
+- Settings & Profile options now show clean bare icons — the colored box behind each glyph is gone — and every settings sub-page (Appearance, Preferences, Recording, Backup, Experiments, Updates and Support) renders its options in the same paper cards as the Settings hub instead of transparent rows.
+- Profile and Settings button icons (back, search/settings and the Home menu/profile pills) sit a touch higher — the glyphs' optical weight no longer reads low inside the circular pills.
+- Mixed-deck colors: the green, teal, purple and blue mixes are now vivid and clean instead of dark and muddy, and the mixed deck's hero card glides through the colors smoothly — no more visible lines or stripes across the card.
+- Mood board: the full-screen editor keeps its own arrangement separate from the small card again — you can arrange each board on its own.
+- Mood board: a Copy board button in the full-screen editor copies your small board (photos + quote cards) into the full-screen board when it's empty.
+- Remaining stock buttons now match the custom pill style: tour Skip/Next, crash-screen actions, FieldMind's Finish/Save and the Sound Bite trim pair use the app's rounded pills instead of boxy default corners.
+- Pet eyes no longer flick toward your finger at the start of every scroll, and the enlarged/shrunk eye pixels render crisp instead of glitchy.
+- Icons in buttons are no longer pushed down and cut at the bottom: glyphs are vertically centered in their slot at every system font size.
+- Pill shadows in dark mode: the glow on small pills (progress pill, filter chips, Apply, category picker tabs, presets and the reveal actions) now hugs the pill's shape instead of peeking out past the rounded ends.
+- Resume draft: a draft written on a non-default take (e.g. a Journal take on a Voice category) now restores onto that take instead of the page's default one.
+- Filter sheet: the Apply / Show all button is now a raised pill that matches the filter chips instead of a flat button.
+- Launcher icon: the cosmic card art is now rendered from the designer's latest source — same mint planet, pink moon and waves, with the white frame dropped — and still sized so the whole card fits the launcher shape.
+- Detail: the explore-session duration no longer repeats twice — it lives once in the Date · Mood · Session · Type card, and the old pill above it is gone.
+- Filter page: the Type · Genres · Era · Origin · Franchise group icons now show in light mode — inactive group pills use a deep ink instead of the pale pastel that vanished on the tinted fill.
+- Icons across the app (Recents rows, Shuffle card, Settings, bottom nav and buttons everywhere): no longer shaved at the top inside buttons — the icon glyphs sit centered in their slots instead of being clipped by the button edges.
+- Mood board: photos can now be dragged all the way to the top of the small editor — the empty band above the collage is usable space (band-placed photos show in the same spot in the saved card).
+- Mood board: quote cards no longer glitch or slide off the card when dragged to the top — they're clamped to the visible board, and new quote cards land on the collage instead of floating off it.
+- Mood board: the inline board no longer resizes while you drag, grow or shrink photos — the fit freezes once the board has content, and quote cards are width-capped so they can't balloon past the small board.
+- Last backup: the row now updates right after a backup instead of showing "Never".
+- Update toast: remade as a small pill in the top-right corner; the update notice opens the Updates page on tap.
+- Dark mode polish: chip-glass pills and search bars, cream hero ink, hero action pills, detail buttons and brand logos all render correctly on black.
+- YouTube Music: the "Listen in" link opens inside the YouTube Music app; Apple Music songs resolve to their album page with the track id.
+- Pet Designer: auto-import's bob animation plays, eye-size presets visibly change the eyes, and a new Pet size option scales the whole pet.
+- Profile: pick an avatar photo in Edit profile — it shows on the Profile hero and in the Home menu drawer.
+- Pet Designer: fixed a crash when opening the studio on some devices; the studio tab bar keeps its solid style for now.
+- Crash detection: native crashes (RenderThread) are now captured on next launch, and the app auto-disables the glass experiment after one so it can't crash-loop silently.
+- Fixed a native crash while scrolling with liquid glass on: top-bar pills keep their solid-to-frost scroll morph again (live glass stays only where it is safe).
+- Crash detector: native crashes are now captured from system exit records and shown on next launch, with the glass experiment auto-disabled to stop silent crash loops.
+
+REMOVE
+- Experiments: the five Spin visuals toggles are gone - all five looks are now the default.
+- The old update card in Support & diagnostics is gone — checking, release notes and installing now live on the dedicated Updates page.
+- Cabinet and Topic Browser: the sort control is gone — lists keep their default ordering (newest captures first / A–Z within each lane).
+
+HOTFIX v1.1.0-beta5:
+- Session note character limit increased to 600.
+- Detail hero fill reverted: uses Material primary only when Material theme is ON; original category gradient otherwise.
+- Settings/profile/quests icons reverted to original category-aware colors (not always Material primary).
+- Nav bar active accent reverted: uses Material primary only when Material theme is ON; category color otherwise.

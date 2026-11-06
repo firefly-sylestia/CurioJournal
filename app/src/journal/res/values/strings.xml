@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    The journal edition's own name. A flavor's res directory OVERRIDES the main
+    one, so the launcher tile, the task switcher and the application info all
+    read "Curio Journal" while every other string in the app is untouched.
+-->
+<resources>
+    <string name="app_name">Curio Journal</string>
+</resources>

@@ -1,0 +1,663 @@
+package com.curio.app.navigation
+
+import android.content.Intent
+import android.net.Uri
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import androidx.navigation.NavController
+import com.curio.app.data.AppPreferences
+
+/**
+ * Centralized route names for the Curio NavHost — see Curio navigation contract.
+ *
+ * Routes that take arguments use placeholder-path syntax that maps directly
+ * to Compose Navigation `composable("route/{argName}")` patterns. The
+ * bottom-nav tab routes are flat (no nested graph) because the placeholder
+ * phase keeps everything in one NavHost — switching tabs uses saveState /
+ * restoreState so back-stack inside each tab is preserved.
+ */
+/**
+ * Out-of-band handoff for the Lightbox target URI.
+ *
+ * The image URI is passed here (not through the nav route string) because
+ * Compose Navigation auto-decodes path arguments — combined with a second
+ * decode in the NavHost this corrupts percent-encoded content URIs and the
+ * image never loads. Setting [uri] right before navigating and reading it in
+ * the Lightbox keeps the URI byte-for-byte intact.
+ */
+object LightboxTarget {
+    var uri: String? = null
+}
+
+/**
+ * v208e — out-of-band Z-INDEX slot for the Topic Reveal's Like/Dislike pill.
+ *
+ * The floating nav bar is composed ABOVE the NavHost destinations, so the
+ * pill (deep inside the reveal destination) would slide in BEHIND the
+ * collapsing nav pill. The reveal registers its pill composable here and
+ * the NavHost composes the slot in its own overlay layer AFTER the bar — so
+ * the Like/Dislike renders ON TOP of the collapsing nav pill during the
+ * handoff (user: "place the like and dislike pill z index above the home
+ * nav pill… keep it overlap"). The slot clears when the reveal route
+ * leaves (the reveal's DisposableEffect) so no stale pill can linger.
+ */
+object SentimentPillHost {
+    var content: (@Composable () -> Unit)? by mutableStateOf(null)
+}
+
+/**
+ * Out-of-band handoff for opening the Cabinet pre-filtered to one lane
+ * (v39 — Profile's "Your lanes" tiles).
+ *
+ * The Cabinet is a bottom-nav tab route, so its filter can't ride a nav
+ * argument without breaking tab state restoration. Instead the caller
+ * stashes the lane's [CategoryId] name here before navigating, and the
+ * Cabinet screen consumes it once on first composition (a monotonic bump
+ * keyed in a LaunchedEffect so the NavHost recomposes when it fires).
+ */
+object PendingCabinetFilter {
+    private var categoryName: String? = null
+    private val counter = mutableIntStateOf(0)
+
+    /** Stashes a lane to open the Cabinet with when the tab next appears. */
+    fun request(categoryId: com.curio.app.data.CategoryId) {
+        categoryName = categoryId.name
+        counter.intValue++
+    }
+
+    /** Monotonic bump — the Cabinet keys its consume-effect on this. */
+    val trigger: Int get() = counter.intValue
+
+    /** Consumes and returns the pending lane's category name, if any. */
+    fun take(): String? {
+        val name = categoryName ?: return null
+        categoryName = null
+        return name
+    }
+}
+
+/**
+ * v413 — WHICH DAY A NEW JOURNAL PAGE OPENS ON.
+ *
+ * A journal page starts on today ([startOfToday] in the journal editor), which
+ * is the right answer for "write something" and the wrong one for a day the
+ * member PICKED before arriving: Home's empty Pages row offers the last three
+ * days as chips, and a chip that opened today's page would silently disagree
+ * with its own label.
+ *
+ * A plain stash rather than a route argument, for the reason
+ * [PendingCabinetFilter] is one: the journal route already carries an entry id
+ * ("new", or a saved row's), and a second argument there would have to be
+ * threaded through every caller of `journalEditor`. The page consumes it once,
+ * in the same `remember` that seeds its date, and only a NEW page's seed reads
+ * it — a saved page keeps the date it was written on.
+ */
+object PendingJournalDay {
+    private var dateMillis: Long? = null
+
+    /** Stashes the day the next new journal page should open on. */
+    fun request(millis: Long) {
+        dateMillis = millis
+    }
+
+    /** Consumes the pending day, if any. */
+    fun take(): Long? {
+        val millis = dateMillis ?: return null
+        dateMillis = null
+        return millis
+    }
+}
+
+/**
+ * Out-of-band handoff for the "Done exploring" notification action.
+ *
+ * The action's broadcast receiver tears the session down and launches
+ * MainActivity with the topic's category slug + name as extras. The extras
+ * are stashed here (like [LightboxTarget]) because MainActivity may be
+ * cold-started (onCreate) or already running (onNewIntent), and the NavHost
+ * is the only place that can navigate to the write-it-down entry page with
+ * a HOME-anchored back stack. The NavHost consumes the target once it is on
+ * a stable root route.
+ */
+object PendingEntryOpen {
+    const val EXTRA_CATEGORY_SLUG = "com.curio.app.extra.OPEN_ENTRY_CATEGORY_SLUG"
+    const val EXTRA_TOPIC_NAME = "com.curio.app.extra.OPEN_ENTRY_TOPIC_NAME"
+
+    private var categorySlug: String? = null
+    private var topicName: String? = null
+    // Compose-observable bump: capture() may run from MainActivity (outside
+    // composition), so the NavHost must recompose when it fires — a plain
+    // Int would never invalidate the LaunchedEffect key.
+    private val counter = mutableIntStateOf(0)
+
+    /** Stashes a deep-link target carried by [intent], if one is present. */
+    fun capture(intent: Intent?) {
+        val slug = intent?.getStringExtra(EXTRA_CATEGORY_SLUG)
+        val name = intent?.getStringExtra(EXTRA_TOPIC_NAME)
+        if (slug != null && name != null) {
+            categorySlug = slug
+            topicName = name
+            counter.intValue++
+        }
+    }
+
+    /** Monotonic bump — the NavHost keys its open-effect on this. */
+    val trigger: Int get() = counter.intValue
+
+    /** Consumes and returns the pending target, if one is set. */
+    fun take(): Pair<String, String>? {
+        val slug = categorySlug ?: return null
+        val name = topicName ?: return null
+        categorySlug = null
+        topicName = null
+        return slug to name
+    }
+}
+
+/**
+ * Out-of-band handoff for a MESSAGE notification's tap.
+ *
+ * A "new message" notification has to open the conversation it is about, not
+ * the app's front door. Like [PendingEntryOpen], the target is stashed here
+ * because MainActivity may be cold-started (onCreate) or already running
+ * (onNewIntent), and the NavHost is the only place that can navigate with the
+ * right back stack. Consumed once the host sits on a stable root route.
+ */
+object PendingDirectMessageOpen {
+    const val EXTRA_USER_ID = "com.curio.app.extra.OPEN_DM_USER_ID"
+    const val EXTRA_HANDLE = "com.curio.app.extra.OPEN_DM_HANDLE"
+
+    private var userId: String? = null
+    private var handle: String = ""
+    private val counter = mutableIntStateOf(0)
+
+    fun capture(intent: Intent?) {
+        val id = intent?.getStringExtra(EXTRA_USER_ID)
+        if (id.isNullOrBlank()) return
+        userId = id
+        handle = intent.getStringExtra(EXTRA_HANDLE).orEmpty()
+        counter.intValue++
+    }
+
+    /** Monotonic bump — the NavHost keys its open-effect on this. */
+    val trigger: Int get() = counter.intValue
+
+    /** Consumes and returns (userId, handle), if a conversation is pending. */
+    fun take(): Pair<String, String>? {
+        val id = userId ?: return null
+        val label = handle
+        userId = null
+        handle = ""
+        return id to label
+    }
+}
+
+/**
+ * Out-of-band handoff for a COMMUNITY notification's tap: the new post lives
+ * on the 24-hour wall, so the tap lands there instead of on Home.
+ */
+object PendingCommunityOpen {
+    const val EXTRA_OPEN_COMMUNITY = "com.curio.app.extra.OPEN_COMMUNITY"
+
+    private var pending = false
+    private val counter = mutableIntStateOf(0)
+
+    fun capture(intent: Intent?) {
+        if (intent?.getBooleanExtra(EXTRA_OPEN_COMMUNITY, false) != true) return
+        pending = true
+        counter.intValue++
+    }
+
+    /** Monotonic bump — the NavHost keys its open-effect on this. */
+    val trigger: Int get() = counter.intValue
+
+    /** Consumes the request, answering whether the wall should open. */
+    fun take(): Boolean {
+        if (!pending) return false
+        pending = false
+        return true
+    }
+}
+
+/**
+ * v509 — the landscape nav bar's own "+".
+ *
+ * The writing disc belongs to Home ([com.curio.app.features.home.HomeScreen]'s
+ * `PersonalCreateLauncher`), and a short landscape window shows no `+` at all —
+ * the member: *"theres no + button in landscape why not in landscape make it
+ * appear on the nav and keep it unattached"*. The bar cannot open Home's sheet
+ * itself, so it asks here and Home answers: the request bumps a monotonic
+ * counter (the NavHost / Home key an effect on it) and Home navigates nowhere —
+ * it is already the root the bar switched to — and simply opens its sheet.
+ */
+object PendingCreateOpen {
+    private val counter = mutableIntStateOf(0)
+
+    /** Asks Home to open its writing sheet on its next composition. */
+    fun request() {
+        counter.intValue++
+    }
+
+    /**
+     * Monotonic bump — the consumer keys its open-effect on this. It is the
+     * state's own value, so a read during composition subscribes to it (no
+     * `@Composable` helper is needed, and this object stays free of Compose
+     * function imports).
+     */
+    val trigger: Int get() = counter.intValue
+}
+
+/**
+ * Out-of-band handoff for the daily-reminder notification tap.
+ *
+ * The daily shuffle reminder ("A little curiosity awaits") carries a boolean
+ * extra so tapping it opens the app ON the Spin deck (the shuffle page it
+ * nudges toward) instead of plain Home. Like [PendingEntryOpen], the extra is
+ * stashed here because MainActivity may be cold-started (onCreate) or already
+ * running (onNewIntent), and the NavHost is the only place that can navigate
+ * with the correct back stack. The NavHost consumes the request once it is on
+ * a stable root route.
+ */
+object PendingSpinOpen {
+    const val EXTRA_OPEN_SPIN = "com.curio.app.extra.OPEN_SPIN"
+
+    private var pending = false
+    // Compose-observable bump: capture() may run from MainActivity (outside
+    // composition), so the NavHost must recompose when it fires — a plain
+    // Boolean would never invalidate the LaunchedEffect key.
+    private val counter = mutableIntStateOf(0)
+
+    /** Stashes the spin-open request carried by [intent], if one is present. */
+    fun capture(intent: Intent?) {
+        if (intent?.getBooleanExtra(EXTRA_OPEN_SPIN, false) == true) {
+            pending = true
+            counter.intValue++
+        }
+    }
+
+    /** Monotonic bump — the NavHost keys its open-effect on this. */
+    val trigger: Int get() = counter.intValue
+
+    /** Consumes and returns whether the Spin deck should be opened. */
+    fun take(): Boolean {
+        val p = pending
+        pending = false
+        return p
+    }
+}
+
+object CurioRoutes {
+
+    // ── Bottom-nav tabs (always rendered with the bottom nav bar)
+    const val HOME = "home"
+    const val SPIN = "spin"
+    const val CABINET = "cabinet"
+
+    // ── Splash / gates (no bottom nav)
+    const val SPLASH = "splash"
+    const val ONBOARDING = "onboarding"
+
+    // ── Inside the Spin flow (Reveal keeps bottom nav for morph stability)
+    const val PICKER = "picker"
+    const val SPIN_WITH_CATEGORY = "spin/{categorySlug}"
+    // Optional ?browse=1 marks a topic opened from the Browse Topics
+    // database: the reveal page renders read-only (no explore CTA, no
+    // like/dislike, no recents recording, and "Already watched" confirms
+    // without the write-about-it dialog).
+    const val REVEAL = "reveal/{categorySlug}/{topicName}?browse={browse}"
+    const val CAPTURE = "capture/{categorySlug}/{topicName}"
+
+    // ── Push destinations (no bottom nav)
+    const val PROFILE = "profile"
+    /** v444 — EDIT PROFILE as a PAGE. The identity editor (picture, name,
+     *  bio, the account's handle, privacy, sign out) used to be a dialog on the
+     *  profile page; it is its own full screen now (see [ProfileEditScreen]). */
+    const val PROFILE_EDIT = "profile/edit"
+    const val QUESTS = "quests"
+    /**
+     * v498 — the Category passport's own page ([com.curio.app.features.quests.PassportScreen]).
+     *
+     * It used to be a 4×3 grid of stamps inside a card on [QUESTS], where a
+     * mastered lane was one tile among twelve; the member asked for a real
+     * passport screen, so the passport is a destination now and the Quests card
+     * is its door.
+     */
+    const val PASSPORT = "passport"
+    // v174c — the Curiosity Stats page (observatory constellation + all
+    // lifetime stats), reachable from the drawer and Profile.
+    const val STATS = "stats"
+    const val ENTRY_DETAIL = "detail/{entryId}"
+
+    // ── v387 — the personal writing family (journals + books). Their own
+    // store, their own screens: a capture's detail view is a reaction to a
+    // TOPIC, and none of these have a topic at all.
+    /** Every journal page the member has written. */
+    const val JOURNALS = "journals"
+    /** One journal day. The argument is a note id, or [PERSONAL_NEW]. */
+    const val JOURNAL_EDITOR = "journal/{entryId}"
+    /** A NOTE ON A TOPIC — its OWN page (v389). The argument is a note id, or
+     *  [PERSONAL_NEW]. It used to be the journal editor with topic route-params,
+     *  which meant a page about, say, the Voyager probes opened asking how the
+     *  DAY felt. */
+    const val TOPIC_NOTE = "notes/topic/{entryId}"
+    /** A TO-DO LIST — its OWN page (v389). Same argument. It used to be the
+     *  journal editor with `kind = todo`, checklist hidden behind one tool. */
+    const val TODO = "todo/{entryId}"
+    /** The book shelf (covers + progress). */
+    const val BOOKS = "books"
+    /** One book: its chapters, its chapter reviews and the member's progress. */
+    const val BOOK_DETAIL = "books/{bookId}"
+    /** ONE CHAPTER of that book: what the app knows about it and the review
+     *  the member wrote, with the writing happening on the page itself (see
+     *  ChapterScreen). Its own route, because a chapter is a page — not an
+     *  expanded row inside the chapter list. */
+    const val CHAPTER = "books/{bookId}/chapter/{chapter}"
+    /**
+     * INCURSION — the viewing order (Marvel / Sony / X-Men).
+     *
+     * A HIDDEN page: nothing links here, it is not in the drawer, and it has no
+     * tab. It opens only once the member has typed "i love you 3000" into a
+     * search field (see `IncursionStore.offer`, called from the shared
+     * `CurioSearchField`), and its door is the floating button Home then shows.
+     * The page brings its OWN bottom nav, so it is deliberately absent from
+     * [bottomNavRoutePrefixes] — Curio's four tabs are not where a viewing order
+     * belongs.
+     */
+    const val INCURSION = "incursion"
+    /** The "write something new" sentinel carried by [JOURNAL_EDITOR]. */
+    const val PERSONAL_NEW = "new"
+    const val EDIT_MOODBOARD = "edit-moodboard/{entryId}"
+    const val EDIT_ENTRY = "edit-entry/{entryId}"
+    const val SETTINGS = "settings"
+    const val SETTINGS_APPEARANCE = "settings/appearance"
+    const val SETTINGS_PREFERENCES = "settings/preferences"
+    const val SETTINGS_RECORDING = "settings/recording"
+    // v461 — Advanced: the doors a member rarely needs (voice-note quality, the
+    // experiments shelf, the pet designer) gathered behind one row, so the hub's
+    // own list is the settings people actually change.
+    const val SETTINGS_ADVANCED = "settings/advanced"
+    const val SETTINGS_DATA = "settings/data"
+    // v3xx — the account + Online Mode page (sign-in and sync).
+    const val SETTINGS_ONLINE = "settings/online"
+    // v3xx55 — the member's own privacy rules (profile visibility, activity,
+    // blocked people). Also reached from the Edit profile dialog.
+    const val SETTINGS_PRIVACY = "settings/privacy"
+    // v3xx — the 24-hour community wall of text share cards. Also the app's
+    // ONLY optional bottom-nav tab: it joins [bottomNavRoutePrefixes] while
+    // the user's opt-in tab is showing (see [liveTabPrefixes]).
+    const val COMMUNITY = "community"
+    // v3xx57 — the moderation control room: the report queue (posts, replies
+    // and members) plus the team and its permissions. Reached from the Social
+    // tab's own Moderation door, and only by members of the team.
+    const val MODERATION = "moderation"
+    // v3xx — the social layer: friend requests + direct messages. The handle
+    // rides in the query so the thread can name who it is with on the FIRST
+    // frame (the caller already knows it; the id alone is opaque).
+    const val FRIENDS = "friends"
+    // v3xx56 — the inbox, split off Friends: "who are my people" and "what was
+    // said" are two different questions, so they are two screens.
+    const val CHATS = "chats"
+    const val DIRECT_MESSAGE = "dm/{userId}?handle={handle}"
+    // v3xx — one card's own view: the full card, its caption, replies + share.
+    const val COMMUNITY_CARD = "community/{cardId}"
+    // v3xx53 — a member's public profile: reaching it from a card, a reply, a
+    // friend row or a conversation is what makes the social layer feel like
+    // people instead of handles.
+    const val SOCIAL_PROFILE = "person/{userId}"
+    const val SETTINGS_BOOK_COVER = "settings/book-cover"
+    // v3xx — the Book browser: every book as a scrollable line-by-line list
+    // (covers, ratings, years) — moved out of the Book covers hub's strip.
+    const val SETTINGS_BOOK_BROWSER = "settings/book-browser"
+    /**
+     * v431 — THE READER'S OWN SETTINGS, as a destination of its own.
+     *
+     * The page belongs to the reader (its own paper and ink, not the settings
+     * family's) and is normally opened OVER a book from the reader's ⋯ menu; this
+     * route is the settings side's door to the same composable, wired on the Dev
+     * page for now.
+     */
+    const val READER_SETTINGS = "reader/settings"
+    /**
+     * ── v469 — THE READ-ALOUD SETTINGS, AS A PAGE OF THEIR OWN ────────
+     *
+     * Engine, voice, narrator, speed, the downloadable voice packs and whether a
+     * reading keeps going with the screen off. They used to be a section of the
+     * Reading page (the member: *"the read aloud settings from the setting page …
+     * its own screen"*), and the reader opens the same page OVER the book from the
+     * Reading page's own door — this route is the settings side's door, wired beside
+     * the Reading one. See `ReadAloudSettingsScreen.kt`.
+     */
+    const val READ_ALOUD_SETTINGS = "reader/aloud"
+    /**
+     * v449 — THE DICTIONARY'S OWN PAGE.
+     *
+     * The reader's dictionary used to live only in its sheet: answer-shaped, drawn
+     * over the page the member was reading, sized to the words they had swept. The
+     * member asked for a page of its own — *"a new of its own dictionary page … more
+     * longer and let user search any word"* — opened from the reader's ⋯ menu and
+     * from Home's "+", so a lookup is not tied to a book. See
+     * `ReaderDictionaryPage`.
+     */
+    const val READER_DICTIONARY = "reader/dictionary"
+    /**
+     * v493 — THE TIME CAPSULE'S WRITING PAGE.
+     *
+     * A letter to a future day (agenda § 5.5), opened from Home's "+" sheet. It
+     * is a REAL route rather than a sheet on purpose: the dial, the paper and the
+     * wax seal are the whole surface, and the return the day it lands is a
+     * full-screen arrival over Home rather than a card on it. See
+     * `TimeCapsuleScreen`.
+     */
+    const val TIME_CAPSULE = "time-capsule"
+
+    /**
+     * v502 — THE RETURN'S OWN SCREEN (`RecallScreen`).
+     *
+     * The Return was answered in a bottom sheet and the days with nothing due
+     * opened a second sheet for the ladder (see [RecallScreen]); the member asked
+     * for a screen instead, and one page now holds both halves.
+     */
+    const val RECALL = "recall"
+    const val EXPERIMENTS = "experiments"
+    const val USER_EXPERIMENTS = "user_experiments"
+    // v264 — the liquid-glass widget test bed (wallpaper + draggable glass shapes).
+    const val GLASS_WIDGET_EDITOR = "glass_widget_editor"
+    const val MANAGE_CATEGORIES = "manage-categories"
+    const val TOPIC_HISTORY = "topic-history"
+    const val RECENTS_ALL = "recents"
+    const val LIGHTBOX = "lightbox"
+    const val CRASH = "crash"
+    const val BUG_REPORT = "bug-report"
+    const val SUPPORT = "support"
+    // v112 — dedicated Updates sub-page (own UI, replaced the Support card).
+    const val UPDATES = "updates"
+    // v403 — What's New: the release's own highlights, each with a "take me
+    // there" door. Opens ITSELF once per version (install and update alike);
+    // the Settings row stays the way back to it at any time.
+    const val WHATS_NEW = "whats-new"
+    // v26 — recycle bin for soft-deleted captures (Settings entry).
+    const val RECYCLE_BIN = "recycle-bin"
+    const val DATABASE = "database"
+    // Share hub — browse every share-card design, pick a topic, share a card.
+    const val SHARE_HUB = "share-hub"
+    const val FIELDMIND_OBSERVATION = "fieldmind-observation"
+    // v8.34 — the Pet designer playground (custom pet look, Settings entry).
+    const val PET_DESIGNER = "pet-designer"
+
+    // ── Route builders ─────────────────────────────────────────────────────
+    fun spinWithCategory(slug: String) = "spin/$slug"
+    /** Multi-category launch — comma-joined slugs ("spin/artists,albums"). */
+    fun spinWithCategories(slugs: List<String>) = "spin/${slugs.joinToString(",")}"
+    fun revealFor(categorySlug: String, topicName: String) =
+        "reveal/$categorySlug/${Uri.encode(topicName)}"
+    /** Opens a topic in the read-only Browse-Topics mode (see [REVEAL]). */
+    fun revealForBrowse(categorySlug: String, topicName: String) =
+        "reveal/$categorySlug/${Uri.encode(topicName)}?browse=1"
+    fun captureFor(categorySlug: String, topicName: String) =
+        "capture/$categorySlug/${Uri.encode(topicName)}"
+    fun entryDetail(entryId: String) = "detail/$entryId"
+    /** One journal day ([PERSONAL_NEW] starts today's). */
+    fun journalEditor(entryId: String) = "journal/$entryId"
+    /**
+     * One note about a topic ([PERSONAL_NEW] starts a blank one).
+     *
+     * The topic params SEED the page for a caller that already knows the topic;
+     * left empty, the page opens with its topic picker in front of the writer —
+     * the catalog (the merged index, ranked like the composer's chooser) or a
+     * name typed in by hand. See TopicNoteScreen.
+     */
+    fun topicNote(
+        entryId: String,
+        topicId: String = "",
+        topicName: String = "",
+        categoryId: String = ""
+    ): String {
+        val params = mutableListOf<String>()
+        if (topicId.isNotBlank()) params += "topicId=${Uri.encode(topicId)}"
+        if (topicName.isNotBlank()) params += "topicName=${Uri.encode(topicName)}"
+        if (categoryId.isNotBlank()) params += "categoryId=${Uri.encode(categoryId)}"
+        val query = if (params.isEmpty()) "" else "?" + params.joinToString("&")
+        return "notes/topic/$entryId$query"
+    }
+    /** One to-do list ([PERSONAL_NEW] starts a blank one). */
+    fun todo(entryId: String) = "todo/$entryId"
+    /**
+     * ONE BOOK'S OWN REVIEW (v389): the whole-book page, where the member
+     * writes about the book as a whole and can drop chapter markers in with a
+     * floating button instead of writing chapter by chapter. A book's own
+     * note is a `personal_notes` row with `chapterIndex = null`.
+     */
+    const val BOOK_REVIEW = "books/{bookId}/review"
+    fun bookReview(bookId: String) = "books/${Uri.encode(bookId)}/review"
+    /** One book on the personal shelf. */
+    const val BOOK_READER = "books/{bookId}/reader"
+    fun bookDetail(bookId: String) = "books/${Uri.encode(bookId)}"
+    /** One chapter of a shelf book (1-based). */
+    fun chapter(bookId: String, chapter: Int) = "books/${Uri.encode(bookId)}/chapter/$chapter"
+    /** Lightweight offline reader for an imported EPUB or PDF. */
+    fun reader(bookId: String) = "books/${Uri.encode(bookId)}/reader"
+    /** One community card's own view. */
+    fun communityCard(cardId: String) = "community/$cardId"
+    /** A member's public profile (their portrait, handle and live cards). */
+    fun socialProfile(userId: String) = "person/${Uri.encode(userId)}"
+    /**
+     * One conversation with [userId]. The handle rides along so the thread can
+     * show who it is with before any message loads (the id alone is opaque),
+     * and so the header never wears a placeholder.
+     */
+    fun directMessage(userId: String, handle: String = "") =
+        "dm/${Uri.encode(userId)}?handle=${Uri.encode(handle)}"
+    /** Edit a saved GalleryWall (mood board) entry — preloads + re-saves in place. */
+    fun editMoodBoard(entryId: String) = "edit-moodboard/$entryId"
+    /**
+     * Edit a saved multi-section entry — reopens every take (the whole
+     * Portfolio) in the universal editor, preloaded + re-saved in place.
+     */
+    fun editEntry(entryId: String) = "edit-entry/$entryId"
+    /** Sets the out-of-band target and returns the arg-free Lightbox route. */
+    fun lightbox(imageUrl: String): String {
+        LightboxTarget.uri = imageUrl
+        return LIGHTBOX
+    }
+
+    /**
+     * Bottom-nav tab route templates. Reveal is included as the Spin tab's
+     * continuation so bottom-nav selection/back-stack logic can still treat
+     * it as Spin-adjacent, but CurioNavHost hides the actual bar on Reveal
+     * and reserves an equal-height torn placeholder for morph stability.
+     */
+    val bottomNavRoutes: Set<String> = setOf(HOME, SPIN, CABINET, REVEAL)
+
+    /**
+     * Route PREFIXES where the bottom navigation bar should be visible.
+     * Use this (not [bottomNavRoutes]) when checking `destination.route`
+     * because the Nav library returns the route TEMPLATE (e.g.
+     * `spin/{categorySlug}`), not the resolved URL, so exact-string
+     * membership fails for any parameterised route. The previous check
+     * `currentRoute in bottomNavRoutes` hid the bar when on
+     * `spin/{categorySlug}` (the Spin screen WITH a category), which is
+     * exactly the user-visible splash-nav bug.
+     */
+    val bottomNavRoutePrefixes: Set<String> = setOf(HOME, SPIN, CABINET, REVEAL)
+
+    /**
+     * The bottom-nav prefixes that are live RIGHT NOW — the fixed tab set plus
+     * Community while its opt-in tab is showing.
+     *
+     * One getter for every consumer (the NavHost's bar visibility, the tab
+     * switch transition, and Community's own chrome) so the app can never
+     * disagree with itself about whether the wall is a tab. Reading
+     * [AppPreferences.communityTabVisible] here works because every caller
+     * runs in composition: the bar appears the instant the user flips the
+     * opt-in and drops the moment either switch turns off.
+     */
+    fun liveTabPrefixes(): Set<String> =
+        if (AppPreferences.communityTabVisible) bottomNavRoutePrefixes + COMMUNITY
+        else bottomNavRoutePrefixes
+
+    /**
+     * Route PREFIXES that own navigation during app boot (splash → home /
+     * onboarding / crash gate). The NavHost waits for these to finish before
+     * acting on a deep-linked entry open.
+     */
+    val bootGatePrefixes: Set<String> = setOf(SPLASH, ONBOARDING, CRASH)
+}
+
+/**
+ * Standard bottom-nav tab switch: pop the back stack back to the persistent
+ * HOME root (saving the popped states), then navigate to [route] with
+ * `launchSingleTop` + `restoreState` so every tab keeps at most one entry on
+ * the back stack while preserving its scroll/UI state across switches.
+ *
+ * Anchored to HOME — NOT `graph.findStartDestination()`: the NavHost's
+ * declared start destination (SPLASH) is popped inclusively on launch, so
+ * `popUpTo(findStartDestination())` would target a destination that is no
+ * longer in the stack — a silent no-op that lets every tab switch and every
+ * re-opened screen pile up duplicate back-stack entries (back then walks
+ * through the same screens repeatedly). HOME is the persistent root that
+ * always remains after Splash/Onboarding/Crash routes land.
+ */
+fun NavController.navigateToTab(route: String) {
+    // From a pushed/parameterized destination (e.g. "spin/artists" opened
+    // from a Quests passport stamp or a discovery daily's Go), pop back to
+    // the HOME root explicitly FIRST: the popUpTo(HOME)+launchSingleTop
+    // navigate can cancel itself there — after the pop, HOME is already the
+    // top entry, so singleTop skips the navigate and the tap appears dead
+    // (the user had to back out to Quests before a tab tap would respond).
+    // Landing on HOME first makes every tab tap from a pushed screen switch.
+    val current = currentBackStackEntry?.destination?.route
+    // v20 — a bottom-nav route PUSHED on top of a non-tab screen (e.g. the
+    // Cabinet opened from Profile) is a pushed instance too, even though its
+    // route name matches a tab. A genuine tab entry always sits directly on
+    // the HOME root; anything else — a pushed screen, or a tab route with a
+    // pushed screen beneath it — gets the explicit pop so the tap never
+    // looks dead.
+    val below = previousBackStackEntry?.destination?.route
+    val genuineTabInstance = current in CurioRoutes.bottomNavRoutes &&
+        below == CurioRoutes.HOME
+    if (current != null && !genuineTabInstance) {
+        popBackStack(CurioRoutes.HOME, inclusive = false)
+    }
+    navigate(route) {
+        popUpTo(CurioRoutes.HOME) { saveState = true }
+        launchSingleTop = true
+        restoreState = true
+    }
+}
+
+/**
+ * Standard quest / guided-tour jump: TAB routes switch tabs (pop to HOME +
+ * save state, like [navigateToTab]); everything else is a push destination
+ * (`launchSingleTop`). Used by the Quests page's Go buttons and by the quest
+ * tour's auto-navigation.
+ */
+fun NavController.navigateToQuestRoute(route: String) {
+    if (route in CurioRoutes.bottomNavRoutePrefixes) {
+        navigateToTab(route)
+    } else {
+        navigate(route) { launchSingleTop = true }
+    }
+}

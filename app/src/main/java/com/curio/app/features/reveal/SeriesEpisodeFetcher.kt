@@ -1,0 +1,269 @@
+package com.curio.app.features.reveal
+
+import android.net.Uri
+import com.curio.app.data.SeriesEpisode
+import java.net.HttpURLConnection
+import java.net.URL
+import java.util.concurrent.ConcurrentHashMap
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
+import org.json.JSONObject
+
+/**
+ * Enriches authored [SeriesEpisode] entries with metadata from TVMaze:
+ * airdate, runtime, rating (0–10), and episode still image.
+ *
+ * The fetcher is opt-in (gated on [com.curio.app.data.AppPreferences.seriesFetchEnabledState])
+ * and memoized per show name so reopening the sheet never re-queries.
+ *
+ * Flow:
+ *  1. Look up the show by name → TVMaze show ID.
+ *  2. Fetch the episode list for that ID.
+ *  3. Match each authored episode by (season, number) and merge the
+ *     fetched fields into the existing [SeriesEpisode] copies.
+ */
+object SeriesEpisodeFetcher {
+
+    /** In-process memo: show name → list of TVMaze episode JSONs (raw). */
+    private val episodeCache = ConcurrentHashMap<String, List<JSONObject>>()
+
+    /** v410 — the MAPPED list per show, the shape the screens render (raw JSON
+     *  cannot seed a sheet, and mapping it again per open was the reload). */
+    private val seriesCache = ConcurrentHashMap<String, List<SeriesEpisode>>()
+
+    /**
+     * v429 — WHAT [fetchForAny] ANSWERED, including an empty answer.
+     *
+     * The same convention the lists above keep, and for the same reason: a sheet
+     * that opened once on a title with no guide must not re-run the whole chain
+     * — two doors and their budgets — every time it opens again.
+     */
+    private val anyCache = ConcurrentHashMap<String, List<SeriesEpisode>>()
+
+    /**
+     * Enrich [episodes] with TVMaze metadata. Returns the same list with
+     * the new fields populated where a match was found. Episodes that don't
+     * match a TVMaze entry keep their original values.
+     */
+    suspend fun enrich(
+        showName: String,
+        episodes: List<SeriesEpisode>
+    ): List<SeriesEpisode> = withContext(Dispatchers.IO) {
+        if (episodes.isEmpty()) return@withContext episodes
+
+        val tvmazeEpisodes = fetchEpisodes(showName)
+        if (tvmazeEpisodes.isEmpty()) return@withContext episodes
+
+        // Index fetched episodes by (season, number) for O(1) lookup.
+        val fetched = mutableMapOf<Pair<Int, Int>, JSONObject>()
+        for (ep in tvmazeEpisodes) {
+            val s = ep.optInt("season", 0)
+            val n = ep.optInt("number", 0)
+            if (s > 0 && n > 0) fetched[s to n] = ep
+        }
+
+        episodes.map { ep ->
+            val match = fetched[ep.season to ep.number] ?: return@map ep
+            ep.copy(
+                airdate = ep.airdate.ifBlank { match.optString("airdate", "") },
+                runtime = ep.runtime.takeIf { it > 0 } ?: match.optInt("runtime", 0),
+                rating = ep.rating.takeIf { it > 0f }
+                    ?: match.optJSONObject("rating")?.optDouble("average", 0.0)?.toFloat()
+                    ?: 0f,
+                stillUrl = ep.stillUrl.ifBlank {
+                    match.optJSONObject("image")?.optString("original", "")
+                        ?.takeIf { it.isNotBlank() }
+                        ?: ""
+                }
+            )
+        }
+    }
+
+    /** Fetch the episode list for [showName] from TVMaze, memoized. */
+    private fun fetchEpisodes(showName: String): List<JSONObject> {
+        val title = clean(showName)
+        episodeCache[title]?.let { return it }
+
+        // v389d — PLAIN BRANCHES, NOT `?: run { … return }`. A non-local return
+        // out of an inline lambda makes the compiler emit its
+        // `$$$$$NON_LOCAL_RETURN$$$$$` class, and R8 cannot dex that class's
+        // method name — which broke the release build while debug built fine.
+        // Behaviour is identical; only the synthetic class is gone.
+        val showId = lookupShowId(title)
+        if (showId == null) {
+            episodeCache[title] = emptyList()
+            return emptyList()
+        }
+
+        val json = httpGet("https://api.tvmaze.com/shows/$showId/episodes")
+        if (json == null) {
+            episodeCache[title] = emptyList()
+            return emptyList()
+        }
+
+        return try {
+            val arr = org.json.JSONArray(json)
+            val list = (0 until arr.length()).map { arr.getJSONObject(it) }
+            episodeCache[title] = list
+            list
+        } catch (_: Exception) {
+            episodeCache[title] = emptyList()
+            emptyList()
+        }
+    }
+
+    /**
+     * Fetch ALL episodes for a show from TVMaze, converting them to
+     * [SeriesEpisode] objects. Used when the topic has no authored episodes
+     * but the member wants to see the episode guide.
+     *
+     * v410 — AND THE MAPPED LIST IS REMEMBERED, not just the provider's raw
+     * payload (see [cached]). Re-mapping the whole show on every open was the
+     * reason a sheet could not open with the episode list its own preview had
+     * already put on screen.
+     */
+    suspend fun fetchAll(showName: String): List<SeriesEpisode> = withContext(Dispatchers.IO) {
+        val title = clean(showName)
+        if (title.isBlank()) return@withContext emptyList()
+        seriesCache[title]?.let { return@withContext it }
+        // Reuse the same memoized episode payload as enrichment. The previous
+        // path bypassed this cache, so opening the series sheet fetched again.
+        val cachedEpisodes = fetchEpisodes(title)
+        if (cachedEpisodes.isEmpty()) {
+            seriesCache[title] = emptyList()
+            return@withContext emptyList()
+        }
+        val mapped = try {
+            cachedEpisodes.mapNotNull { ep ->
+                run {
+                    val season = ep.optInt("season", 0)
+                    val number = ep.optInt("number", 0)
+                    if (season <= 0 || number <= 0) return@run null
+                    SeriesEpisode(
+                        season = season,
+                        number = number,
+                        title = ep.optString("name", ""),
+                        summary = ep.optString("summary", "").replace(Regex("<[^>]+>"), "").trim(),
+                        airdate = ep.optString("airdate", ""),
+                        runtime = ep.optInt("runtime", 0),
+                        rating = ep.optJSONObject("rating")?.optDouble("average", 0.0)?.toFloat() ?: 0f,
+                        stillUrl = ep.optJSONObject("image")?.optString("original", "") ?: ""
+                    )
+                }
+            }
+        } catch (_: Exception) {
+            emptyList()
+        }
+        seriesCache[title] = mapped
+        mapped
+    }
+
+    /**
+     * v410 — THE ANSWER THIS TITLE ALREADY HAS, without asking anything.
+     *
+     * The reveal's series/anime card and the episode sheet show the same list,
+     * and the card is drawn first — it fetches the guide to render its chip row,
+     * so a sheet that opened on an empty list re-asked for a list that was
+     * already in memory and flashed "No episode guide yet." in between (member
+     * report: "sometimes the series or anime data is already shown in preview
+     * but it loads again when the page opens"). Null means "not asked yet",
+     * which is different from an empty list — an empty list is a real answer.
+     */
+    fun cached(showName: String): List<SeriesEpisode>? = seriesCache[clean(showName)]
+
+    /**
+     * A title without its "(2013)" disambiguator, or its season (v428).
+     *
+     * The year belongs to the topic's own name and the season to whatever list
+     * the member is reading (Curio's Incursion rows say "Loki S2"); neither is
+     * part of a show's name, and TVMaze has never heard of either — one clean
+     * here is what every query and every cache key below goes through.
+     */
+    fun clean(showName: String): String = stripNaming(showName)
+
+    /**
+     * The episodes of a title that MIGHT be a show at all (v389f).
+     *
+     * This is the film and anime lanes' entry point, and it exists because a
+     * title's shape is not something a lane knows: an "animated movie" topic is
+     * as often a series (the member's own words: "episodes when it is really a
+     * show"). TMDB answers WHEN A KEY IS SET, because it is the only source that
+     * states outright whether a title is a film or a show; TVMaze — keyless, and
+     * already trusted by the series sheet — is the fallback. An empty list is the
+     * answer that means "no show here", which is what tells the caller to show a
+     * film's own facts instead.
+     */
+    suspend fun fetchForAny(title: String, season: Int? = null): List<SeriesEpisode> =
+        withContext(Dispatchers.IO) {
+            val key = clean(title)
+            if (key.isBlank()) return@withContext emptyList()
+            anyCache[key]?.let { return@withContext it }
+            // ── v429 — THE TWO DOORS RACE, AND BOTH ARE BOUNDED ────────────
+            //
+            // This is the call behind the member's report that a series' episode
+            // guide "doesn't load" in Incursion. The cause was arithmetic: the
+            // keyed door went first, on its own, with a budget of 8s to connect
+            // and 8s to read PER READ — a search, then a detail, then up to four
+            // seasons — so a title whose keyed door was dead spent every one of
+            // those budgets before the keyless door that actually had the answer
+            // was even asked (the same 24-second stack the member measured on
+            // TMDB). Now both are asked AT ONCE, each inside its own budget, and
+            // the keyed answer wins when it has one. A title with no season hint
+            // is unchanged in meaning: TMDB first if it answers, TVMaze otherwise.
+            val raced = coroutineScope {
+                val keyed = async {
+                    runCatching { withTimeoutOrNull(DOOR_BUDGET_MS) { TmdbFetch.showEpisodes(title, season) } }
+                        .getOrNull()
+                }
+                val keyless = async {
+                    runCatching { withTimeoutOrNull(DOOR_BUDGET_MS) { fetchAll(title) } }.getOrNull()
+                }
+                val first = keyed.await()
+                val second = keyless.await()
+                when {
+                    !first.isNullOrEmpty() -> first
+                    !second.isNullOrEmpty() -> second
+                    else -> emptyList()
+                }
+            }
+            anyCache[key] = raced
+            raced
+        }
+
+    /**
+     * How long EITHER door may take before the other one's answer is the answer.
+     * Both run at once, so this bounds the pair rather than adding to it.
+     */
+    private const val DOOR_BUDGET_MS = 7_000L
+
+    /** Look up the TVMaze show ID by name. Returns null on miss. */
+    private fun lookupShowId(title: String): Int? {
+        val json = httpGet(
+            "https://api.tvmaze.com/singlesearch/shows?q=${Uri.encode(tvmazeSpelling(title))}"
+        ) ?: return null
+        return try {
+            JSONObject(json).optInt("id", 0).takeIf { it > 0 }
+        } catch (_: Exception) {
+            null
+        }
+    }
+
+    /**
+     * Minimal synchronous HTTP GET — runs on IO, on a SHORT budget (v429): this
+     * door is one of two racing for the same answer, so it may never be the
+     * reason the pair waits.
+     */
+    private fun httpGet(urlStr: String): String? = try {
+        val conn = URL(urlStr).openConnection() as HttpURLConnection
+        conn.connectTimeout = 4_000
+        conn.readTimeout = 5_000
+        conn.setRequestProperty("Accept", "application/json")
+        if (conn.responseCode == 200) conn.inputStream.bufferedReader().use { it.readText() }
+        else null
+    } catch (_: Exception) {
+        null
+    }
+}

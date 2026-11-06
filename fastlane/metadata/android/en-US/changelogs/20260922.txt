@@ -1,0 +1,869 @@
+FIX:
+- Writing: dictation in Save your take no longer closes the moment you tap the mic — the tool bar it was opened from folds away when the keyboard is down, and it used to take the open dialog with it.
+
+ADD:
+- Writing: dictation types into the note while you speak — your words land in the box as you say them, Cancel puts the note back exactly as it was, and the dialog's door is Done instead of Insert.
+
+REMOVE:
+- Privacy: the app no longer asks for all-files access — its only user was the wallpaper experiment retired earlier, and nothing has touched it since. The camera permission went with the barcode scanner above.
+- Books: the ISBN barcode scanner is gone from the shelf's add-a-book sheet, and the camera permission the app asked for goes with it — Search and Type are the two doors that remain, and nothing else in the app used a camera (a picture is always handed to your phone's own picker).
+
+FIX:
+- Reading: a locked page scrolls like a page — with the motion lock on, a drag whose first few pixels went a hair sideways froze the page for the whole gesture (it could not scroll at all), while a drag that began vertically let a later sideways move turn the page; the lock settles the axis once, at the touch slop, and keeps it until you lift.
+- Reading: the dictionary's word list no longer unloads for a letter — tapping a letter replaced the whole list with a "Reading the … pages" line and built it again when the words arrived; the list stays and only its words change.
+- Home: the Pages and My shelf rows are already drawn when you come back — they composed empty and filled in a frame later, so the chips flashed on every visit, and the journals list, the shelf and the drawer's knowledge map started the same way.
+
+ADD:
+- Home: the drawer's star map stands in a soft light — one radial glow behind the sky, from the centre out to the page's own colour, with no panel edge or corner anywhere — and each star now comes out of the middle as it lights, gathering back the same way as the drawer closes.
+
+FIX:
+- Home: the drawer's star map is smoother and reads deeper — the stars and the lines between them carry a notch more shade, and the map draws one smooth glow per star instead of four stepped rings.
+- Reading: a highlight is drawn on the words you highlighted — a phrase the paragraph carries twice used to wash the earlier one, so a pick could land on a different line from the one you made; the pass you swept is remembered now and the wash stays on your words.
+- Reading: the reader's sheets move in one piece — a drag re-laid-out the whole panel and its shadow on every frame (that was the clunk inside them); the panel moves as one layer.
+- Reading: the dictionary's browsable word list is words — WordNet's multi-word entries arrived with their database underscores (alarm_clock) and its symbol strings read as corrupted rows; the list shows English now.
+- Reading: the dictionary page's paper reaches the bottom of the screen — a bare strip of the app's own background used to show under it.
+- Reading: the topic browser remembers your place — opening a topic and going back landed at the top of the list.
+
+REMOVE:
+- Reading: the abridged Webster's 1913 download is gone — the complete 1913 sits beside WordNet and holds the same text in full, so the two rows read as one dictionary twice; a phone that had downloaded it gets the space back.
+
+ADD:
+- Reading: a film's own facts, with no key at all — the reveal's film card and the film sheet show the year, the runtime, the score, the genres, the director and the cast, read from Wikidata and the film's Wikipedia article. The same keyless pair now dresses the Incursion rows too, so films stop being the lane that only works with an API key.
+- Reading: a word's meanings open in a bottom sheet in the reader's own paper, with which dictionary is answering — and a switch to the other dictionary on your phone — and the spellings it thinks you meant.
+- Support: the Share hub moved out of Settings to the Dev page (Support, then five taps on Version), under Sharing.
+
+FIX:
+- Reading: the dictionary page's foot no longer hides its last rows behind an invisible bar, and the page no longer offers to remove a downloaded dictionary — that lives in the reader's dictionary sheet.
+
+FIX:
+- Home: the recents rows no longer react to a hold — a hold that outlived the finger could keep the action menu up after letting go; the rows simply open the topic now, and the held actions (write about it, remove from recents, open a saved entry) are on the Recents page's own rows, where the feed is managed.
+
+ADD:
+- Appearance: Lite mode — one switch that makes the app lighter on slower phones: the glass surfaces stop refracting and the idle effects (the shimmer over loading cards, the splash's breathing mark, the drawer sky's twinkle, the Incursion mark, the resting die, the pet's glances and ear flicks) hold still. Nothing moves, disappears or restyles itself, the pet still breathes and blinks, and every switch it holds down comes back exactly as you left it.
+
+FIX:
+- Performance: the app stops working when nothing is happening — a scroll rail's thumb woke every frame to find nothing to move, reading the page's scroll state sixty times a second on any screen that shows one; and the glass surfaces now take one look at a single switch instead of each deciding for itself. With Lite mode on, that glass pass is skipped entirely.
+
+ADD:
+- Appearance: liquid glass reaches the reading surface — the reader's floating pills (the way out, the book's name, search, the foot's five buttons, the search bar, the listen and motion-lock pills, the pinned page count and the page scrubber) now refract the page under them instead of sitting on a solid fill; the glass follows the same Liquid glass switch, and a pill that is "on" (a held page, a voice reading) refracts through its own accent tint.
+- Everywhere: the round back pill refracts on every page that uses the glass, with no per-page setup — it is the app's most repeated control and it was solid everywhere.
+
+ADD:
+- Reading: the dictionary is one you can walk, like a shelf — the page from Home's "+" lists the words the dictionary actually holds, a letter at a time, and taps straight into any of them; the search is a pill at the top right that opens when you ask for it instead of a field that is always in the way.
+- Reading: a word shows which dictionary answered — one badge per dictionary on your phone above the answer, so you can see what WordNet says and switch to the complete 1913 (or the other way round) without leaving the word.
+- Appearance: the theme picker is a two-column grid of real previews — each card draws the theme itself (its page, its hero and its own ink) with the name under it, and the one you are on is ringed in its own accent.
+
+FIX:
+- Messages: a received bubble's words ask the bubble's own colour (and the "edited" mark stopped being a hardcoded white), so text can no longer blend into the bubble on a dark or colour-carrying theme.
+- Profile: "Change photo" and "Use my blob" are proper pills with a real lift and an equal share of the row, and the camera on your picture's corner sits on it instead of flat against it.
+- Journals: filtering is two labelled rows — how the day felt and how much you wrote — and the colour filter is gone (a page's colour still marks it; it is just no longer a way to hide pages).
+
+FIX:
+- Reading: the dictionary's Offline door answers from every dictionary on your phone — the door called "Offline" used to be one abridged dictionary on its own, so standing on it could answer nothing while Modern and Full 1913 answered; the badge row is now Offline · Wiktionary · Free, the one Offline door searches whatever you have downloaded (modern senses first, then the complete 1913, then the abridged one) and keeps offering all three to download or remove.
+- Reading: the ⋯ menu is six doors in two full rows — the Share tile is gone (Share is the selection's own door and is still there when you pick a passage, with Snapshot beside it for a cropped picture), and Settings moved up so every row is as wide as the others.
+- Home & Profile: the glass header is the app's other glass headers again — a title with its subtitle, its pills on the row and the curved bottom edge, at the height it needs, instead of a thin strip that read as a different component.
+
+FIX:
+- Everywhere: a pill's icon is the app's accent, and the words inside it stay ink — the back arrows, the menu, the streak fire and Edit were a mix of plain ink, muted tones and one-off colours, so a row of pills read as unrelated controls; they are one family now, in light and dark alike.
+
+ADD:
+- Reading: the dictionary has a page of its own — open it from the reader's ⋯ menu or from Home's "+" and search any word, taller than the sheet and riding clear of the keyboard, with the same doors (Offline · Wiktionary · Free), each offline volume downloaded or removed from the page itself, and the words you have already looked up staying in reach for the visit.
+- Reading: the ⋯ menu's Snapshot — the reader puts its own head, foot and dock away, takes the picture of exactly what you were looking at, and hands it to a crop frame: corners to size it, anywhere inside to move it, and the cropped piece goes to the share sheet as a PNG in the page's own colours.
+- Reading: the dictionary has offline doors — download one once from inside the dictionary sheet and every word answers with no connection: Webster's 1913 (public domain, 9 MB, 86,000 headwords), WordNet 3.1 (11 MB, 155,000 words WITH modern senses) and the complete OPTED 1913 (public domain, 14 MB, 176,000 definitions). The badge row holds the three doors (Offline · Wiktionary · Free) and shows the one you are on, each volume is downloaded from its own row (with a progress bar) and removed from the same row, and the ⋯ menu opens the dictionary in a taller panel where you can search any word.
+- Reading: the drawer's star map twinkles, and it draws itself in and out with the drawer — the lines run from each star to the one it joins, and the whole sky gathers and lets go with the panel.
+
+FIX:
+- Reading: back puts the selection down instead of leaving the book — with words picked, the system's back closed the reader with the dock still up.
+- Reading: the highlight dock is a real toolbar — 42dp colour discs and 44dp doors (they were 30 and 32, under the size a finger can aim at) with a real gutter between them, and the dictionary is its own pill above the dock, naming the word it will answer for, when the selection is a single word.
+- Reading: "Wide" stays wide — the choice was being read back from a save that had not landed yet when the rotation rebuilt the reader, so the page turned to landscape and then straight back to upright.
+- Reading: a locked page keeps its vertical move — with the motion lock on and the page Wide, or magnified in pages mode, a drag that is going up or down still moves the page; the pinch and the sideways page turn stay frozen.
+- Reading: the ⋯ menu breathes — three rows with a real gap between them and between the tiles, sharing a row with the new Snapshot door, and its own floor grows with them.
+- Reading: the offline dictionary's download says how far along it is — the row carries a bar under its percentage, so a slow connection reads as progress instead of a stuck number.
+- Profile: Edit profile wears the reader's floating pills — the page's name rides a floating capsule beside a round way back, and Cancel and Save changes float at the bottom instead of sitting in a band; the account's state, a locked email and a username's verdict are badges in their own colours.
+- Reading: a swipe down really closes a sheet — the body's drag had no end of its own, so the panel sat half-way down for the whole settle wait after your finger was gone; it springs back or shuts the instant you let go.
+- Reading: the dictionary's search box is no longer hidden by the keyboard — a sheet lifts clear of the keys.
+- Reading: copying a passage that runs over a line break keeps the words apart — two lines used to arrive glued together, in the copy, in the dictionary's quoted line and in a saved highlight; a hyphen at the line's end is still one word.
+- Writing: the marker and the bullet panels close themselves — the first cross takes the pen or the list off the line AND shuts the panel, and the panel puts itself away when you start typing or move to another line, so the dock is a tool row again.
+- Home: the drawer's selected star glows in its own category colour — a picked lane used to read as a lighter star (the same pale mix, only wider), and the dot no longer swells when you tap it.
+
+ADD:
+- Profile: Edit profile is a page of its own instead of a dialog — a quiet title, your picture with its camera disc and two actions, your name and bio as open fields, your account flat under ACCOUNT, one tap anywhere on the Privacy row, and Cancel / Save changes held at the bottom.
+- Profile: tapping your picture opens it over the page, with the ⋯ there to remove the photo.
+- Profile: your username saves with Save changes — the field checks it as you type, and the terms are the same dialog the account card already shows.
+- Profile: signed out, the account is one calm "Sign in to Curio" row instead of a form inside the page.
+
+FIX:
+- Reading: a scroll over the reading-progress bar no longer moves it — the bar took any movement as a scrub, so a finger running down the page that passed over it moved your place AND stopped the page from scrolling; it waits for a sideways move, and a downward one belongs to the page.
+- Reading: the highlight dock's colours are a switch — the colour a passage already wears is drawn as taken, and pressing it again takes the highlight back; the cross at the end of the dock is gone.
+- Reading: the dictionary answers for the words it does not have — a word with no entry at all came back as "could not be reached" (the dictionary's own 404 was read as a dead network), so a misspelled or rare word looked like a failure and the nearest-spelling suggestions never appeared; an unknown word and an unreachable dictionary are said differently now, and the dictionary no longer flashes "could not be reached" as it opens.
+- Writing: the journal's paper never takes your colour — "Paint the page too" is gone, so the paper is the theme's and the words are never read against a colour off a wheel; your colour stays on the page's doors and its own controls.
+- Writing: the day keeps the theme's colour — the Today pill and its date steppers no longer wear the page's own colour.
+- Writing: the ink on any colour you pick is measured — the colour sheet's tick and everything that wears your colour on it read dark-on-light or light-on-dark, so no colour you choose can come out unreadable.
+- Writing: the copy box's letter arrows only add — the left arrow gave a letter back and the right one walked the selection along the line, so between them they could never reach past one character; each arrow now takes the letter on its own side of the selection.
+- Home: the menu button is a menu button — the drawer's own hamburger was wearing your face, because a member who wears their blob as their picture has no photo path for it to fall back on.
+- Reading: the side of the screen answers at once — a side tap waited out the double-tap window before it turned the page and a second tap zoomed instead of turning it; a zone tap is answered the moment your finger lifts, and every tap works.
+- Reading: the motion lock no longer locks the touches — a locked page still hears a tap, a hold and a sweep, and only a real drag is held still.
+- Reading: a sheet closes on a flick as well as a pull — a quick downward throw used to drag a few millimetres and spring back; the flick shuts it now, and the pull that always meant "shut" is shorter.
+- Reading: the highlight dock is a pill, not a shadow — its fill was almost the same colour as the page under it, so the only part of it you could see was its shadow.
+- Reading: the header's animation is one motion — hiding the chrome no longer shrank the title sideways while it left; that shrink belongs to the search opening alone.
+- Reading: the ⋯ menu is sized to its own tiles — it was two thirds empty paper with the tiles crowded into the top.
+- Reading: "At sunset" is the times you set — a dim window from one time until another (20:00 to 06:00 by default), with a clock picker in the appearance sheet and in reading settings.
+- Reading: the dictionary reads the passage you selected — its notable words are offered as chips with the sentence the word came from, and a word with no entry is offered the nearest spellings.
+- Reading: a word's meaning survives how it was written — "Einstein," and "word's" are looked up as the word itself.
+- Reading: the page slider's arrows keep up with a fast hand — a tap stepped from the page the last turn had already been sent to instead of the page it had left behind, so four quick taps earned one page and then nothing until the turn settled.
+- Reading: the page slider is a pill, not a shadow — its fill was almost the same colour as the page it floated over, so the only part of it you could see was its shadow; it is a true capsule now, with the count in a fixed slot so the track never changes size under your finger.
+
+ADD:
+- Writing: the marker pens and the bullet styles open INSIDE the dock, like the format, alignment and export tools — one panel at a time, under the row you tapped, instead of a sheet over the page.
+- About Curio: the credit for the member faces, with blobatar's own licence notice.
+
+FIX:
+- Writing: a quotation and a bullet read firmly in both modes — a deeper coffee on the light page, a lighter milk at night.
+- Writing: the dock is a proper tool row — bigger targets and a real lift, so it no longer reads as a thin strip under the page.
+- Writing: the heart bullet sits level with its words, and the dash bullet is centred like every other mark.
+
+REMOVE:
+- Writing: the leaf and crystal bullets are gone.
+
+ADD:
+- Social: a member's portrait is drawn from their own username — one of ten silhouettes, two eyes and a palette from six tones, so no two members share a face and a rename re-faces you.
+- Reading: the reader's search is its own round pill beside the book's name.
+
+FIX:
+- Reading: the reader's head clears the top of the screen instead of sitting on the glass, and the search grows out of its pill while the name steps aside.
+
+REMOVE:
+- Social: the 28 hand-drawn portraits and the portrait picker are gone — your face is derived from your handle now, so there is nothing to choose.
+
+FIX:
+- Reading: a sheet scrolls and shuts on a swipe from anywhere — the reader's sheets wrap their content up to 60% of the screen, the body is the one scroll inside them (a short sheet is no longer half-empty paper), and dragging down anywhere collapses the sheet instead of only the handle doing it.
+- Reading: long-press to select works while a PDF is magnified — the page's own one-finger pan claimed the drag from its first move and cancelled the sweep, so the words under a held finger could report nothing.
+- Reading: the hold dock carries the selection tools — a passage chosen by holding a page offers the dictionary and Share, the same doors a swept selection has.
+- Reading: the appearance sheet is the reader's own capsule language — the switches are animated segmented pills (reading mode, how the page stands, keep-awake), the layout rows are one A−/slider/A+ shape, and a PDF finally has a ZOOM slider where a reflowable book has its type size.
+- Reading: the ⋯ menu is six capsule tiles — big glyph, small name — Share, Gestures and Settings instead of the longer labels, with a count badge where a door has a count.
+- Reading: the gesture editor gets out of the way — an eye takes the washes off the page, the depth slider is on demand and hides the washes while it is dragged, and a tap on the page picks the zone it landed in.
+- Writing: the journal's tool dock is compact and grouped — style, alignment and copy sit behind one door each that expands inside the dock itself, and a tool that is on reads as lit.
+- Writing: the copy tool floats as its own box — four arrow pills, an undo and cut/copy/paste icons, a select-all button and a cross to close it — with the reach arrows in the corners and the voice note door out of the way while it is up.
+- Writing: picking a word works on its own again — the letter reach opens from the row you are writing in, without having to take a row first.
+- Writing: the Today pill, the eye/pen switch and the mood capsule share one capsule style.
+- Settings: the sub-pages' quick tools row and its suggestions are gone.
+
+ADD:
+- Reading: the look you choose is remembered — paper, typeface, type size, leading, margins, paragraph spacing, alignment, orientation, keeping the screen awake and the night dim all come back after a restart.
+- Reading: appearance and reading settings gained the layout controls — line spacing, page margins, paragraph spacing, ragged or justified lines, keeping the screen awake and a night dim that washes the paper without touching the tools.
+- Reading: a reflowable book's page is measured at the leading and margins you set, so its pages break where the page will really end.
+- Incursion: the list can be ordered — the viewing order, title, year or runtime, each the other way round with one tap, and a list that is not in viewing order leaves its phase headings behind.
+
+ADD:
+- Incursion: a title's own description, rating, runtime and genres are looked up where the row carries none — one network of four sources (TMDB, OMDb, Wikipedia, Comic Vine), each on a short leash, with the facts the source states shown as small pills under the text.
+- Incursion: a title nothing else could dress finds its art in OMDb, Wikipedia or Comic Vine — the doors behind the app's own keyless ones.
+- Books: Google Books is asked for a book's page count and its blurb as well as its chapters, and a book whose about-text every catalogue is missing is read out of its Wikipedia article.
+
+FIX:
+- Art: a painting or an artwork no museum holds is only looked up once — the three sources were re-asked on every open to arrive at the same nothing; a lookup that FAILED (a timeout) is still not remembered, so a bad line is tried again next time.
+- Art: a work is looked up faster — the museum records inside a search are read together instead of one after another (a painter's list of eight was eight round trips), each source answers on a short budget, and a painting Wikipedia files under a longer name ("Nighthawks (painting)") finds its article instead of falling back to whichever museum happens to hold it.
+- Incursion: a series' episode guide loads, and the season you are looking at is the season it reads — the keyed and keyless doors are asked at the same time instead of one waiting out the other, so a guide arrives in a second rather than never.
+- Incursion: the watch button is an eye — a hairline eye until you have watched a title, filled in your accent once you have; a play mark read as an instruction to play rather than as "I have seen this".
+- Incursion: rows and titles stop waiting on a source that is not answering — every provider in a chain is held to a short budget, so a dead key can no longer stall a page for half a minute (TMDB's read alone could take 24 seconds).
+- Books: ISBN covers are served by Open Library, because LibraryThing's own host refuses every app with a 403 (Cloudflare) whatever key is set; the key still turns the row on, and the same ISBNs now resolve.
+- Home: the drawer's star map joins its stars with gently bowed lines instead of straight ones.
+- Reading: a PDF's zoom in the scrolling reader holds the exact page point under your fingers wherever you are in the file — it was correcting as if you were always on the first page, so a pinch deep in a book grew it about a point near the top.
+
+ADD:
+- Share card: the Signature design is a hand-drawn sketchbook page, one per category — warm paper, a wobbly pen outline, pencil shading, washi tape and a doodle of its own, titled in the app's own handwriting.
+- Post: the share card is edited with the same card editor the topic reveal opens, from a door on the post's own preview, and the shape switch (3:4 or 9:16) sits right there with it.
+
+REMOVE:
+- Share card: the Classic Signature design is gone for every category except Games and Films.
+
+FIX:
+- Writing: the journal's four alignment buttons are one tool with the four choices behind it, and the scrolled tool bars keep their place instead of snapping back to their first tool.
+
+ADD:
+- Settings: TMDB's attribution sits in About Curio — its own approved mark and the notice "This product uses the TMDB API but is not endorsed or certified by TMDB.", shown by a build that uses TMDB and linking to themoviedb.org.
+- Incursion: a watch button on every row and tile — one tap marks a title watched, the next takes it back, and every finer state is still the sheet's own chips.
+- Incursion: a series' sheet carries its episode guide — the show's own episodes with their numbers, names and airdates, read through the same fetcher the series lane uses (and the year and season are stripped from the lookup, so "Loki S2" is looked up as "Loki").
+
+FIX:
+- Dev: the source lab asks TMDB with the credential the build really carries — the read token as a Bearer header or the key as a query parameter, exactly as the app's own door sends them — so a build holding only the token no longer reads as "needs TMDB_API_KEY" while its film sheets are resolving posters fine.
+- Incursion: the Personal tab opens — every tap on it was answered with Marvel, because its own id failed the page's validity check, so the status desk could never draw; it is also asked about before the list's own branches, and the filters are no longer drawn on it.
+- Art: film posters load again — iTunes' movie search answers nothing at all for any title (its music store on the same endpoint still answers), so a film's keyless door was dead and only the keyed one was left; a film's own Wikipedia article image is the primary door now, with the candidate chain a wiki really files films under and a search behind it.
+- Incursion: series posters load — these rows say which season they are ("WandaVision S1"), which is a name no catalogue has, so the season and year come off before anything is asked.
+- Writing: two pictures with only a blank line between them stay one row — the blank line stopped counting as air the moment the caret rested in it, which is where the caret lands after almost every picture is added, so a row could come apart in the editor while the reading view still drew it as a row.
+- Setup: TMDB's second credential works — the API Read Access Token is sent as a Bearer header (valid on v3 and v4 alike) instead of being ignored, and a token pasted into the key field is recognised as one.
+
+ADD:
+- Writing: a journal can have its own colour — pick one of the app's own themes or any colour at all on a wheel, and it is kept with that day: the day wears it down the journal list's spine, on its chip on Home, and on the palette tool in its own tools. Until you change it, a page follows your theme.
+
+FIX:
+- Writing: the text bar is four arrows and nothing else — ↑ ↓ take rows and ← → take letters (the Letters / Rows switch is gone), a new selection starts on the row you are writing in so a reach can be built from the bottom of a page, and every arrow dims when it has nowhere left to go. Each letter arrow only ever ADDS a letter, on its own side.
+
+ADD:
+- Incursion: a Personal tab where the Essentials tab was — how far into the whole order you are, a bar per line, what each line wants next, the six states tallied, and the figures your statuses add up to (hours watched, hours left, essentials done, longest run); essential rows keep their star and their filter chip.
+- Incursion: every row, tile and title sheet carries the title's own poster — the data already knew each title's TMDB id, so the art is asked for by id and falls back to the app's keyless providers; it obeys the existing Cover fetching switch, and with that off the plate is Curio's own, carrying the order.
+- Incursion: one search across all three lines — a query is answered from Marvel, Sony and X-Men at once, each group saying which line it came from and how many titles it holds.
+- Incursion: Next up — the first title the page still wants from you, in the head, one tap into its sheet.
+- Incursion: a line of your own on any title, kept in its sheet.
+
+FIX:
+- Incursion: a title's sheet is the app's own — the poster leads it, the six states are one scrolling chip row instead of six stacked rows (which pushed the synopsis and the note off its first screen), and the synopsis has its own heading.
+- Incursion: the foot bar's icons are the app's own set and no two tabs share a shape — a reel, a play, a spark and the person, where a globe stood for Marvel and both film lines wore the same glyph.
+
+FIX:
+- Writing: a row of pictures leaves for paper as the page lays it out — two side by side, an upright frame with two stacked beside it, four as a square, or a lone small print with its line beside it; the sheet drew every print alone at the full measure, so a row of pictures the member had built came out as one picture per row.
+- Writing: a print on paper is the height the page gives it — the sheet kept one of the frame's five pads and gave an uncaptioned print no strip at all, so a picture printed 14dp shorter than the page (about a quarter short with nothing written in it) and every row it stood in measured short with it; the frame's own paper is the page's own now, on its own and inside a row alike.
+- Writing: the words read back in dark mode are the page's own ink — a plain word carried no colour at all, so it fell back to the ink Compose uses outside a card (black) and the eye view was dark text on a dark page; the reading side sets the colour it draws with everywhere now.
+- Writing: a picture leaves for paper as the page draws it — the sheet fitted the whole photograph into a box where the page crops it to the size's own frame, so a Small print or a portrait frame came out as a different picture at a height the page never gave it; the frame, the pad and the crop are the page's own now, and a photograph shot sideways prints upright instead of lying down.
+- Writing: a voice note's wave on paper is the page's own drawing — the sheet drew a lookalike (a filled pill and a bar chart of the sound), so a note printed as a different object at a different weight; the strip is the page's own row and the wave is the page's own stroke, drawn from the same code the page uses.
+- Writing: the text bar shows what it is holding — its reach washes the picked rows on the page, where it counted "4 of 12 rows" while the page showed nothing.
+
+ADD:
+- Dev page: a source-fetch lab — one fixed question per content source (the twenty the app fetches from, grouped by lane), each showing its status, how long it took, how big the answer was, a one-line reading of it and the raw payload itself; a keyed source says which key this build is missing instead of failing, and Run all asks them one at a time.
+- Writing: the text bar's reach goes letter by letter — Letters mode picks a run of characters inside the line with the arrows moving it a letter at a time, All letters takes the whole line, and Cut, Copy and Paste act on exactly those characters.
+
+FIX:
+- Home: the drawer's star map is a night sky now — the constellations wear the two lanes' own colours instead of one grey, each line stops at the glow of the star it joins (and a join long enough to cross the sky is not drawn at all), every star's halo is a four-step bloom where there were three flat rings, the sky itself is taller with the stars spread into it, and the "N of N lanes explored" line under it is gone (the stars already say it).
+- Reveal: the previews on a topic read properly again — a book's synopsis teaser, an album's track list, a series or anime's synopsis and episode rows, and the chapter chips all sit on a card tinted with the topic's own colour, while their words were wearing the inks meant for the UNTINTED page; each card now asks its own fill what reads on it, in light and dark alike.
+
+ADD:
+- Art: a painting the Met does not hold has a museum's own record now — the Cleveland Museum of Art joins the artwork and maker pages, keyless, so an artist or painter whose works hang there is no longer an empty page (and it brings the museum's own biography of them when Wikipedia has no article at all).
+- Music: a song finds its cover in two places instead of one — MusicBrainz and the Cover Art Archive are the second door the albums already had, so a track the shop does not carry is no longer art-less.
+- Books: a manga, comic, manhwa or light novel added BY HAND finds its own cover now — a row you typed in (or that came out of a file name) had never been through a search, so it kept a blank plate and no about-text forever; it is handed to the sources its own kind belongs to and everything the row is missing is filled in, with nothing it already has ever replaced.
+- Books: a Comic searches the comics sources now, not a books catalogue — Comic Vine is the door that holds Marvel's and DC's volumes both, and it brings a volume's own cover, publisher, year and how many issues it runs to (it is a free key, so it is asked only when the key is set; without one the search falls back to Open Library exactly as before).
+- Books: Standard Ebooks joins the cover sources — the keyless door that actually answers for a classic, where the ebook shop often has no nineteenth-century novel at all and Open Library's title cover is very often a 1×1 placeholder; it also brings the one-line summary the about-text falls back to.
+
+FIX:
+- Reading: a reflowable book's page flow never shows a sheet with nothing but a heading on it — a heading is big type with margins of its own, so the paragraph it names is what pushed the pair over the page and the break landed between the two; a page holding nothing but a heading keeps it company now.
+- Reading: a reflowable book's pinch magnifies the page live and settles when you let go — the type size is what these pages are MADE of, so the old zoom re-measured every block in the book on every event, which is the stutter; the page grows in the draw phase under your fingers and the type lands once, at the size you asked for.
+
+ADD:
+- Books: manga, manhwa, manhua, comics and light novels are on your shelf now, each keeping its own name — pick the kind before you search and the same shelf, reader, chapters and progress you already have hold them, with the kind worn on the cover of its own card.
+- Books: the comics sources — MangaDex, AniList, MyAnimeList and Kitsu, all keyless, asked in order — bring a manga's own cover, author, synopsis and how long it is (volumes and chapters), because a books catalogue has never heard of it.
+
+FIX:
+- Books: a book whose own copy is an EPUB says how long it is — the attach path only ever asked a PDF, so an EPUB adopted its contents with no length at all and its page sat on "Set how long the book is" for a file that knows exactly how long it is; every kind of file answers its own page count now (an EPUB that carries its print edition's page-list is read out of that list).
+
+FIX:
+- Incursion: the page reads as part of Curio — every state wears a theme tone (the six were fixed hexes, bright enough to be the loudest ink on a named theme's dark page), the phase headers, rows and tiles are cards (fill, radius, soft shadow) instead of tinted bands, the chips are fills rather than boxed lines, and a title opens in the sheet the rest of the app uses instead of a boxed dialog.
+- Incursion: the reveal that announces the unlock is a Curio card — it was white words on a black scrim under a filled accent disc, which read as a notice rather than as a secret, so it wears the theme's own ink and card and says what it is.
+
+FIX:
+- Support: a live feedback form greets you on Home without a trip through Settings — the form is published on the server and read with your own account, and that read ran before a cold start had restored the session (only the Online Mode, Privacy and Community screens did); the account is restored with the rest of the app's state at launch now, and a read made too early waits for it instead of giving up.
+- Appearance: the named themes' night is muted — Jade, Orchid, Ocean, Sand and Ember painted their page, their cards, their hero and their second and third fills with daylight chroma, so a page of Settings or Profile cards came out brighter than the app's own dark ladder and the hero read as a lit slab; every night fill carries its hue quietly now, the card ladder sits a shade lower, and the accent ink clears 4.5:1 on the top card step (it had missed).
+
+ADD:
+- Reading: the page's tap zones are yours to place — a tap on the SIDE of the screen turns the page now (both side edges stand the whole height, the head scrolls back and the foot goes on), and holding the Crop switch in the reader's foot opens the zones themselves: drag each edge's line where your thumb reaches, say what that edge does (back, on, a screenful either way, or nothing) and set how deep it stands.
+- Writing: a page's tools can copy the whole page — the new Copy tool selects the page and raises Android's own copy / select all bar right above the tools.
+- Writing: a page exports as a file — PDF drawn on the page's own paper, ink, pens and type: it is a facsimile of the journal's column (same measure, same sizes, same leading, so a heading, a quotation, the small print, a list's boxes and every print's own label sit as they do on the page, over as many sheets as the words need), with its photos, voice notes and checkboxes, plus plain text, or Markdown that keeps the bold, italics and headings.
+- Writing: a seventh voice note look — Pill, the drawn pulse with its play mark in a wide pill button.
+
+FIX:
+- Writing: a voice note's quiet passages read quiet — every wave took its height almost straight from the sound, so a whisper drew like a shout; the reach is the square of the level now and a silence is a line.
+- Writing: a voice note's progress bead rides the wave's own line — it was snapped to the nearest peak, so between two peaks it drifted off the ink; it is drawn on the curve itself now.
+- Writing: the Ribbon look is a single drawn stroke instead of a filled mirror shape, and Beads are strung evenly on the centre line with one clear size for the sound.
+- Writing: the Minimal look's play mark is measured properly — a tall wedge sized for the whole button read off-balance inside its own ring.
+- Reading: a pinch in the scrolling PDF grows the file about your fingers — it used to magnify from the sheet's own corner, so the place you pinched slid away from you; a double tap lands where you tapped as well.
+
+FIX:
+- Appearance: a named theme's night accent is a jewel again instead of a highlight — Jade, Orchid, Ocean, Sand and Ember painted their icons, headings and small accents at 0.78 of lightness on a deep page, which cleared the contrast bar and still read as neon; they sit at 0.69 with the chroma eased, and the night's second and third fills are muted with them.
+- Appearance: a named theme's cards are a ladder, not one shade — the five card steps sat 0.03 of lightness apart on one hue at one chroma, so every card on a page (Settings especially) read as the same shade of the same theme; each step now has its own stride and its own chroma, in both twins.
+
+FIX:
+- Writing: a voice note's progress rides the wave — the head of the heard run was a straight bar across the strip, which read as a knob bolted onto a hand-drawn line (and sat at the far edge of the live recorder's own meter); it is a bead of the wave's ink now, drawn only while there is somewhere left to go.
+- Writing: the Bubble look is a voice message — the hand-drawn line inside the bubble is the mirrored bars a message is drawn with, and the bubble's foot corner is cut so it reads as a message rather than as a box.
+- Journals: "How did the day feel?" lost its shadow — the mood pill and its six chips are a choice on the page, not cards lying on it.
+
+FIX:
+- Reading: the scrolling PDF zooms the whole file — a pinch magnified one sheet among its neighbours, which read as a swollen page rather than a zoom, so every sheet now lays out at the magnified size and the column scrolls the bigger book (sideways as well as down), with each page's words still measuring the frame they are given.
+- Reading: a page's words are read for every sheet on screen — only the column's first page carried a text layer, so holding the words on the page below it marked the page instead of sweeping the passage.
+- Reading: the reader's quiet words stop blending into the page — the label at the foot, a page's own number and the small captions were painted as low as 2.5:1 on the sepia page; every one of them clears 4.5:1 now, on all four inks.
+- Reading: an EPUB names its own page — the page bar counted the reader's own screenfuls ("Page 12 of 340", a number that moved with the type size), so it now says the book's own printed page, and a book that prints none shows the two arrows alone.
+
+ADD:
+- Reading: the page's corners turn it and its head and foot move the reading on — a tap in a corner goes back or forward (a page where the book has pages, a screenful where it scrolls), a tap in the head or foot moves it the same way, anywhere else is the tap that brings the chrome back, and a Crop switch in the reader's own foot turns the zones on and off.
+
+FIX:
+- Reading: the progress bar on a book is a control now — drag or tap it to move the page (or chapter), and the knob only appears under your finger.
+- Reading: auto-rotate is a real three-way choice — Auto, Upright or Wide — for both PDF and EPUB; it used to be a PDF-only upright switch.
+- Reading: the Scrolling↔Pages switch settles in instead of flinching, and the progress bar's sheen no longer jumps back to the start.
+- Reading: smoother page turns — the next page is laid out ahead of the turn — and the chapter you are reading is lit in the contents.
+- Reading: a PDF page turn has motion — the page slides and tilts as it is carried across instead of two stills swapping.
+- Home: the drawer's sky is a scatter again — the orbit-and-spoke grid read too symmetric, so the lanes spread on a golden-angle field over a faint dust sky.
+- Appearance: the Category tint switch now tints Home and Profile too — with it on, their page wears the lane you last picked on Spin; before it did nothing there unless Adaptive Hero was the active theme.
+- Appearance: cards read again — the light themes' card fill steps are clearer and the soft shadow lifts a card off the page at a deeper step.
+- Theme: the Curio rose is richer and less dusty — the same hue with more saturation, day and night twins together.
+- Appearance: the Color theme sheet's pick survives its own close — the write was riding a coroutine scoped to the sheet, so dismissing the sheet cancelled it before it landed; the scope now outlives the sheet, and the reveal expands from the row you tapped.
+- Social: the bottom bar's Social tab wears the app's accent instead of the butter fallback — dark mode painted the tab yellow-on-yellow (a yellow pill with a yellow label, hence the invisible text), and the no-accent fallback is fixed for every page after it.
+- Appearance: the Paper option grays itself out where it can't act — dark mode and the Material theme paint their own pages, so the row is disabled with a line saying why instead of a switch that silently did nothing; the stored choice comes back on a light Curio or Azure theme.
+- Appearance: picking a theme in the Color theme sheet takes — the reveal coroutine lived in the sheet's own scope, so closing the sheet cancelled the pref write mid-flight and the app repainted nothing; the write now survives the close.
+- Home: the Shuffle-the-deck dice shows again in dark mode — the disc is near-white and its glyph wore the banner's near-white ink, so the dice vanished into its own button; the glyph now wears the ink that reads on the disc itself.
+- Social: dark mode's filled accents are readable again — the active filter chip, the accent pills, the unread badge, your own chat bubbles, the send button and every moderation tab kept hard-coded white ink on what is a bright pale accent at night, so their words and icons vanished only in the dark; the ink now asks the fill it sits on and reads on the rose and azure accents alike.
+- Cards: no more outlines anywhere — a card is its fill, its radius and a soft shadow now, so nothing reads as a drawn box (the cream is subtler with it, and the chapter and page controls on a book step in the same language).
+- Journal: its own paper — a warm page carrying a whisper of your theme instead of the app's flat cream — and its pages, cards and mood chips lift with the same soft shadow.
+- Journal: a voice note is ONE drawn wave — it was drawn twice, a mirror pair, which read as two waves folded together; the single pulse now sits on the page with a soft under-stroke behind it.
+- Books: one progress bar instead of two — the page gauge and the chapter tick row are one bar now, with each chapter's opening drawn inside its track.
+- Books: the chapter and page controls are two tiles you change while reading (the chapter one names the chapter) with how long the book is stated quietly beneath them.
+- What's New: the page shows the version this build really is.
+- Reading: the book progress bar follows your finger — the drag detector was keyed on a callback the card re-creates on every redraw, so the bar restarted its own gesture mid-drag and only a tap ever moved the place; a touch no longer teleports the fill either, it follows once the finger moves.
+- Writing: a voice note's wave can no longer be cut — a loud passage ran off the top of its strip and the first peak was sliced in half at the left edge, so the drawing now measures from a band inset by its own stroke.
+- Writing: a voice note's play mark and clock are part of the drawing — the filled disc beside a hand-drawn line was two drawings in one strip, so the bare looks draw the mark in the wave's own ink and set the clock in the page's own hand.
+- Appearance: a named theme's light hero is airy, not a heavy slab — Jade, Orchid, Ocean, Sand and Ember now wear a soft banner with the theme's own deep ink, in the app's own banner language.
+- Appearance: a named theme's dark twin is calm and deep — the hero was so bright that pale words could not read on it (Jade worst, then Orchid) and every element around it felt washed; the page is a quieter jewel and the hero a deep one that carries its pale ink.
+- Theme: the Curio rose is muted at night — the dark banner carried the light hero's vibrancy onto a black page and read as neon.
+- Home: the drawer's sky has no plate under it — the star pattern is drawn straight on the drawer, the sky is taller so the scatter reaches further, an untouched lane's point is a solid dot instead of a hollow circle, and the picked star lights up in its own colour instead of wearing a ring drawn around it; every tone in it now reads from the drawer's own surface in white and in dark.
+- Home and Profile: accents read on the deepest card again — a named theme's own accent ink now clears the bar where it used to sit just under it, which is where buttons and text blended.
+
+ADD:
+- Appearance: one Color theme door — Curio rose, Azure, Material and Adaptive Hero, each its own row with a preview of the page, the hero and the ink it would paint. Pastel colors and Category tint stay on the page.
+- Appearance: five new named themes — Jade, Orchid, Ocean, Sand and Ember — each a full theme with its own page, cards, hero and a deep-jewel dark twin.
+- Appearance: Light, Dark and System are one sliding switch with a sun, a moon and a half-and-half mark — no checkmarks.
+- Home: one hero — the torn banner is taller and "Today's quest / Shuffle the deck" lives inside it now, under your figures, instead of a button parked below the seam.
+- Home: the drawer's lanes are a star map — a star per lane, its size and brightness its knowledge, its colour its own accent, joined into constellations; tap one and its own figures open below the map.
+- Reading: hold a page arrow to keep turning — a tap still turns one page, holding turns them until you let go.
+- Writing: four voice note styles — Hand-drawn, Bars, Bubble and Minimal — chosen from the note itself, each pairing its own wave drawing with its own play mark, and each note keeps the look you gave it.
+
+REMOVE:
+- Appearance: the Paper option is gone from Curio rose and Azure — both wear a soft silver-gray card on a white page now, and the white-page/cream-page choice belongs to Adaptive Hero alone.
+
+FIX:
+- Home: the greeting is one line and the type is bigger — "Welcome back" over your name, the name at 40sp — and the "A fresh mix of ideas, picked for you" line under Today's quest is gone.
+- Books: a chapter move takes the page with it — picking a chapter lands the page on the page that chapter opens at, so the two steppers agree in both directions.
+- Books: the book's progress follows your reading — the reader writes the page it is showing back onto the book, so a PDF reopens where you actually stopped; a hand-set page can no longer outlive it by being written to the book later.
+
+REMOVE:
+- Appearance: the Material theme, Hero and Adaptive Hero switches — they were three halves of one question (what colour is the app) and are the Color theme sheet now.
+- Home: the drawer's lane grid — the star map replaces it.
+
+ADD:
+- Books: a book shelved from a topic reveal keeps its own cover and its own length — the shelf, the book page and the Cabinet used to draw a plain placeholder for a book the app knows everything about.
+- Books: a book that came in without artwork has a cover fetched for it — the app's own catalog first, then iTunes and Open Library — and the cover that actually arrived is kept on the book, so the shelf, the book page and the Cabinet's shelf all show it.
+
+FIX:
+- Books: the look-up is one visit to Open Library instead of three — the chapters, the page count and the description were asked for in separate searches, one after the other, which is what made a first open crawl; one search and one work read answer all three now, and a book Curio's own catalog already holds is never asked for its chapter list.
+- Books: covers show up as they land — the shelf and the book page draw the artwork the app has already fetched, so a cover no longer waits for the book's own row to catch up.
+- Reading: an episode list opens with the one the card already fetched — the series and anime cards fetch the guide to draw their chips, and the sheet that opens from them fetched that same guide a second time, saying "No episode guide yet." in between.
+
+ADD:
+- Appearance: a Paper option — a white page with cream cards (the new default) or the previous cream page with white cards, one tap apart.
+- Books: the reading card is a gauge now — how far in as a percentage, over the chapter you are on, the page you are on and how long the book is, each as a labelled control; and the chapter list shows which chapters are read.
+
+FIX:
+- Books: the page number can be set — the card wrote the page count and the chapter but never the page, so the number sprang back to where the reader was; a hand-set page is kept on the book in either direction, reading on takes the card back over, and the reader's own place is never touched.
+- Books: marking a book finished closes every chapter with it, and "Reading again" puts the marks back exactly where they were.
+- Theme: light mode's paper is flipped — white page, cream cards, with a soft edge on every card and more room inside the Settings and Profile cards; the icon tiles are back on Online mode, Recycle bin, Updates and Support & diagnostics.
+
+REMOVE:
+- Home: the drawer's menu is gone — Quests & Levels, Your Curiosity (Topic history, Manage categories, Browse topics) and About (Support & diagnostics, Replay intro). Settings keeps those rows, Home keeps Browse topics, Profile keeps Quests.
+- Your Curiosity: the "Your lanes" list is gone — the lane map above it already names every lane and its knowledge.
+- Settings: the star map's Experiments switches ("3D star zoom", "Drawer constellation") are gone with the star map.
+
+ADD:
+- Home: the drawer is your brain — your streak, your level with its XP bar and your total knowledge, over a grid of your lanes, one card per lane with a meter that fills as you build there; tap a lane and its own figures open under it.
+- Your Curiosity: the constellation drawing is replaced by that same lane map — real tiles, a meter per lane, and a Cabinet door onto the lane you tap that opens the Cabinet filtered to it.
+
+ADD:
+- Home: the drawer's curiosity map is a real chart now — the lanes sit on orbit rings and radial spokes with a hub, each ring woven closed through its own stars, and the map fills more of the drawer.
+
+ADD:
+- Shuffle: on the Material theme the deck is your own device colour now — a single lane keeps its category colour as the bottom of the card (the device tone runs down the top ~70% and blends into it), a mixed deck is the device colour throughout in the deck's own per-mix gradient styles, and the peek cards, spin button and confetti follow the same tone.
+
+FIX:
+- Journal: the voice note's wave is one smooth drawn pulse now instead of a thin sawtooth scribble.
+- Journal: the "How did the day feel?" pill and its mood chips are solid fills — the page no longer shows through them — and the same fix went to the other see-through chips, discs and pills across the journal, notes and books.
+- Appearance: the System theme option wears the half-lit contrast mark now, instead of the hand-drawn half-sun that read as a smudge.
+
+ADD:
+- Books: the reading-progress bar glides to its new place and counts up smoothly while you hold the +/-, and a slow sheen drifts along the filled part while it sits still.
+
+ADD:
+
+FIX:
+
+ADD:
+- Books: hold the +/- on a book's reading progress and the count runs — a tap moves one step, a hold speeds up the longer you keep it, with a tick you can feel at every step.
+
+FIX:
+- Books: the reading-progress card says where you are once — the chapter-name/page headline and the count row under the bar are gone, leaving the label, the bar and the two +/- tiles; the book-length setting is a quiet footer now.
+- Your Curiosity: four cards instead of six — streak with level, XP and journey stages on ONE card (one Quests door), the six brain dimensions as meters with only the weakest one's tip, the lane map, and the lifetime figures in one compact grid. The six tip paragraphs and the repeated lane list are gone.
+
+REMOVE:
+- Home: the drawer no longer offers Stats & insights twice — the curiosity map at the top of the drawer is the door, and the duplicate row inside the fold-out group is gone.
+- Profile: "Your lanes" is gone, and so is the Settings shortcut in the bar — the hero already says how many lanes there are, and Settings keeps the one door that says what it is. The lanes themselves are still arranged in Settings ▸ Manage categories and still browsed in the Cabinet.
+- Cabinet: the "Your books" heading on the Curiying-now shelf is a label, not a second way into My shelf.
+
+FIX:
+- Home: the drawer's rows stopped saying the same thing twice — "Quests & Levels" and "Your Curiosity" no longer both promise stats and streaks, and the curiosity group no longer claims to carry the stats it just handed to the map.
+- Settings: the Online mode page no longer names itself inside itself — the sync switch on that page says what it does instead of repeating the page's title.
+
+ADD:
+- Settings: the main page is a plain list — a heading per section and a white card of rows underneath (icon, name, one line), instead of the big 2-up design cards with doodles and oversized titles. The rail stays where it belongs: inside the sections, where switching between them is what it is for.
+- Settings: Online mode, Recycle bin, Updates and Support read as full-width rows with no icon tile and their sentence whole, instead of being cut off mid-word inside four small cards.
+- Books: reading progress says what the FILE says — a book with a PDF shows a page bar with "page 87 of 312" and the chapter that page falls in; a book with an EPUB shows its own chapter. You can still set a chapter or a page by hand.
+- Books: a book added straight from a file is named after the file — the name on your own device is read, cleaned up, and put in front of you in two fields (title and author) to fix before the book is created. Its pages and chapters are read out of the file itself.
+
+FIX:
+- Theme: cards are white on the cream page — every card, tile and tab sat one warmth-step below the page it was drawn on, so on a tinted page (Home, Profile, Cabinet, Settings) they dissolved into it; the page keeps its colour and everything that reads as a card now separates from it by lightness, with a hairline edge. Dark mode's plates stepped up too.
+- Settings: the tab rail no longer sits on the all-settings page, and its leading "All Settings" chip is gone with it.
+- Books: tapping a book's synopsis or a chapter on a topic opens the book's own page now, instead of a smaller bottom-sheet copy of it — the same chapter list, the same notes and the real reading progress.
+
+ADD:
+- Cabinet: opening a collection is a move instead of a cut — the page rises and fades into the shelf you tapped, and the way back home does the same.
+- Curie: hold the pet's home to turn the pet off — the offer now lives where the pet actually lives, and a tap still wakes it or brings it out; the switch in Settings stays the other door.
+- Settings: the glyph watermarks are very subtle by default — the category glyphs behind every page, the scatter on the torn heroes (Home, Profile, Cabinet, Settings, Topic History, the intro and the saved-entry banner), the mood-board collage and the small card headers were all tuned deep and read as a distracting scatter, so they now sit at a whisper; Appearance ▸ Glyph backdrop offers Subtle or Deep, where Deep restores the old look everywhere at once.
+- Settings: cover fetching and the Take studio start ON — both shipped opt-in, so a fresh install opened on placeholder art and a Save your take page without the studio the page is about; each keeps its switch, so turning either off still works.
+
+REMOVE:
+- Cabinet: the empty-Cabinet suggestions are gone — a fresh Cabinet opens straight onto its Cupboard card and shelves, with no "Your Cabinet is empty" block, no three shuffled picks and no Shuffle pill.
+
+FIX:
+- Home: holding a recent row waits its two seconds and ticks — those rows' options menu ran on the platform's own short hold and never announced itself, so a finger resting on a row during a slow scroll still popped the menu; the recents preview wears the patient hold now, and every hold that opens a menu plays its tap-weight haptic (the Spin picker's lane tiles included).
+- Cabinet: book covers find themselves — many books kept a blank plate because a cover URL that never loaded was remembered as the answer, and every provider handed that same one back; the search now really tries iTunes Search and then Open Library, the tiles cascade for books too, and only a cover whose image actually arrived is remembered.
+- Cabinet: the open book on the Curiying-now shelf is a book again — its pages bowed the wrong way and its ruled lines ran straight through the spine; the two pages now meet in a shadowed gutter, with a ribbon past the foot.
+- Art: an artist or a painter's page has words now — the Met only knows the works it holds, so a maker it holds nothing for opened an empty sheet; their own article and their face now come from Wikipedia beside the works list, and the reveal card falls back to that portrait.
+- Art: a painting opens faster — the Met and Wikipedia are asked at once instead of one after the other, the museum's web-size image is used instead of the full-resolution original, and fewer records are opened per lookup.
+- Recents: a row's options no longer appear while you scroll — a hold now waits two full seconds and a swipe cancels it outright, and it gives a proper tap-weight haptic when the hold really lands.
+- Writing: a note's tools float above the keyboard — the dock was laid out inside the note, at the foot of its own field, so a note low on the page put its tools under the keyboard the moment the member tapped in to write; it is a floating strip pinned to the window and lifted by the keyboard's own inset now, so it is always just above the keys and never under a note.
+- Releases: builds are faster — the build cache is on, so a task whose inputs did not change is restored instead of re-run, and the topic catalog's own check declares what it produced, so a build that leaves the catalog alone no longer re-parses all 20,877 topics.
+
+ADD:
+- Updates: What's New arrives as a SHEET, and only once the welcome is over — it waits for the intro to be finished and for the tour offer to be answered, then rises over Home, with "See all" keeping the full page (which is still the door under Settings ▸ Updates).
+- Reveal: an anime with no episode guide says so, instead of ending at its poster in silence — only a couple of titles carry an authored list and the online one can come back empty.
+
+FIX:
+- Updates: What's New no longer opens DURING the intro — the splash and onboarding routes counted as a quiet start, so a fresh install could be handed the highlights before it had met the app, and the tour offer was pushed aside by it.
+- Moderation: the ban sheet folds its reasons away once one is picked — the chosen reason stays as a single chip with a Change beside it, so the note field and the Ban button are on screen the moment the decision is made, instead of eight wrapping chips standing in front of them.
+
+ADD:
+- Home: a door whose row has nothing in it says so — on a fresh install the Pages and My shelf strips were the door alone, which read as a part of the page that had failed to load; each door now offers its own first step as a chip the size of the ones that will follow.
+- Reading: the page can be held upright — the reader follows your phone's rotation by itself, which is how a wide PDF page is read; a switch in the page's ink sheet keeps a PDF's pages standing up instead, for reading with the phone lying on its side. A reflowable book has nothing to stand up, so it is not offered one.
+- Reading: a type-size slider for a reflowable book — the size the pinch already sets, said out loud as a percentage with a thumb that can be dragged to it exactly, in the page's ink sheet. A PDF is a picture of a page, so its own size stays the pinch's.
+
+FIX:
+- Writing: a photo can be taken to the other side of a row — which end of a pair, a three or a four a dropped print took was decided by the VERTICAL direction alone, so every drop into a row landed on its head and there was no way to ask for the other side; a sideways drag now chooses the end for real, and the dashed cell drawn in the air is the cell that is taken (the ghost used to draw the opposite end from the one the drop chose).
+- Reading: a page no longer shifts as it is zoomed or unzoomed — the pan was thrown away while the page was still 2% magnified, so it snapped back to its centre; the page is now left at exactly 1× (where the pan is already nothing, because a page at 1× has no room) before the zoom is given up, and the translation is no longer dropped while the page is still magnified.
+- Reading: the first frame of a pinch belongs to the zoom — a two-finger gesture consumed its changes only once it had something to report, so the scroll underneath took the opening frame and the page moved before the pinch did.
+- Reading: a zoomed page keeps the whole gesture — the drag was handed back mid-gesture the moment the page reached its edge, so the pager took over with the finger's whole accumulated travel and jumped to the next page in a flash; a gesture now belongs to the page from its first move, and a page ALREADY at its edge gives the entire swipe to the page turn.
+- Reading: the reading progress is live — the places sheet read the stored auto-bookmark, which is written only once a scroll settles (up to 900ms behind), so it could name a place you had already left; each surface now reports the page or passage it is showing as it moves, so the figure, the percentage, the "Page 7 of 300" line and the "Continue reading" door all name the place you are actually in.
+- Reading: the tools stay while the page bar is used — the chrome's auto-hide countdown now waits for a turn asked for at the bar to settle and then starts again from full, instead of running out from under the hand that is holding the bar.
+- Reading: a text jump is asked for like every other — a mark, the progress card's "Continue reading" and the bookmarks list moved the scroll list directly, so in the Pages flow nothing appeared to happen; the block is handed to whichever surface is showing, exactly as a chapter already was.
+- Reveal: fetched posters and covers stay put — each art card seeded itself from the cache but keyed only on the topic, so a URL another surface resolved AFTER it composed was never noticed and the art was fetched again on the next visit; the cached URL now keys the seed and the effect alike, across the artwork, artist, author, album, film, anime, series and song sheets.
+
+ADD:
+- Moderation: the queue has a Clear button for its finished half — every report already dismissed or resolved leaves the list in one tap, open reports stay exactly where they are, and what was decided stays in the history.
+- Support: a feedback form from the team, when one is open. It greets you on Home and stays in Support to take later, with the questions as they were written, a Not now, and a Never show me another one. Answers arrive with no name, no account and no device attached to them.
+- Updates: a What's New page says what each version shipped, one line per thing with a "Take me there" door straight to it. It opens itself once per version, on a fresh install and on an update alike, and waits under Settings, in Updates, any time after.
+
+FIX:
+- Moderation: banning says what happened — a refusal used to be written on the page behind the ban sheet, so a ban the server turned down looked like a button that did nothing; every moderation sheet now shows the refusal under its own title, the ban reasons are chips that fit on one screen instead of a list that ran off the bottom, and the button says "Pick a reason" while it waits for one.
+- Moderation: the queue keeps up with you — a report that had just been dismissed or resolved stayed in the list until you reopened the screen, because the refresh ran through a read meant for the first load only.
+- Moderation: Lift works from a report — the way out of a ban looked the member up in the ban list, which this screen had never read, so it silently did nothing.
+- Moderation: the ban list is a record again — one Open button per row (a filled one while a ban is in force, an outlined one on a lapsed ban, ready to set a tier again), with changing the tier and lifting the ban inside the sheet it opens, instead of a row of buttons next to a profile link.
+- Moderation: a report's row has two decisions — Remove and Dismiss, each keeping its own reason sheet — and acting on the author is a quiet line beside them rather than a third button of the same weight.
+- Writing: two photos added one after another group on their own — the picture tool splits the line it was used on, so the second picture used to arrive with an empty line holding the two apart; a piece with no words of yours is no longer kept, and the two pictures land edge to edge as a pair at a cell's size, with no dragging.
+- Writing: two prints brought together really become a row — a dropped photo snaps against the photo it was dropped on (the row's first cell travelling down, its last travelling up) instead of landing inside the run, so a pair, a three and a four are built by dropping a picture onto another one, and a print already in the row stays where it is when you press on it again.
+- Writing: a page-sized photo that joins a row takes a cell's size as it lands — Page is where a new photo arrives and a row cannot hold a page, so the two you put together are two halves you can see, while a photo that is alone keeps the size it has and a size you picked yourself is never changed for you.
+- Writing: a voice note still blends with the paper and now sits a little proud of it — the strip casts its own soft shadow instead of wearing a card around itself.
+- Writing: the landing preview is the thing arriving, not a ruler — the hover over the row you are dropping into is the dashed room the block will take, drawn as a cell when a photo is coming down on another photo, with no colour line anywhere.
+- Writing: the pinned heading says the truth now — a title line reports where it is ON THE SCREEN instead of where it sat inside its own little box, so the bar no longer appears while the heading is still in view, no longer names a heading three chapters away, and no longer goes missing on a page with more than one. A heading that loses its title, or leaves the page, stops being pinned at all.
+- Writing: tapping the pinned heading lands ON it — the bar moves the page by the distance between the heading and the top edge of the writing area, instead of jumping to the top of the page, and on a book review it moves the scroll you are actually looking at (reading or writing) rather than the other one.
+- Writing: the pinned heading names what it is — "Heading" on a page of your own, "Chapter" on a book review — over the heading's name, with the page's own accent on its marker, its hairline and the way back.
+
+ADD:
+- Writing: a caption is the print's own LABEL now — its own face (seven faces, each menu row set in the face it offers and the button an "Aa" in the one chosen), its own size (small, standard or large, riding the print's frame), and a date on its own line under the words instead of a word typed into them.
+- Writing: the caption's own dock — while a caption has the caret the dock swaps to the tools a label can use (the date, the face, the size, and one tap back to the writing tools), and the writing tools step aside in a crossfade until the words are tapped again. Bold, the marker and the bullet list do nothing to a caption, so they are not offered where they cannot act.
+- Writing: a caption's date is written in the order YOU read dates — day first (14/03/2026), month first (03/14/2026) or year first (2026/03/14), set for every caption at once, with a per-caption override that wins where it is set. First tap stamps today, the tap after opens the menu (today, yesterday, remove, and the order).
+
+FIX:
+- Writing: a print's size is its OWN inside a row — in a pair, a three or a four, the size you pick is the size it takes (a portrait print stands taller and narrower than the one beside it), instead of every cell being forced into the same slot so the size menu changed nothing you could see.
+- Writing: a page read back is as tall as the page you wrote — the caption band under a print is drawn even with nothing written in it, so a row of prints no longer measures differently on the two sides of the eye / pen switch.
+- Writing: the landing preview follows the finger — each step was charged only the row being passed, so carrying a voice note down a page of paragraphs ran the guide a row or more ahead of the note under the thumb; a step is now half of the block in hand plus half of the row it is crossing.
+- Reading: the vertical PDF reader zooms where you pinched — a pinch magnified every page in the column at once, so growing the page above pushed it out from under the fingers; only the page you pinched is magnified now, inside its own frame, and it grows about the point you held.
+- Reading: a magnified page holds its place — the zoom is anchored at the fingers with the drag folded in, so the page no longer slides out from under them as it opens.
+- Reading: a zoomed page is panned before the column scrolls — the page takes the drag while it still has room in that direction and hands it back at its own edge, so a page turn only happens once the page has run out, on the next swipe.
+- Reading: the pages of a PDF are numbered as you scroll — the corner of each page carries the reader's own page number, outside the zoom, so "which page am I on" is answered in the scrolling flow too.
+- Reading: a PDF's places really move you — a mark, a chapter, a search find and the page bar used to scroll the PAGER's state, so in the scrolling flow (where a PDF opens) nothing appeared to happen; a jump is now asked for and taken by whichever surface is showing.
+- Reading: the page bar works in the scrolling reader — the column has no page of its own, so it reports the page it is showing and the bar's arrows ask it for the next one, instead of the bar being absent.
+- Reading: your marks say the PAGE — a mark on a PDF read "Section 12" (the reader's own block numbering); it now says the page (with the chapter beside it when the book has one), in the book's order, wearing its own kind in its own colour, with the passage set as a quotation and the note as an aside.
+- Social: no portrait wears a line above its shoulders — the bust's outlined edge was a dark rule crossing the disc just above the shoulders and the collar floated above the line it belonged to (the collar now sits from the shoulder line down, and the garment's own tone is edge enough).
+- Social: the poses are within their own heads again — the tilts ran to eight degrees, which walks a head off its collar and reads as a bent neck, so every row now turns by no more than four.
+- Social: every gaze is a shape that means something — an open eye with its own catch-light, a closed smiling eye, a lidded eye whose lid sits on the eye, a wink, and a looking-down pair, instead of bars drawn straight across the eyes; and the four mouths are four different shapes (a grin with its own lip line and corners, a short quiet arc, an open o, a plain smile) instead of one arc at four sizes.
+- Social: the moon is a real crescent and the leaf is gone — the moon's arc was a broken ring that read as the letter C, so it is now a crescent built by taking one circle out of another, and the leaf's tile holds a rainbow (three bands of one arch with a cloud at each foot).
+- Reading: panning a zoomed PDF page no longer turns it — the drag the page could take is claimed from the first movement (before it reached Android's own tap-slop) instead of from the second event, which is what let the pager read the rest as a page turn; a drag the page has no room for is still handed back, so an edge swipe still changes pages while zoomed.
+- Reading: a zoomed PDF page cannot be dragged off the screen — the pan stops at the page's own edge, measured from the page as it is actually drawn at that zoom rather than from the box around it.
+- Reading: a zoomed page in the continuous vertical reader no longer paints over the pages above and below it — the page's own box grows with the zoom, so a magnified page is a bigger page in the flow and the layout always keeps them one after the other. Scrolling down a magnified page is the scroll itself, and a sideways drag still reaches the page's left and right edges.
+- Reading: the contents list has a bookmark that says what it is — a bookmarked chapter's pill is filled in the reader's accent and takes the bookmark back, instead of looking the same as an unmarked one, and a PDF's page rows carry one too (a scanned book has no chapter names to mark).
+- Social: every avatar is redrawn from zero in a cozy minimal style — one warm disc, one soft bust, one head and one clean silhouette each — twenty portraits (ten men, ten women) built from a short shared vocabulary of shapes and a small named set of faces, instead of the accumulated detail that turned to mush at avatar size.
+- Social: a hat, a beret or a crown no longer swallows the face — the front hair on those rows stops above the brows.
+
+ADD:
+- Writing: the block in the air is a STACK — a carried print or voice note lifts with two sheets of paper peeking out behind it, and the landing preview is a dashed sketch of the block's own shape (the room a voice strip or a paragraph really takes) instead of a flat colour line.
+- Reading: double-tap a PDF page to zoom — in to read a line closely, out to see the page whole again, anchored on the point that was tapped, in both reading flows.
+- Writing: a run of photos lays itself out the way a page does — two side by side, three as one upright frame with the two others stacked beside it, four as a square — and the size menu gains a small portrait frame for a picture that belongs in a row rather than on a page of its own.
+- Reading: the bookmarks, the reading progress and the contents are ONE sheet on ONE page behind ONE button — the progress card first (the figure, a filled rail, the chapter or page it belongs to, "Continue reading" and "Mark my place"), then your marks, then the book's own contents, with no chips hiding two of the three. The figure follows you as you read instead of naming the place the book happened to open at.
+- Social: eight cozy icon avatars — a moon, a sun, a star, a cloud, a leaf, a mountain, a cup and a heart — drawn on the same disc with the same palette and the same ink as the portraits, so the picker is one set of 28.
+
+FIX:
+- Writing: a dragged photo or voice note shows WHERE it will land, at the size of the thing in hand — a ghost band over the words it is about to push, on the side it is travelling towards — instead of a bare line that only said "around here".
+- Writing: a photo lifts and tilts a little as it comes up, the way a hand holds a photograph, and a voice note rises evenly as a card; both settle back down as they land, and a dropped block slides the last few pixels into place while the rows it passed glide closed behind it instead of snapping.
+- Reading: a PDF highlight sits ON the letters again — the box was measured from the baseline down, so every wash ran a little under its words.
+- Reading: a zoomed PDF page moves with one finger — the drag was being left to the page turn — and a swipe at the edge still changes pages without zooming out first.
+- Reading: pinch zoom works in Pages mode too, and the pages sit flush — a turn is a slide of the paper, not a gap between cards.
+- Reading: the page's ink tool wears a palette icon instead of the "Tt" that read as a text-size control.
+- Reading: bookmarks, reading progress and contents live in ONE sheet now — two tabs, with a bookmark pill per chapter so a chapter can be marked straight from the list.
+- Reading: the head's flow control is an icon instead of a word.
+- Social: the avatars are redrawn from zero — twenty portraits, ten men and ten women, each shelf with its own build (the men's shoulders broader and squarer, the women's narrower and softer), its own hair, gaze and pose, and no two portraits sharing a silhouette.
+- Writing: a pen or a face chosen for the words you type next lights its tool the moment it is armed, instead of waiting for the next keystroke to prove it.
+- Writing: tapping a tool whose menu is open closes it — the outside tap used to dismiss the menu AND re-open it in the same breath, so the menu never went away. The Save your take dock's font, paper and size menus had the same habit, now fixed.
+- To-do: a row keeps its checkbox until it has words again — the box was drawn on the row's characters, so emptying a row took the box with it; a row with no words now stands as a box waiting to be written on the writing and the reading side alike, and the first word typed into it wears the box even after the list is closed and re-opened.
+- Writing: the font tool sets the paragraph it is in — every character of the line you are writing wears the chosen face at once, instead of only the words after the caret.
+- Releases: a tagged release carries the same keyed providers a CI build does — the optional keys were exported by the pull-request workflow only, so the APK that actually shipped went out without them.
+- Books: an author's written works are kept on the device — the list the sheet showed last time is on screen in its first frame, offline included, and a lookup that failed is not remembered as "wrote nothing" for someone with a shelf full of books.
+- Releases: the writing page compiles again — the drag's auto-scroll imports the two things it calls and takes the pixel travel as a float.
+- Cabinet: the Notes shelf is your own notes now — the pages you wrote about a topic and your to-do lists, each opening the page it belongs to. The captures you saved under "notes" keep their own shelf, the Cupboard and search; they no longer share a shelf with your writing.
+- Journals: a journal list is journal days only — a to-do list and a note about a topic are no longer listed among the days, and the Personal shelf keeps the days too.
+- Books: the file you attach IS the book now — its own contents and its own page count are read out of it and written onto the book the moment it is wired, so the chapter rows and the length come from your copy instead of a lookup for someone else's edition. A file with no contents of its own leaves what was fetched where it was.
+- Books: chapters are looked up in the sources that actually answer — Open Library's own table of contents and Crossref first, Google Books asked last and only when a key is set (its keyless endpoint answers a quota error, checked live).
+- Reveal: the artwork, artist, painter and author sheets read in the app's own ink, instead of a pale accent drawn on a wash of that same accent — the least readable pair in the app, on the screen you open to read.
+- Home: the Pages and My shelf doors ARE your accent now — the whole card is filled with it and the words wear the app's own ink for a filled card, instead of an accent hairline around a pale tile.
+- Journals: the day's number is dark ink instead of the accent's lightest shade, so the one figure a journal row exists to say reads first.
+- To-do: a list reads bigger — its rows, its boxes and the list's own name are a size up, on both the writing and the reading side.
+- Journals: the day's mood chips and the title no longer sit on top of each other — the page's head lays itself out as a column again, with the space between them back.
+- Writing: the day's title stays on the page and out of the top bar.
+- Writing: a print set beside the writing fills its own column, so the picture is a picture instead of a sliver with a squeezed caption.
+- Writing: a carried voice note's drop line follows the finger — the page measures every row it passes, so the line lands where the note will actually go instead of running ahead of the hover.
+- Writing: a page follows a carried block — hold a note at the foot of the screen and the page scrolls with it, so it can be taken past the last line that fits.
+- Social: the quick fact follows the topic — choosing a different topic replaces the line the last one offered instead of leaving it under the new topic's name.
+- Social: posting finishes with the composer, note and topic alike — the entry the writer's words were kept in is the one cleared now, so a topic note no longer comes back with its old topic on the next open.
+- Save your take: typing is smooth again — the page was re-reading every take's data as it drew itself, so one character typed anywhere re-ran the whole page (the topic strip, the chips, the take rail and every card of the format body), and the draft autosave sat on the same per-character clock. Each take's contribution is now a derived value only the parts that need it read, published from a snapshot instead of on every frame — the same fix covers the take studio.
+- Social: every portrait is its own character now — its own pose (the head turned and the whole figure off centre, each of the 28 leaning its own way), its own silhouette (the two bobs are no longer the same shape, nor the goggles' crop, the pixie and the braided crown the same box, nor the four waves the same mass), an ink line along every shoulder, mask, plait, hood and tail, and a prop that breaks that outline — a headband over the bob, a bloom behind a curl, sunglasses pushed up onto the crop, a pin past the straight sheet of a hime cut.
+- Save your take: a note's tools come up with the keyboard — the floating dock rides the keyboard while you write in the box and folds away the moment it is dismissed, instead of a formatting row standing under a note nobody is writing in.
+- Save your take: the strip of tools above a note is gone — the sheet's style, its colour, the text-history pill and the mic all ride the same floating dock, so the box is nothing but paper until a finger lands in it.
+- Writing: a tap on the page outside a note's paper drops the caret and the selection with it, so a passage is released by tapping anywhere rather than by finding the exact line it sits on.
+- Journals: the tool bar rides the keyboard and steps aside as you scroll down the page, and the smallest upward nudge brings it back.
+- Writing: the full-screen card editor and the book's note editor write in the journal's own hand, straight on the page, with no bordered chip around the words.
+- Journals: the keyboard no longer comes up by itself when a saved day is flipped from the eye to the pen — the page stops shifting at the switch — and a day being made still opens with the caret in its title and the keyboard up.
+- Writing: taking the eye puts the keyboard away, so a page being read is not sitting under an inset.
+- Writing: a voice note's play control is the filled glyph on the page itself, with no disc behind it, and its clock shows one figure — the position while it sounds, the recording's own length while it stands — so nothing shifts as it counts.
+- Releases: the release build builds again — a return out of a composable page block made the compiler emit a helper class the shrinker refuses to package, so the signed APK failed while debug builds were unaffected.
+- Writing: a page READ back now draws the small print with the writing beside it exactly as the page that was written does — the read view ran its own copy of the renderer, so the pair only existed while editing.
+- Writing: a small print keeps room for the writing — the print takes a narrow column and the line under it moves in beside it, like a picture set in a printed column, instead of pushing every word down the page (a half or page print, and a second photo, still pair as they did).
+- Books: a chapter list is read from more places — Open Library's own work record as well as its editions' (and the richest table wins, instead of the first one with three rows), Google Books, and Crossref, whose chapter records are the only source that answers for an academic or edited volume and carries the pages each chapter spans.
+- Reading: a PDF selection takes the words under your finger — the press settles on the line it landed on, measured in the page's own crop box, instead of reaching for whichever word was nearest anywhere on the page, which is what made a hold wash the whole page.
+- Reading: a paragraph of an image with no caption can no longer break a selection sweep.
+- Reading: a movie, an anime and a song open the same sheet the books, albums and series do — artwork beside its own title and byline, the shelf toggles, the synopsis in a folding card — instead of a "Similar …" panel that said nothing and could not keep the topic.
+- Books: reopening a book no longer flashes its placeholder rows — the head, the chapter names and their page ranges are the ones the last visit ended on from the first frame, instead of arriving a couple of frames late.
+- Reading: a PDF page is drawn for the screen it is on — it was rendered at a fixed size and then stretched back up, which is what made it soft on a high-density phone — and the foot of the reader no longer states the page a second time while the page bar is already saying it.
+- Reading: the scrolling reader shows ONE page at a time again — every page takes the screen it is given and fits inside it, so a page and the next one's top are no longer stacked under each other.
+- Reading: a book's own contents keep their shape — a part's chapters are indented and marked by their level, from the EPUB's nav document, its NCX and a PDF's outline alike, instead of reading as one flat list.
+- Books: a book keeps its chapters, an album its tracks and a series its episodes after an update — the stored lists are kept readable across builds instead of an update being able to read them back empty.
+- Social: the wall opens on the page this phone already has — "Last 24 hours" and its cards are on screen from the first frame, instead of the section arriving a beat late and a "Nothing here yet" card showing before the wall you already had.
+- Social: the session is read before the page paints, so a signed-in account no longer opens on "Sign in to see the social wall" and then swap to the wall.
+- Social: the Moderation door is remembered from the last time the server confirmed it, so it is on the page the moment Social opens instead of a check later — and that check still corrects it.
+- Social: two portraits were wearing the same eyes — the flower crown had the wizard's sparkle, and the space helmet wore the curious wide eye instead of looking through its own visor; each has a gaze of its own now, so no portrait shares one with the tile beside it.
+- Writing: a voice note is no longer a box — it is the waveform, the play button and the clock on the page itself, with the ✕ asking before it throws a recording away.
+- Writing: a note on a topic says the topic once — the bar carries the lane now, instead of repeating the name the page already shows.
+- Journals: the day's mood is six named chips in each feeling's own colour, instead of six grey glyphs to guess at.
+- Save your take: a note's tool bar appears while you are writing in it and folds away when you stop — tap the blank space beside a note to end the typing — instead of a formatting row parked under every note on the page.
+- Writing: a marker's colour and the face a line is set in travel with the words, so both survive Enter, a paste and reopening the page.
+- Reading: tapping the page brings the head and foot back — they used to hide themselves and then be unreachable, because every paragraph swallowed the tap.
+- Writing: tapping bold, italic, underline, strike, size or quote with nothing selected now sets what you type NEXT instead of rewriting the line you are on.
+- Writing: Enter keeps the writing together — a journal entry, a book review and a note are ONE text field again, so Android's own Select all, its drag handles and its cut take the whole entry instead of one line of it. A paste lands the same way, and a checklist or bullet row still starts a new row on Enter.
+- Writing: the title tool sets the LINE you are on — tapping it while writing a heading turns that line into the heading there and then, for the book's review and chapter pages as much as a journal, instead of only changing what you type next.
+- Writing: a heading, a small note and a list line stand on their own line of the page, so Enter under a heading starts prose and Enter under a bullet starts the next item.
+- Writing: the align tools take the whole page — left, centred, right and justified set every line at once, so a page cannot end up half one way and half another.
+- Writing: the title tool stops at the end of the title — Enter under a heading starts prose.
+- Writing: turning to the pen no longer fights the keyboard's rise; the page turns first and the keyboard follows.
+- Books: the pinned chapter no longer appears before its heading has actually scrolled away, and tapping it goes back to that heading.
+- Books: the book page's head rolls up the author along with the title.
+
+ADD:
+- Reading: anime looks up the way series looks up — its episode list AND its poster now come from TVMaze first (the series sheet's own source), with Jikan kept behind it for what TVMaze does not carry, so an anime sheet carries each episode's air date, runtime, rating and still and answers in one request instead of a paged sweep.
+- Reading: a book's own emphasis comes through — a phrase the edition set in bold or italic reads that way in the reader (of the PDF's text layer too), instead of every tag being thrown away and the sentence arriving as plain prose, and a highlight or a selection still paints over it.
+- Social: a rainbow icon joins the cozy set in the leaf's place — a crescent moon, a sun, a star, a cloud, a rainbow, a mountain, a cup and a heart.
+- Reading: anime opens the series sheet — its own episode list from MyAnimeList's data, with the watched marks, the likes and the shelf toggles a series has, and the reveal card previews those episodes under its poster.
+- Reading: a "movie" that is really a show lists its episodes — the sheet asks a source that can actually tell a film from a series, a film keeps the film sheet it had, and the two can never show at once.
+- Setup: a free TMDB key is now read from `TMDB_API_KEY` — with it the film and anime sheets resolve posters from TMDB, and a film's facts and a show's episode list come from there too; without it the keyless providers answer exactly as before. `.github/AGENTS.md` walks the whole setup, secret included.
+- Books: a work in an author's sheet opens IN the app — its cover, its year, what Open Library says about it and its subject headings, with the work's own page a tap away in the corner and a pill that files it onto My shelf as a book you can read and write in.
+- Writing: a photo can be a Portrait — the tall frame a phone picture of a person or a doorway actually is, for the vertical photos the other three sizes had to crop.
+- Art: the artwork, artist, painter and author cards on the reveal wear their own picture — an artwork shows itself (the Met's public-domain image, then Wikipedia's), an artist or a painter shows a work the Met attributes to them, and an author shows their portrait (Wikipedia's lead image for the name, or the cover of the first of their books when there is no photograph). The resolved picture is remembered per topic, so the sheet that opens on a tap is painted from the same one.
+- Art: an artwork, an artist and a painter open a sheet of their own — the work's record (its title, maker, date, medium, museum and a public-domain image from the Metropolitan Museum's open-access API, with Wikipedia's own words and its article as the words half), or, for an artist or a painter, the works the Met attributes to them. Both sources are keyless and free.
+- Books: the author's own sheet leads with their face — the portrait the reveal card resolved sits in the header, read from the same stored picture instead of being looked up again, and it falls back to the person's silhouette when there is none to draw.
+- Books: an authors topic opens their written works straight from the reveal, the same sheet the author's name opens from a book.
+- Books: the author under a book's title is a door now — tap it and their written works open in their own sheet (every other book Open Library knows them for, with covers and first publication years), on the same keyless source the rest of the app already reads.
+- Setup: every artwork, chapter and author source the sheets read now has its free tier written down in `.env.example` — which ones need no key at all (Open Library, iTunes, TVMaze, Jikan, MusicBrainz, Cover Art Archive) and which three buy more when set (Google Books, LibraryThing, Spotify).
+- Reading: tap links in journal pages — URLs are detected and underlined in the read-only view, and tap them to open in the browser.
+- Reading: the selection bar is opaque now — highlight colours and actions sit on a solid surface that matches the reader's skin, instead of a near-transparent wash.
+- Books: Google Books chapter list as a fallback — when Open Library has no table of contents, the enrichment pass now tries Google Books' own chapter data (keyless, same consent toggle).
+- Reading: select words on a PDF page too — hold the page to take the word under your finger and drag to extend the passage, then highlight it, write a note on it or bookmark it from the same bar a reflowable book uses. A page of pictures still marks as a whole page, exactly as before.
+- Reading: a typeset book's own printed page numbers — the Contents sheet can show the page-list the edition carries, so "printed page 42" is a place to jump to, not a guess.
+- Incursion: a hidden page holding the whole viewing order — every Marvel, Sony and X-Men film, series and short, in the order they are meant to be watched, with the essentials marked. It is not in any menu: type "i love you 3000" into any search box in the app and it unlocks, then opens from a floating "Incursion" button on Home.
+- Incursion: mark any title not watched, watching, planning, watched, on hold or dropped — the list says how far through you are, and the filter chips narrow it to essentials, what is left, what is in progress or what is done.
+- Incursion: each phase is a card of its own — its name, what the phase is about, a bar for how far into it you are, and all six states as chips along its foot. A whole phase is one tap on that chip, and the phase can clear itself again after asking.
+- Incursion: a title's line says how much of it there is — a season's own episode range where the data states one (S1 · ep 8-12), which is all of what the seven X-Men seasons that carry no episode count have to say.
+- Incursion: list or grid, whichever you like reading a shelf in — two tiles across with each title's order and status, phases still heading their own blocks so the one-tap phase marking works in either view.
+- Writing: a photo is a print now — a page, half or small one chosen from the frame's own corner, sized as a share of the text's measure so nothing can ever land on top of it, with the caption written in the frame's wide bottom border.
+- Writing: a photo can be picked up and carried to another place on the page, exactly like a voice note.
+- Writing: a marker pen on the dock — four inks (amber, rose, sage, sky), the same four a book is marked with. Mark a selection outright, or arm a pen for the words you type next; the button wears the pen it is about to lay down.
+- Writing: a font menu — the four faces the app already bundles (serif, sans, mono, display), with the menu itself set in each face and the button a lettered specimen of the face in use.
+- Writing: right and justified now join left and centred, so every alignment a line can wear is one tap on the dock.
+- Writing: text history is the dock's first tool — the line you are in is snapshotted as you write, and a version you restore lands back on that line.
+- Reading: pinch a book to zoom — a page magnifies and pans, a reflowed book re-lays itself out at a larger type size.
+- Reading: search any book from the foot of the page, and every find is washed where it sits.
+- Reading: highlight a whole chapter at once from its heading, instead of marking it paragraph by paragraph.
+- Reading: a PDF page now takes the reader's own ink — paper, sepia, night or white — and fills the screen it is on.
+- Reading: an EPUB's pictures are drawn in the place they stand in the file, and its headings keep their own three sizes.
+- Writing: every page can pin its own headings to the top as they scroll by, like the book review pins a chapter — tap the pinned line to go back to it.
+- Books: the book page's head names your shelf until the book's own title and author have scrolled up, then wears both.
+- Books: hold the "Read" pill to say which file Curio opens — pick the PDF or the EPUB, or swap the one it already has.
+- Books: a book review pins the chapter you are in to the top of the page as its markers scroll by, so a long review always says where you are.
+- Writing: the book review and the chapter review wear the same eye / pen switch as every other page, and the switch itself now slides between the two instead of swapping.
+- Writing: tap the blank part of a page to start writing even when the caret was already sitting there, and double-tap a page you are reading to put the pen back.
+- Writing: press and hold a voice note to carry it to a new place on the page, the way a to-do row already moves.
+- Books: the book review and the chapter review now have the journal's own mic — record a voice note in either page, and the waveform lands in the writing just like it does in a journal.
+- Writing: the card editor's and the book note's tool dock now HOLDS the foot of the screen while the writing moves under it, the way the journal page's dock does.
+- Social: every portrait has its own gaze now — twelve eye designs chosen per character (a wizard's sparkle, a hood's shaded gleam, a beard's steady eye, a flower crown's smile) with brows to match, instead of the same pair of eyes on all 28.
+- Writing: the dock's two last tools — put a line to the left, centred, right or justified, and set the hand it is written in (default, book serif, writing hand, display serif). Both work on a selection, or on the line you are in when nothing is selected, and they show in the card, the saved entry and the export alike.
+- Writing: the enlarged card editor and the book's note editor are the journal's page now — the same background, the same dock at the foot of the field.
+- To-do: a list previews as its OWN thing in the journals list — its rows with their boxes, ticked or not — instead of its text run into a paragraph.
+- To-do: rows read bigger on a list page, and the Home "+" sheet's to-do door wears the list's own box.
+- Writing: the card editor's full-screen writing and the book sheet's chapter-note editor now write on the journal's own tool dock — a floating strip at the foot of the page where every tool is its own button (bold, italic, underline, highlight, text size), instead of a Format toggle that unfolded a second toolbar.
+- Writing: underline is a tool now — arm it and the words you type carry it, or select a passage and apply it.
+- Reading: a book's own reader — tap once and the head and foot step out of the way, tap again and they come back, so the words get the whole screen.
+- Reading: mark a passage as you read — press and hold to highlight it in one of four inks, write a note on it, or drop a bookmark. Every mark is listed with the words it was made on, and jumping to one lands back on it.
+- Reading: what you marked while reading now shows on the book's page as quotes from the margins, and tapping one opens the reader at that mark.
+- Reading: an EPUB or a text file reads as one continuous scroll instead of a page at a time, with each chapter a heading you can jump to.
+- Reading: the page's own ink is yours to choose — paper, sepia, night or white — for daylight, lamplight or the dark.
+- Books: the shelf shows three covers across, split into what you are reading and what you have finished.
+- Books: a book added from the open library now arrives with its real chapter names and page ranges, read from the edition's own table of contents.
+- Books: a photo on a page now grows out of where you tapped it — no screen change, the page stays behind it.
+- Books: the "+" sheet has two new doors — a note on any topic, and a to-do list.
+- Books: a book page opens on the review side when there is writing — the eye reads it back, the pen turns the page into its notebook; a book with nothing written still opens ready to write.
+- Books: one page for the WHOLE book — review the book itself instead of going chapter by chapter, and drop chapter markers into that same page with a floating "Add chapter" button. Open a book's chapter review under the marker that names it, all on the one page.
+- Books: a floating "Read" pill on a book — wire it a PDF or EPUB you already have and Curio reads it in its own reader, with a cover that is a cover again.
+- Books: a "Download help" pill on the book page searches the web for a PDF or EPUB copy.
+- Books: "Look it up" now tells you what it found (chapters, pages, the description) or why it found nothing.
+- Books: "About this book" now works for non-catalog books too — it shows the description from Open Library, labelled as such.
+- Messages: notifications now look like the people they are from — the sender's own portrait, a Reply box right on the notification that answers their last message, a Like, and Mute for that conversation.
+- Writing: a book's chapter is its own page now — what the app knows about it (its name, its pages, a summary), then your review; tap and you are writing on the same page, with the tools sliding in.
+- Books: opening a book fills in the rest by itself — its chapters, page count and synopsis come from Curio's own catalog first, then the open library. No page is left blank to fill in.
+- Community: follow members — a Follow pill on every profile, and a wall filter that shows just who you follow so their posts are easy to find.
+- Community: bans now come in four reaches — hide content, view-only, social-only, or a full account lock — each with its own clock (a day, a week, a month, or until lifted), and the moderation page keeps a living ban list you can soften or lift.
+- Community: every moderation action is remembered — a member's page and your own profile now carry the record of bans, lifts and removals.
+- Community: deleted posts wait locally behind a small door at the foot of the wall, where they can be re-posted or let go.
+- Community: an unfinished post is kept as a draft and offered back the next time you open the composer.
+- Books: the add-book sheet searches Curio's own book shelf first, then the open library — and says which one it found the book in.
+- Profile: your profile (and every member's) now lives inside the header itself — portrait, counts, bio and actions on the banner, with a proper Message pill.
+- Writing: a note on a topic is its own page — the topic sits at the top as a card (with a way through to it), and you can pick that topic by searching Curio's catalog or by typing a name of your own.
+- Writing: a to-do row can be picked up and moved — press and hold a row to carry it up or down the list (the rows make room as you go), and the new order is saved with the list.
+- Writing: swipe a to-do row sideways to remove it, with a floating "Undo" pill that puts it back exactly as it was — same words, same tick, same place — for a few seconds after.
+- Writing: a to-do list is its own page too — give it a name, type a row and it arrives as a checkbox, with a running count of what is left and the day it was started.
+- Writing: talk into a page — a floating mic sits over the writing, the tools step aside while you record, and what you said lands in the page as a waveform. Tap or drag anywhere along it to jump to that moment, and keep writing under it.
+- Writing: leave a page mid-recording and you are asked what to do — keep recording (a small pill says it is still going and takes you back), keep the note, or discard it.
+- Writing: the bullet tool opens a menu of marks to choose from — dot, ring, dash, star, sparkle, crystal, arrow, leaf, heart and bolt — and each line keeps the one it wears.
+- Journals: the head shows today's date instead of a "Write today" pill, the same on the shelf instead of "Add a book".
+FIX:
+- Books: the book page stops repeating itself — its title comes into the head only as the page's own title scrolls under it, instead of sitting there twice.
+- Writing: the eye / pen flip is one move now — the two sides cross-fade upward into the keyboard instead of sliding past each other, so it no longer looks clunky while the keyboard comes up.
+- Social: no portrait reads as a black blob — the darkest hair and hood tones came off near-black, and the hooded face is a face rather than paper.
+- Writing: a note's topic stays pinned above the writing WHILE WRITING it instead of scrolling out of view, so "choose the topic" can never hide under the fold — reading the note back opens on its own words, with the topic's card out of the way.
+- Writing: going to a topic from a note's header and coming back keeps the note and the topic it was about — it no longer saves one page and then asks you to pick the topic again on a second one.
+- Writing: select all selects the PAGE now — the whole row set wears the selection and Copy puts all of it on the clipboard, instead of grabbing only the line the caret was in.
+- Writing: a to-do box can be ticked while READING a page, not only while writing it — and the tick saves itself like any other change.
+- Reading: a book opens exactly where you stopped, and the foot of the reader names the chapter you are in (the page, for a PDF) as you read instead of the place it opened at.
+- Reading: a PDF draws its pages as you reach them instead of every page up front, so a long PDF opens at once and stops holding so much of the phone's memory.
+- Reading: a mark belongs to the book AND to the file it was made in, so wiring a book to another PDF starts that file's own marks instead of landing the old highlights on text that is not there.
+- Books: a saved book opens the way a journal does — the reading side when it has writing and the pen when it has none (the shelf was being asked before it had answered, so a book with writing still opened as the book view).
+- To-do: picking a row up to move it no longer fights the swipe — a carried row cannot also be swiped off the list, and a task that wraps onto two lines counts for its own height, so the list lands where your finger put it.
+- Cabinet: tapping "Curiying now" on a book also puts it on your own shelf, so it shows up in My shelf on Home and the book's chapter notes attach to it — taking it back out of the shelf never deletes the book.
+- Writing: the blank part of a book or chapter review starts the writing — tap the empty space and the caret and the keyboard follow, instead of the page sitting there dead.
+- Books: "Add chapter" offers the book's own chapter list (its number and its name) and drops the one you pick straight in, instead of handing you a blank heading to type.
+- Journals: opening a saved journal lands on the reading side, while a page with nothing written on it still opens ready to write.
+- Writing: a line you made with Enter can be taken back — backspace at the start of a line joins it to the one above, and an empty line goes away.
+- Writing: the tool you have switched on stays on after Enter — a quote, a list or a title carries to the new line instead of dropping to plain prose.
+- Writing: a quote is a coffee panel now — a soft wash behind the words with the rule down its side — and a quotation typed over several Enters reads as one continuous block.
+- Writing: the bullet tool gives the line a dot on the first tap and opens the mark menu on the next, and the row that takes a list off a line reads "Remove list".
+- Writing: a bullet's mark is a deep coffee instead of your theme's accent, and the to-do tool wears the page's own checklist box instead of a struck-through task icon.
+- Writing: the page's mic floats over the writing, clear of the tool row, where the whole button can be tapped — and recording a voice note asks for the microphone properly (the first tap used to fail silently while Android's dialog was still up).
+- Writing: the eye / pen switch is a move instead of a swap — the writing slides in from one side and the reading from the other.
+- Journals: the date changes with a shift instead of swapping in place, and the calendar's picked day is the accent's lighter tone so the numeral stays readable.
+- Social: a quote is set in deep coffee instead of your theme's accent, in the composer's preview and on the wall alike.
+- Home: the Pages / My shelf doors hold their row's left edge while the chips scroll under them, and the doors wear your accent; the book cover footer's title is smaller.
+- Books: the description folds to a line while you are writing and opens on a tap, instead of pushing your own words down the page.
+- Books: a chapter review saves itself even when you back straight out of the page (the last change used to be lost).
+- Cabinet: "Curiying now" counts and lists the shelf books you are part-way through, instead of only the items saved onto that shelf.
+- Books: a file you add is COPIED into Curio's own storage, so the book keeps opening offline instead of dying with the picker's permission — and the file no longer takes the book's name (a book keeps the name it has).
+- Books: a book added from a file draws its own cover instead of trying to show the PDF as a picture.
+- Writing: the in-page photo is crisp now — it is loaded at the size it is drawn, with high-quality filtering, instead of being decoded small and stretched back up.
+- Writing: tapping anywhere on the empty part of a page starts writing at the end of your last line — no more having to hit the faint "Write…" itself.
+- Writing: "Write…" appears once on a blank page instead of on every empty line you make with Enter.
+- Journals: the date is shown once (the bar above already had it), a long title stops at two lines, and the emptiness of a row no longer turns into a wall of words.
+- Home: the book chips wear the whole cover with the title on a small footer across its bottom, and the Pages / My shelf doors are lifted off the row with a soft shadow and a hairline edge.
+- Writing: a ticked checklist row stays ticked — the tick is saved with the page, so reopening a list shows what you finished instead of an empty box.
+- Writing: the checklist box is a clean hairline outline in your own ink instead of a pale accent smudge, the tick sits inside it properly, and the box lines up level with the row's words.
+- Writing: searching for a topic ranks the same everywhere — the composer, the Share Hub and the note page all put a name match first instead of an alphabetical guess.
+- Performance: the app hands the topic catalog's memory back when Android asks for it (it could not before, so the app stayed heavy in the background), with no cost to how fast the Topic Database opens.
+- Books: a lookup that failed (no connection, a timeout) is no longer remembered as done — the book is looked up again on your next visit instead of staying blank forever.
+- Books: "Mark finished" really finishes the book now (un-finishing had silently failed), and a chapter you have written wears the accent line down its side.
+- Books: the whole app wears your theme's own accent — the Cabinet, the shelf, Stats, the recycle bin, the category picker, the settings pages, the Topic Database and the composer included — instead of a fixed rose under an azure or lane hero.
+- Books: the journals are grouped by month, and the book page shows a tick per chapter so your progress reads as a place, not a figure.
+- Writing: bold works again, a quote looks like a quote — a touch smaller, with the rule down its side — and an empty page says "Write…" once instead of on every new line.
+- Writing: the journals, the shelf, a book and a chapter page no longer run under the status bar, the writing tools fit a narrow screen without being cut off, and every one of those pages wears your theme's accent instead of a fixed rose.
+- Books: a chapter note taken from a topic's Book Notes and the chapter review on your shelf are the same note — write it in either place and both show it.
+- Social: the portraits are redrawn cute — matching brows, big friendly chibi eyes, and no more odd tint under the chin.
+- Community: wall cards wear the app's accent instead of paper cream, and the Post button steps out of the way while you scroll down.
+- Community: quotes now look like quotes — one proper pull-quote shape shared by the composer preview and the wall.
+- Writing: a journal of your own — a page per day with its date, how the day felt, a title and the writing, with bold / italic / underline / strikethrough / quote / alignment tools that ride above the keyboard and apply to the line you are on. Photos drop into the writing itself.
+- Writing: a book shelf — add a book (or find it and its cover), keep your progress, and write a review for any chapter in the page you are reading it from. Everything saves itself as you write.
+- Home: a "+" that starts a journal page or a book, and a small row of chips showing your newest journals and books, each one tapping straight into it.
+- Take studio: the take rail lists your takes again, with an "Add take" door at the end — pick a format and the new take lands beside the ones you already wrote.
+- Messages: the composer takes a line break when you press Enter, so a message can run to several rows — the round button is what sends it.
+- Chats: a compose button opens your friends, so a new conversation starts right from the inbox.
+- Community: the composer is rebuilt — the topic goes first, the preview is always on, and a topic can ship as a share card or as a plain text post with one tap.
+- Chats: conversations, friends and the wall all run on the same rebuilt chat engine — messages, typing dots, reactions, read ticks and live updates are steadier and faster everywhere.
+- Community: replies now thread properly at any depth — fold and unfold a branch at any level, with a thread line showing where each answer belongs — and every reply can be hearted.
+- Friends: a "Start a chat" strip at the bottom of the contacts list offers your newest friends, one tap from a conversation.
+- Community: the moderation room now covers members too — reports can name a member, hiding an author hides their content without touching their account, and the team manages moderators with five per-person permissions.
+- Social: the 28 portraits are redrawn with real detail — proper faces with brows, noses and lips, layered hair, and accessories that look made (a ribbed beanie with a pompom, a stitched wizard hat, headphones with a mic, goggles with glass, braids).
+FIX:
+- Home: the saved shelf (bookmarked quotes and pinned topics) left the page — your own writing holds that spot now, and the saved shelf keeps its home in Topic History.
+- Wildcard: the Wildcard deck deals its own curated curiosities instead of loading every category first, so it opens instantly.
+- Speed: a restart no longer rewrites the whole topic catalog to the database or rebuilds its text rules for every topic, so the deck, the Topic Database and the composer come up faster and the phone stays cool.
+- Speed: the deck deals cards straight away on a restart instead of showing "Gathering the deck…".
+- Community: the topic chooser in the composer starts collapsed, and its search ranks real matches — name first, then byline, tags and teaser — with each result's category shown.
+- Messages: the quoted message inside a reply is one line tall and fits its own words instead of stretching the bubble across the thread.
+- Speed: the Topic Database opens with the topics already on screen again, and the Cabinet shows your saved entries the moment you open it — no more waiting skeletons.
+- Speed: the Topic Database no longer builds the whole catalog's search index every time it opens or re-derives the page as you scroll, so it opens at once and scrolls without stutter.
+- Releases: the release APK now ships with the full topic catalog — previous releases opened an empty database.
+- Accounts: confirmation and password emails now open a real Curio page instead of a link that went nowhere, and the sign-in form has a "Forgot your password?" row that sets a new one.
+- Community: a reply thread no longer rearranges, duplicates or loses lines when a new answer is posted — every reply is drawn once, in its own branch, at every depth — and a reply you can't reply to no longer blocks a thread.
+- Community: a reply posted on a busy card stays in the thread instead of dropping off the end, and replies are compact so more of a conversation fits on screen.
+- Messages: editing a sent message or a reply really saves now, reaches the other device, and keeps its "edited" mark after reopening the chat; swiping to reply no longer traps a long message.
+- Messages: sending puts the real message on screen at once, and a slow connection can no longer make a sent message look lost until the chat is reopened.
+- Messages: read ticks are per message, so a double tick means it was actually read; opening a chat also clears its unread badge.
+- Messages: an expired sign-in no longer reports "JWT expired". The session renews itself, and a device with no connection says so plainly.
+- Messages: received bubbles sit on the left again, and "Delete for everyone" is a solid red action.
+- Social: topic cards render whole and crisp at every size — no more shrunken art, cropped corners or off-centre previews.
+- Social: Chats, Friends and You ride the header itself now, so they are on screen the moment the Social tab opens instead of appearing late.
+- Messages: editing your own message or reply is on by default (the Experiments switch still turns it off).
+- Topics: picking a category in the Browse Topics panel applies straight away, and closing the box no longer needs Done to keep the pick.
+- Social: an avatar can never spill past its circle — the drawing is clipped to the disc, which also removed the square corners under the portraits.
+- Server setup: re-pasting the SQL no longer fails on the old encryption triggers.
+- Reading: a zoomed page moves with one finger again — the drag was folded into the zoom's own maths, where a constant zoom cancelled it out, so every pan on a magnified page answered "no room" and was handed to the surface underneath: the column scrolled (so a zoomed page could not be moved at all) and the pager turned the page you were looking at. The drag is folded in by the pan's own rule now, so a magnified page follows the finger and only hands the drag back at its own edge.
+- Writing: a journal voice note is saved on the device as well as in the app — every recording is copied into your own music library, in a folder called "Your Journal Voices", named by the day and the moment it was made, so a folder of them reads as a diary in date order and an accidental uninstall cannot take them with it.
+- Writing: a voice note in a journal sits flat on the page again — the soft shadow the strip cast is gone, so a recording reads as part of the writing instead of a card lifted off it.
+- Writing: a voice note's graph is a drawn pulse now — one inked line that rises and falls with the voice and wobbles as it goes, instead of a bar chart — and its play control is a dark filled disc with the glyph knocked out of it.
+- Releases: a CI run reads at a glance — a build summary on the run page (version, catalogs bundled, signing, APK size and SHA-256, lint totals, and which optional providers the build carried), every Kotlin warning and error re-emitted as a clickable annotation in the Checks tab instead of a line 12,000 lines into a log, and the same report as a check beside the build and as a comment on the pull request.
+- Reading: a PDF's pages are separate sheets in the continuous reader — they were drawn flush, edge to edge, so a column of scans read as one continuous strip; each page now sits on the reader's own paper with a hairline edge and air between it and the next, which is also what makes a magnified page read as a page held closer rather than the column stretching.
+
+ADD:
+- Your Curiosity: lane stats is a ranked bar chart now — knowledge per lane, strongest first, with the rest counted in your Cabinet; tap a bar for that lane's figures and its Cabinet door.
+
+FIX:
+- Books: the +/- on a book's reading progress takes every tap again — each step re-proposed the value the card was showing when it first appeared, so the count stuck at one until the card was rebuilt; it now follows your finger, a hold keeps running, and the bar moves with it.
+- Appearance: the Paper option is live under Adaptive Hero — a lane only tints the page wash and the banner, so the cream/white flip still has its effect there instead of being greyed out.
+
+ADD:
+- Writing: ten hidden writing tools you make with a gesture — bring back a removed row, move the page's alignment, carry the line you are writing up or down, give it a list mark or the next mark, take the whole page, change its writing face, save on the spot, and drop today's date in as a heading. Each one is a switch of its own on the Dev page, off until you choose it, with the gesture and what it does written under it.
+
+FIX:
+- Social: the Social tab's active indicator matches the rest of the bar now — it wore the accent at its button depth (a heavy deep-pink slab), and now wears the app's own accent like the other three tabs, with the label ink to match.
+- Books: the reading-progress card holds its height while the chapter name changes — a longer chapter grew the tile and pushed the card down, so two lines are reserved for the name.
+- Theme: the Curio rose is a touch more vibrant — the same hue and lightness, a little more saturation, so it reads less dusty in the banner, the hero and everything derived from it.
+
+ADD:
+- Writing: five more hidden gesture tools for editing — undo the last change (three-finger tap), copy the line you are in (three-finger double-tap), copy the whole page and select it (three-finger swipe right), paste the clipboard under the caret (three-finger swipe left) and delete the line you are in with the Undo pill ready (four-finger tap). Each is its own switch on the Dev page.
+
+FIX:
+- Books: the reading gauge keeps its chapter divisions however long the book is — a forty-chapter file turned the track into a picket fence and a longer one drew no divisions at all, so the marks are now thinned toward a fixed rhythm, losing weight and mixing into the fill as the count climbs.
+
+ADD:
+- Home: an empty Pages row offers your last three days — Today, Yesterday and the day before — each opening a journal page ON that day, under a line asking you to write down something about one of them.
+- Home: an empty My shelf row offers three books from Curio's own catalog, with their real covers; one tap puts the book on your shelf and opens it. The three change each day.
+
+FIX:
+- Home: the empty doors no longer offer a button that leads somewhere else — the "No pages yet" chip and the "No books yet" chip are gone, replaced by the days and the books themselves.
+
+FIX:
+
+FIX:
+- Books: the reading-progress divisions follow the chapter count you set — a book with no file, or one whose contents carry names but no page ranges, now shows a division per chapter, adding or removing a chapter adds or takes one away, and the divisions settle into their new places instead of the bar flickering.
+- Journal: Select all shows its tools — with the whole page selected the tool bar now lights what that page carries, whichever door it came through (the gesture, Android's own Select all, or Ctrl+A).
+
+FIX:
+- Writing: an exported page's pictures keep the size they wear on the page — every print was decoded at the page's own measure and scaled only until it fitted, so a picture set to Small or to a portrait frame left the journal as a page-wide photograph; the print's own share is the box now, a low-resolution picture fills its box instead of printing as a stamp, and the picture keeps its own aspect.
+- Appearance: the Color theme sheet answers the touch — the picked row's wash animates in instead of snapping on after the paint, and both the sheet's rows and the Color theme door squish deeper than the section rows do.
+
+ADD:
+- Writing: the page's copy tool opens a text bar — Cut, Copy, Paste and Undo with the arrows that say how much of the page is in hand (the reach starts as the whole page and the arrows trim it, All rows takes it in one tap), instead of Android's select-all menu.
+- Writing: a picture that ended up a line away from its row comes back to it — two prints with nothing but air between them are one row again, and the air is left out of the drawing, so the row a page was meant to have is the row it shows.
+
+FIX:
+- Journal: a stack of prints reads the size you picked — in a stack of three the upright frame leads instead of being squeezed to a third of the measure (it used to come out narrower than the two stacked beside it), each stacked print keeps its own width, and a print beside the writing takes the share its own size says instead of a fixed 42%.
+- Appearance: the Color theme sheet is quieter and tighter — one line of copy instead of a sentence, the rows give back the air they were not using, and the long "one primary, neutral surfaces" hint lost its em dash.
+- Appearance: the two two-option rows wear the app's own switch — Glyph backdrop and Paper were Material's segmented buttons and are the sliding-thumb capsule the Light/Dark/System row already uses (a row that can disable one of its options keeps the old control, where those states work).
+- Appearance: a Settings page is the same card as Profile at night — the card every Settings sub-page draws its rows on asked for a higher, brighter step of the theme's card ladder than the Profile card, which was close enough to pass on the app's own greys and nearly twice as bright under a theme whose ladder carries colour, so those pages read as a lit panel beside Profile's quiet one; both families are one fill now.
+- Appearance: the named themes' glyphs read in the dark — a named theme's hero fill sits in `primary` and a dark tone in `tertiary`, so every icon and mint label that asked those roles as INK came out nearly black on the theme's own dark page (the drawer, Stats, topic history, the reveal, a share card's toggles, the Cabinet's empty states); ink asks the theme's own accent tones now.
+- Journals: a quotation, a link and the day's feeling read at night — a quoted passage and a URL were painted in the light coffee whenever the theme was dark, and the darker mood inks sat at about 2.3:1 on the journal's dark paper; each has its night tone now.
+
+FIX:
+- Reading: zooming a vertically scrolling PDF no longer throws you through the file — a pinch holds the exact point under your fingers, where it used to scroll about ten pages ahead the deeper you were.
+
+ADD:
+- Reading: the reader wears two floating pills — the book name and a search door above, and five buttons at the foot (appearance, contents, pages, bookmarks, more) instead of bars across the words.
+- Reading: appearance is one sheet — text size with A- / A+ and a slider, three typefaces, five page colours with a "+" for tuned papers (mint, rose, amber, slate), and auto-rotate and horizontal pages switches.
+- Reading: the pages button in the middle of the foot pill opens a page scrubber, and holding it pins the page count in the corner while you read.
+- Reading: chapters, bookmarks, notes and highlights each open their own sheet, and every chapter row keeps its bookmark and its progress.
+- Reading: a floating search bar with previous / next arrows that marks every find on the pages and highlights the one you are on.
+- Reading: select one word and the bar offers the dictionary; select more and it is the wide capsule toolbar.
+- Reading: the dictionary looks words up in the app (Wiktionary) from the ⋯ menu or a selected word.
+- Reading: a reading settings page of its own — paper, type, face, orientation and tap zones — from the ⋯ menu.
+- Reading: share a passage from the ⋯ menu.
+
+FIX:
+- Reading: a double tap in a scrolling PDF opens the page point you tapped and gives the file back from the same place — the file's own scroll was corrected with a number measured at the OTHER zoom, so a double tap to unzoom landed a page or three away from the word you had tapped.
+- Reading: a pinch stops reading as a tap when your fingers lift — the tools no longer come and go with every zoom, and a lift near the side of the screen no longer turns the page instead of bringing the tools back.
+- Reading: the tools arrive and leave with a move — the head pill settles down from the top and the foot pill rises from the bottom, where both only faded in place.
+- Reading: the tools no longer leave on their own — the four-second countdown that took the pills away mid-sentence is gone, and a tap on the page or your own scroll is what puts them away.
+
+ADD:
+- Social: the faces are alive — every member's portrait breathes, bobs, blinks and glances on its own seeded timing, so a wall of them reads as a crowd instead of one heartbeat; it obeys the phone's own "remove animations" setting.
+- Reading: the page slider is a small floating pill over the page instead of a sheet — the two hold-to-turn arrows, the count following your thumb and a cross to put it away, and a tap on the page closes it too.
+
+FIX:
+- Writing: the journal's colour reaches its own controls — the dock's tools and the page's raised paper wear the day's colour instead of the theme's rose.
+- Writing: the copy box is two rows with nothing to scroll — the reach arrows, Select all and Line along the top, cut, copy, paste, undo and the cross below — and the writing dock steps aside while the box is up.
+- Writing: a bullet sits level with its words — every mark was centred on the line's own box, which sits below where the eye reads a line of text.
+- Reading: the reader's sheets leave quickly, and the notes and highlights lists keep a real panel's height instead of shrinking to a strip.
+- Reading: the ⋯ menu is smaller, and opening the search merges with the book's name in one movement instead of two panels changing places.
+- Reading: the way out of a book is a pill of its own beside the book's name, and the reader's controls press back when you touch them.
+- Writing: a voice note's wave and bars now show the actual sound — the drawing used to place every bar against the loudest a 16-bit sample can be, so ordinary speech read as a flat line; each note is now drawn against its own loudest moment, and the live meter fills with your own voice.
+- Writing: the copy tools are one row with the rest behind a door, matching the journal's own dock instead of stacking a second toolbar above it.
+- Reading: a tap and a hold both work while a page is zoomed — the page used to swallow the first few pixels of your finger's own wobble, which cancelled the tap that brings the tools back and the hold that starts a highlight.
+- Reading: a motion lock on the page — the Zoom slider is gone, and a pill in the page's corner freezes your pan and pinch at the size you left, remembered for the next book too.
+- Profile: wear your blob as your picture — the face Social draws from your @username can be your picture in the app as well, and your photo is kept for whenever you switch back.
+- Reading: low power reading, on by default — pages are drawn at your screen's own size, the next page is no longer prepared in advance, and pictures the book left behind are cleared as you close it, so a long read costs less heat and less cache.
+
+FIX:
+- Reading: one word gets the whole selection bar back — highlighting a single word used to offer only the dictionary, so the pens, the note, the bookmark and Share had to wait for a longer sweep.
+- Reading: back closes what is open instead of leaving the book — reading settings is drawn over the reading, and the system's back was popping the reader itself.
+- Reading: the reading-settings head clears the top of the screen, and the night dim now darkens the tools as well as the page, while the panels you are working in stay bright.
+- Reading: the ⋯ grid is a pill with the glyph in it and its name underneath — the names were inside the capsule, which is what made the buttons read as huge; the empty notes and highlights lists say nothing but a dash now.
+- Reading: the page slider takes the bottom of the page to itself while it is up, so the buttons it opened from step aside.
+- Writing: a page always keeps a line to type in — cutting or deleting the whole page left the writing with nothing to put the cursor in, so there was no way to type again; an empty line stays at the foot with the cursor already in it.
+- Writing: a journal's colour stays on the previews that name it — the journal list's spine, its chip on Home and the palette tool — and no longer tints the page or its tools, where the words around them could blend into the fill.
+
+ADD:
+- Writing: search your journals — a pill under the head that becomes the field when you tap it; it reads the titles, opening lines, topics, moods and dates you can already see, and says how many pages answered.
+- Writing: a journal row says the time it was written beside its word count, and that time is the moment the page was made — editing it later never moves it.
+- Writing: tap the date in the journals head to read the collection from its other end, newest or oldest, with the arrow in the pill saying which one it is.
+- Reading: the gestures box can get out of the way — it steps off the page while you are placing an edge, and a small door puts it away entirely and leaves a "Gestures" pill in the corner to bring it back.
+- Writing: filter the journals — by how the day felt, by the colour you gave the page, and by how much you wrote, with the count of what answered.
+- Writing: a daily writing goal and its own evening nudge — pick a word goal in Settings and the journals head shows today's count against it; switching the goal off disarms the nudge with it.
+- Writing: the journal's door can open today's page (or the last page you were writing) — one switch in Settings, beside the goal.
+- Reading: the progress card says how many pages are left in the chapter, and the night dim can come on at sunset (with your phone's own dark theme) instead of all day.
+- Reading: read a page aloud — a Listen pill beside the motion lock reads what's on the page and follows on, with a speed slider and a picker for which voice does the reading, and a choice between Wiktionary and a second free dictionary for lookups.
+
+FIX:
+- Everything: a page now opens in a quarter of a second instead of half — the slide every plain screen used (the journal, a chapter, a book) was 500ms, which is what made opening the journal feel slow, and the tools that appear under your thumb arrive crisper too.
+- Reading: the PDF renders again in Cooler mode — the low-power pass had told the page renderer to use a bitmap format it refuses, so pages stopped drawing.
+- Writing: a voice note can no longer crash the app while it is being drawn.

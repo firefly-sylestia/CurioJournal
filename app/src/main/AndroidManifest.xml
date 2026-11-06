@@ -1,0 +1,203 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <!-- v458 — the camera permission is gone with the ISBN scanner. The app
+         takes no picture of its own: every image door (an avatar, a pet, a
+         note's photo, a gallery wall) hands the job to the system picker,
+         which needs no permission here. -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- Update checker: queries the public GitHub API for the latest release (About → Check for updates). -->
+    <uses-permission android:name="android.permission.INTERNET" />
+    <!-- v25 — in-app updater: lets the user install the downloaded release APK. -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <!-- Floating explore bubble: a Messenger-style timer bubble drawn over
+         other apps (the browser) while an explore session runs. This is a
+         special-access permission granted via Settings (no runtime dialog). -->
+    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
+    <!-- Explore-session timer: persistent elapsed-time notification + done reminder -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
+    <!-- v458 — All-files access (`MANAGE_EXTERNAL_STORAGE`) is gone. Its only
+         user was the Glass Widget Lab's wallpaper auto-detect, deleted with the
+         lab itself; nothing here asks for it, checks it, or reads a wallpaper
+         file (the widget paints its own art), and it is the most
+         review-sensitive permission this manifest could carry. The widget lab's
+         `wallpaper` glyph and the OS's own wallpaper blur are unaffected — they
+         never needed the permission to draw. -->
+
+    <!-- Android 11+ package visibility: without this, resolveActivity() /
+         queryIntentActivities() return nothing for OTHER apps' activities,
+         which broke external launches like the bug-report "Report on GitHub"
+         button (it silently skipped the browser). Declaring the VIEW
+         intent for web URLs makes browser launches visible and checkable. -->
+    <queries>
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:scheme="https" />
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:scheme="http" />
+        </intent>
+        <!-- v464 — read-aloud's engine picker. Android 11+ package visibility means
+             the reader cannot see the OTHER text-to-speech engines on the phone
+             without this, so "point read-aloud at a better engine" would list only
+             the one that already had it — the exact opposite of the feature. -->
+        <intent>
+            <action android:name="android.intent.action.TTS_SERVICE" />
+        </intent>
+    </queries>
+
+    <application
+        android:allowBackup="true"
+        android:dataExtractionRules="@xml/data_extraction_rules"
+        android:fullBackupContent="@xml/backup_rules"
+        android:icon="@mipmap/ic_launcher"
+        android:roundIcon="@mipmap/ic_launcher_round"
+        android:label="@string/app_name"
+        android:networkSecurityConfig="@xml/network_security_config"
+        android:supportsRtl="true"
+        android:theme="@style/Theme.Curio"
+        android:usesCleartextTraffic="false">
+
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.fileprovider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
+        </provider>
+
+        <receiver
+            android:name=".infrastructure.DailyReminderReceiver"
+            android:exported="false" />
+
+        <!-- v440 — the writing goal's own evening nudge, on its own alarm and
+             its own channel (see [JournalGoalReminderReceiver]). -->
+        <receiver
+            android:name=".infrastructure.JournalGoalReminderReceiver"
+            android:exported="false" />
+
+        <receiver
+            android:name=".infrastructure.DailyReminderBootReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.TIME_SET" />
+                <action android:name="android.intent.action.TIMEZONE_CHANGED" />
+            </intent-filter>
+        </receiver>
+
+        <!-- Explore sessions: elapsed-timer foreground notification + "are
+             you done?" reminder, rebuilt after reboot so a session never
+             silently dies in the background. -->
+        <service
+            android:name=".infrastructure.ExploreSessionService"
+            android:exported="false"
+            android:foregroundServiceType="specialUse">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="exploreSessionTimer" />
+        </service>
+
+        <!-- v256 — the pet companion OUTSIDE the app: a tiny overlay window
+             that keeps the sprite floating over other apps (opt-in). -->
+        <service
+            android:name=".infrastructure.PetOverlayService"
+            android:exported="false"
+            android:foregroundServiceType="specialUse">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="petCompanionOverlay" />
+        </service>
+
+        <!-- v465h — read aloud with Curio off screen: a foreground service so
+             the phone cannot freeze the reading mid-sentence. It drives no audio
+             of its own (the reader does), which is why it is `specialUse` rather
+             than `mediaPlayback` — that type wants a MediaSession and the
+             FOREGROUND_SERVICE_MEDIA_PLAYBACK permission, and both are additions
+             to what the app already declares (FOREGROUND_SERVICE_SPECIAL_USE). -->
+        <service
+            android:name=".infrastructure.ReadAloudService"
+            android:exported="false"
+            android:foregroundServiceType="specialUse">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="readAloudSession" />
+        </service>
+
+        <receiver
+            android:name=".infrastructure.ExploreReminderReceiver"
+            android:exported="false" />
+
+        <!-- v389 — the shade's own doors on a message notification: Reply
+             (RemoteInput), Like and Mute land here, so they work with the app
+             in the background and on a cold process. Not exported: only our
+             own PendingIntents may reach it. -->
+        <receiver
+            android:name=".features.community.SocialNotificationReceiver"
+            android:exported="false" />
+
+        <receiver
+            android:name=".infrastructure.ExploreBootReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+                <action android:name="android.intent.action.TIME_SET" />
+                <action android:name="android.intent.action.TIMEZONE_CHANGED" />
+            </intent-filter>
+        </receiver>
+
+        <!-- v3xx57 — the keyboard may only ever be reported as an INSET.
+             With no soft-input mode the system is free to PAN the whole
+             window instead, and it does so on top of whatever the layout
+             already did with the inset: that is what threw the message box
+             most of the way up the screen the moment a composer added its own
+             lift. ADJUST_RESIZE is the mode an edge-to-edge app wants (the
+             window is not resized while the app draws behind the system bars,
+             it simply stops the pan), so the IME inset is the one and only
+             thing that moves content out of the keyboard's way. -->
+        <activity
+            android:name=".MainActivity"
+            android:exported="true"
+            android:icon="@mipmap/ic_launcher"
+            android:label="@string/app_name"
+            android:windowSoftInputMode="adjustResize"
+            android:theme="@style/Theme.Curio">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+        <!-- v272 — glass widget configuration (placement + long-press Edit) -->
+        <activity
+            android:name=".infrastructure.GlassWidgetConfigActivity"
+            android:exported="false"
+            android:theme="@style/Theme.Curio">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_CONFIGURE" />
+            </intent-filter>
+        </activity>
+
+
+        <!-- v267 — the liquid-glass home-screen widget -->
+        <receiver
+            android:name=".infrastructure.GlassWidgetProvider"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/glass_widget_info" />
+        </receiver>
+
+    </application>
+
+</manifest>

@@ -1,0 +1,1 @@
+Stability polish: topic catalogs load on demand and release memory under pressure. Topic Reveal now keeps the hidden navbar footprint reserved, so the watermark and hero morph stay level while the torn bottom edge replaces the bar. Tour Explore taps no longer open stale screens or browsers, and Curie stays less repetitive with screen-aware routines.

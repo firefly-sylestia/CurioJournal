@@ -1,0 +1,161 @@
+package com.curio.app.ui.components
+
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.dp
+import com.curio.app.ui.theme.CurioIcon
+import com.curio.app.ui.theme.CurioIcons
+
+/**
+ * Shared top-bar primitives — see Curio surface contract.
+ *
+ * Currently houses the standardized [CurioBackButton] used by every
+ * push-destination screen (Settings, ManageCategories, TopicHistory,
+ * Lightbox, plus the 6 main feature screens). Kept here so the back-button
+ * appearance + theming can be tuned in one place if the visual language
+ * ever needs to change (e.g. swap the arrow glyph, change the size, or
+ * add a haptic on press).
+ */
+
+/**
+ * The canonical "‹ Back" button. Circular Surface in surfaceVariant
+ * containing the ChevronLeft Material Symbol — the unified back arrow
+ * that mirrors [CurioForwardArrow]'s chevron. Sized at 40dp total (24dp
+ * glyph + 8dp padding on each side) to match the standard Android
+ * touch-target minimum.
+ */
+@Composable
+fun CurioBackButton(
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    contentDescription: String = "Back",
+    // Optional overrides — the entry-detail hero's frosted-glass controls
+    // pass a transparent container with a frosted-plate modifier and the
+    // hero ink; every other screen keeps the default surfaceVariant circle.
+    containerColor: Color = MaterialTheme.colorScheme.surfaceVariant,
+    // ── v450 — THE GLYPH IS THE ACCENT ─────────────────────────────────
+    //
+    // The member: *"more unification and polish of button and pills icon
+    // colors"* — and, asked what the rule should be: **all glyphs in the
+    // accent**. The back chevron is the app's most repeated pill glyph, so its
+    // DEFAULT is the accent role rather than plain ink; a screen that really
+    // needs its own colour (the detail hero's frosted controls) still passes
+    // one explicitly, so nothing that was deliberately recoloured changes.
+    contentColor: Color = MaterialTheme.colorScheme.primary,
+    // Optional floating shadow — the entry-detail hero's scroll-reactive
+    // sticky bar grows this with scroll progress so the popped pills visibly
+    // float off the page; every other screen keeps the flat 0dp default.
+    shadowElevation: Dp = 0.dp,
+    // v7.34 — rippleless press for frosted-glass pills: on the detail
+    // hero's small circular frosted buttons the default Material ripple
+    // expands past the plate and reads as a circular visual glitch, so the
+    // detail screen passes true and the press is conveyed by the frost and
+    // shadow alone (the same fix Home's sticky pills use — clickable with
+    // indication = null). Every other screen keeps the standard ripple.
+    disableRipple: Boolean = false,
+    // v246 — optional external gesture source: when the caller also wires
+    // liquid-glass press feel, both must read the SAME stream.
+    pillInteraction: MutableInteractionSource? = null,
+    // v451 — WHETHER THIS PILL TAKES THE SCREEN'S AMBIENT GLASS.
+    //
+    // On by default, so a screen that has adopted a glass host
+    // ([rememberCurioGlassScreen] / [ProvideCurioGlass]) gets a refracting back
+    // pill with no wiring at all. It is the four callers that ALREADY hand this
+    // pill glass of its own (their own `Modifier.liquidGlassCapsule` — the two
+    // glass toolbars, SettingsHeroHeader and the entry-detail hero) that pass
+    // `false`, because two drawBackdrop passes over one capsule is the same
+    // refraction paid for twice, not a stronger one.
+    ambientGlass: Boolean = true
+) {
+    val icon: @Composable () -> Unit = {
+        CurioIcon(
+            name = CurioIcons.ChevronLeft,
+            contentDescription = contentDescription,
+            tint = contentColor,
+            size = 24.dp,
+            modifier = Modifier
+                // v264 — 12dp padding grows the pill to 48dp for better touch
+                // targets and visual presence.
+                .padding(12.dp)
+        )
+    }
+    // ── v451 — THE BACK PILL REFRACTS ON A GLASS SCREEN ──────────────
+    //
+    // The member: *"liquid glass to more buttons and things app wide, many doesn't
+    // have it"*. The app's most repeated control is this pill, and it was solid
+    // everywhere. It now takes the SCREEN's ambient glass ([ambientGlassOn]) — so it
+    // refracts on every page that has adopted a glass host
+    // ([rememberCurioGlassScreen]) and is exactly the pill it has always been
+    // anywhere that has not, with no parameter to pass either way.
+    //
+    // The fill goes transparent and the lift goes to the glass while it is on, and
+    // the dark-mode glow is dropped with it (two shadows under one capsule is what
+    // makes glass read as a smudge). A caller that brings its own frosted plate —
+    // the entry-detail hero — still passes `containerColor = Color.Transparent`,
+    // which makes the glass read CLEAR rather than as a second frost.
+    val glass = ambientGlass && ambientGlassOn()
+    val glassMod = Modifier.curioAmbientGlass(containerColor, shape = RoundedCornerShape(50))
+    val lift = if (glass) 0.dp else shadowElevation
+    if (disableRipple) {
+        val fallbackInteraction = remember { MutableInteractionSource() }
+        val interactionSource = pillInteraction ?: fallbackInteraction
+        Surface(
+            shape = RoundedCornerShape(50),
+            color = if (glass) Color.Transparent else containerColor,
+            shadowElevation = lift,
+            modifier = modifier
+                // v28 — dark mode elevation visibility (glow + hairline).
+                .curioDarkGlow(lift, RoundedCornerShape(50))
+                .then(glassMod)
+                .clickable(
+                    interactionSource = interactionSource,
+                    indication = null,
+                    onClick = onClick
+                )
+        ) { icon() }
+    } else {
+        Surface(
+            onClick = onClick,
+            shape = RoundedCornerShape(50),
+            color = if (glass) Color.Transparent else containerColor,
+            shadowElevation = lift,
+            modifier = modifier
+                // v28 — dark mode elevation visibility (glow + hairline).
+                .curioDarkGlow(lift, RoundedCornerShape(50))
+                .then(glassMod)
+        ) { icon() }
+    }
+}
+
+/**
+ * The canonical "forward" disclosure arrow (› chevron). Used everywhere a
+ * row/card leads deeper — Home sections, Profile rows, Settings items, the
+ * Spin "Tap to open" hint. One component keeps the arrow language unified
+ * (consistent glyph, weight, and default tint) instead of ad-hoc ArrowForward
+ * glyphs at random sizes and alphas.
+ */
+@Composable
+fun CurioForwardArrow(
+    contentDescription: String? = null,
+    modifier: Modifier = Modifier,
+    tint: Color = MaterialTheme.colorScheme.onSurfaceVariant,
+    size: Dp = 18.dp
+) {
+    CurioIcon(
+        name = CurioIcons.ChevronRight,
+        contentDescription = contentDescription,
+        tint = tint,
+        size = size,
+        modifier = modifier
+    )
+}

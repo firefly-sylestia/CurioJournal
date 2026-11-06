@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    The journal edition's manifest.
+
+    It INHERITS the app's manifest and changes exactly one thing: which activity
+    is the launcher. The discovery app's [MainActivity] is removed from the
+    merged manifest (its class still compiles — it is simply never launched, and
+    nothing in the journal build reaches the screens it hosts), and
+    [com.curio.app.journal.JournalActivity] takes the launcher tile instead.
+
+    Everything else the app's manifest declares stays: the journal page can
+    attach a voice note (RECORD_AUDIO) and its word goal has an evening nudge
+    (POST_NOTIFICATIONS + the goal receiver). The services for explore sessions,
+    the pet overlay and read-aloud are declared but never started, because no
+    screen in this build starts them.
+-->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <application>
+
+        <!-- No second launcher tile: the journal build has one front door. -->
+        <activity
+            android:name=".MainActivity"
+            tools:node="remove" />
+
+        <activity
+            android:name=".journal.JournalActivity"
+            android:exported="true"
+            android:windowSoftInputMode="adjustResize"
+            android:theme="@style/Theme.Curio">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+    </application>
+
+</manifest>

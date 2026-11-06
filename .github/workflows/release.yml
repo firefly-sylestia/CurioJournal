@@ -1,0 +1,365 @@
+name: Curio Release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+concurrency:
+  group: curio-release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: Build and publish signed release APKs
+    runs-on: ubuntu-latest
+    # v465 — 45 minutes, not 30: TWO editions ship from every tag now (core +
+    # full), so this job compiles and packages twice what it did before.
+    timeout-minutes: 45
+    env:
+      # The tag (e.g. "v1.2.3") drives the build's versionName (tag minus the
+      # leading "v"). Consumed by app/build.gradle.kts at configuration time,
+      # so BOTH the APK metadata and the printReleaseVersion task used for the
+      # release APK filenames report the tag version.
+      RELEASE_VERSION: ${{ github.ref_name }}
+
+    steps:
+      - name: Check out Curio
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v6
+
+      - name: Make Gradle executable
+        run: chmod +x ./gradlew
+
+      - name: Require release signing secrets
+        env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          missing=()
+          [ -n "$KEYSTORE_BASE64" ] || missing+=(KEYSTORE_BASE64)
+          [ -n "$KEYSTORE_PASSWORD" ] || missing+=(KEYSTORE_PASSWORD)
+          [ -n "$KEY_ALIAS" ] || missing+=(KEY_ALIAS)
+          [ -n "$KEY_PASSWORD" ] || missing+=(KEY_PASSWORD)
+          if [ "${#missing[@]}" -gt 0 ]; then
+            echo "::error::Missing release signing secrets: ${missing[*]}"
+            echo "Configure KEYSTORE_BASE64, KEYSTORE_PASSWORD, KEY_ALIAS, and KEY_PASSWORD in repository Actions secrets."
+            exit 1
+          fi
+
+      - name: Decode release keystore
+        env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+        run: |
+          set -euo pipefail
+          printf '%s' "$KEYSTORE_BASE64" | tr -d '[:space:]' | base64 --decode > release.keystore
+          size=$(wc -c < release.keystore)
+          if [ "$size" -lt 100 ]; then
+            echo "::error::Decoded release keystore is unexpectedly small (${size} bytes)."
+            exit 1
+          fi
+          echo "Release keystore decoded (${size} bytes)."
+
+      - name: Build signed release APKs (universal + per-ABI)
+        env:
+          KEYSTORE_PATH: ${{ github.workspace }}/release.keystore
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+          # Supabase (account sign-in + Online Mode backend) — public client
+          # credentials baked into BuildConfig. The service-role key must
+          # NEVER be added here. Either publishable key name is accepted
+          # (app/build.gradle.kts reads PUBLISHABLE_KEY, then ANON_KEY).
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_PUBLISHABLE_KEY: ${{ secrets.SUPABASE_PUBLISHABLE_KEY }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+          # The Curio account site (auth-web/): the redirect every confirmation
+          # and password reset email carries. Optional: unset (empty) leaves
+          # Supabase's own Site URL in charge and hides the recovery row.
+          CURIO_AUTH_SITE_URL: ${{ secrets.CURIO_AUTH_SITE_URL }}
+          # Optional keyed providers. These were exported by android.yml only,
+          # so a TAGGED release shipped without them while a CI build carried
+          # them — the published APK is the one that matters, so they are here
+          # too. Every one of them is optional: unset keeps the keyless path.
+          GOOGLE_BOOKS_API_KEY: ${{ secrets.GOOGLE_BOOKS_API_KEY }}
+          LIBRARY_THING_API_KEY: ${{ secrets.LIBRARY_THING_API_KEY }}
+          SPOTIFY_CLIENT_ID: ${{ secrets.SPOTIFY_CLIENT_ID }}
+          SPOTIFY_CLIENT_SECRET: ${{ secrets.SPOTIFY_CLIENT_SECRET }}
+          # v389f — free TMDB key (film/anime artwork, a film's facts, and the
+          # episode list of a title that is really a show).
+          TMDB_API_KEY: ${{ secrets.TMDB_API_KEY }}
+          # v428 — TMDB's other credential: the API Read Access Token (a JWT,
+          # sent as `Authorization: Bearer …`). Either one alone is enough.
+          TMDB_READ_TOKEN: ${{ secrets.TMDB_READ_TOKEN }}
+          # v426 — free Comic Vine key (Western comics: Marvel's and DC's
+          # volumes both). Unset keeps the keyless comics sources.
+          COMIC_VINE_API_KEY: ${{ secrets.COMIC_VINE_API_KEY }}
+          # v428b — free OMDb key (a film/series plot, poster, rating and
+          # runtime when TMDB has nothing for the title).
+          OMDB_API_KEY: ${{ secrets.OMDB_API_KEY }}
+        run: |
+          if [ -z "$SUPABASE_URL" ] || { [ -z "$SUPABASE_PUBLISHABLE_KEY" ] && [ -z "$SUPABASE_ANON_KEY" ]; }; then
+            echo "::warning::Supabase URL/key secrets not provided — this release APK will ship with Online Mode reporting unconfigured."
+          fi
+          # Bundle the source catalogs as Android assets, exactly like
+          # android.yml does for CI builds. Without this the release APK ships
+          # with NO topic data: assets/topics/ holds only SCHEMA.md in git, so
+          # the first launch has nothing to import into Room and the Topic
+          # Database opens empty.
+          rm -rf app/src/main/assets/topics
+          mkdir -p app/src/main/assets/topics
+          cp data/topics/*.json app/src/main/assets/topics/
+          topic_files=$(find app/src/main/assets/topics -maxdepth 1 -name '*.json' | wc -l)
+          if [ "$topic_files" -eq 0 ]; then
+            echo "::error::No topic JSON assets were bundled."
+            exit 1
+          fi
+          echo "Bundled $topic_files topic catalog files into the release APK."
+          # v465b — per-EDITION+BUILDTYPE task names, not `assembleRelease`:
+          # with the `edition` flavor dimension that name is ambiguous and
+          # Gradle fails at task selection ("Task 'assembleRelease' is
+          # ambiguous …"). Both editions must be built here — the release
+          # publishes both — and v485 adds the F-Droid build type (CORE only:
+          # F-Droid ships the FOSS build, which is the core edition's exactly).
+          # The rename step below reads the edition from the APK's own path.
+          #
+          # v486 — THE F-DROID BUILD IS SWITCHED OFF for now (the member's
+          # call — "turn off frdoid builds for now. just off"): the
+          # assembleCoreFdroidRelease task is commented out below and the
+          # rename/guard/publish steps skip any *-fdroid APK on disk. Re-enable
+          # by uncommenting the task (nothing else needs to change — the
+          # rename, verify, body-row and guard code already handle the file
+          # whenever it exists). The `fdroid` build type itself stays in
+          # app/build.gradle.kts: building it by hand keeps working.
+          ./gradlew validateTopics assembleCoreRelease assembleFullRelease --stacktrace
+          # ./gradlew validateTopics assembleCoreRelease assembleFullRelease assembleCoreFdroidRelease --stacktrace
+
+      - name: Verify release APKs and signatures
+        run: |
+          set -euo pipefail
+          # ABI splits + universal APK all live here (see app/build.gradle.kts),
+          # now under ONE DIRECTORY PER EDITION (v465): the `edition` flavor
+          # dimension moved the outputs from `apk/release/` to
+          # `apk/<flavor>/release/`. A glob that did not learn the extra level
+          # matches nothing — and would fail this step with "No signed release
+          # APK was produced", which reads as a signing fault rather than a path
+          # fault.
+          #
+          # v485 — the fdroid build type ALSO lands in `apk/core/release/`
+          # (AGP puts all release-family build types of a flavor in that
+          # directory), so the glob below picks it up and verifies it with
+          # the rest.
+          shopt -s nullglob
+          apks=(app/build/outputs/apk/*/release/*.apk)
+          if [ "${#apks[@]}" -eq 0 ]; then
+            echo "::error::No signed release APK was produced."
+            exit 1
+          fi
+          sdk_root="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-/usr/local/lib/android/sdk}}"
+          apksigner=$(find "$sdk_root/build-tools" -type f -name apksigner | sort -V | tail -n 1)
+          if [ -z "$apksigner" ]; then
+            echo "::error::Android build-tools apksigner was not found."
+            exit 1
+          fi
+          for apk in "${apks[@]}"; do
+            echo "Release APK: $apk"
+            "$apksigner" verify --print-certs "$apk"
+            if "$apksigner" verify --print-certs "$apk" 2>&1 | grep -q 'CN=Android Debug'; then
+              echo "::error::Release APK $apk is signed with the Android debug key."
+              exit 1
+            fi
+          done
+          echo "Verified ${#apks[@]} release APK(s) — none signed with the debug key."
+
+      - name: Read app version for APK naming
+        id: version
+        run: |
+          set -euo pipefail
+          # printReleaseVersion prints "versionName:versionCode" (app/build.gradle.kts).
+          # versionName may carry a prerelease suffix (v1.2.3-alpha -> 1.2.3-alpha),
+          # so allow letters/hyphens AFTER a leading digit (stray gradle warning
+          # lines like "foo:123" still can't match).
+          version=$(./gradlew -q printReleaseVersion | grep -m1 -E '^[0-9][0-9a-zA-Z.-]*:[0-9]+$' || true)
+          if [ -z "$version" ]; then
+            echo "::error::Could not read the app version from Gradle (printReleaseVersion)."
+            exit 1
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      - name: Rename release APKs and write install guide
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          # cd to the PARENT of the per-edition directories (v465). The APKs are at
+          # `apk/<flavor>/release/<apk>`, so this step walks `*/release/*.apk` and
+          # reads the edition from the first path segment.
+          cd app/build/outputs/apk
+          # VERSION is "versionName:versionCode" from the printReleaseVersion task.
+          vname="${VERSION%%:*}"
+          vcode="${VERSION##*:}"
+          # minSdk 26 == Android 8.0 (see defaultConfig in app/build.gradle.kts).
+          # Every APK below requires Android 8.0 or newer; the ABI picks the CPU.
+          min_android="8.0"
+
+          body="$GITHUB_WORKSPACE/release-body.md"
+          : > "$body"
+
+          # Editable release note — docs/RELEASE_NOTES.md, moved there from the
+          # repo root to keep the root to its rail and its build files. Its
+          # content is embedded at the TOP of the release body, above the
+          # install guide, so "what's new" reads first. The user updates this
+          # file before tagging; it is always included as-is.
+          if [ -f "$GITHUB_WORKSPACE/docs/RELEASE_NOTES.md" ]; then
+            {
+              cat "$GITHUB_WORKSPACE/docs/RELEASE_NOTES.md"
+              echo ""
+              echo "---"
+              echo ""
+            } >> "$body"
+          fi
+
+          {
+            echo "## Curio $vname ($vcode)"
+            echo ""
+            echo "**Two editions ship in this release, and every file name says which one it is.**"
+            echo ""
+            echo "- \`core\` — **Curio**, the smaller app: everything except the on-device offline voice-to-text stack and the neural read-aloud voice packs."
+            echo "- \`full\` — **Curio Full**: those two as well, plus the ISBN barcode scanner."
+            # v486 — the core-fdroid body row is commented out with the build:
+            # uncomment when assembleCoreFdroidRelease comes back.
+            # echo "- \`core-fdroid\` — the same FOSS **core** app, prepared for the F-Droid store build; anyone may sideload it too."
+            echo ""
+            echo "They install **side by side** and are two separate apps with separate data (\`com.curio.app\` and \`com.curio.app.full\`) — installing one never replaces the other."
+            echo ""
+            echo "All APKs require **Android $min_android (API 26) or newer**. Pick the one that matches your device's CPU — when in doubt, use the **universal** APK."
+            echo ""
+            echo "| File | Best for | Size |"
+            echo "|---|---|---|"
+          } >> "$body"
+
+          for apk in */release/*.apk; do
+            # The edition is the first path segment, the ABI the tail of AGP's own
+            # name (`app-<flavor>-<abi>-release.apk`), so the published file name
+            # carries BOTH and a member can never install the wrong edition by
+            # mistaking one for the other.
+            flavor="${apk%%/*}"
+            base="$(basename "${apk%.apk}")"
+            # v486 — the F-Droid build is switched OFF for now (see the build
+            # step): any fdroid APK already on disk (a stale cache, a re-run)
+            # is skipped rather than renamed or published.
+            case "$base" in
+              *-fdroid-*) echo "Skipping fdroid APK (fdroid builds are off): $base"; continue ;;
+            esac
+            abi="${base#app-}"
+            abi="${abi#${flavor}-}"
+            # v485 — the fdroid build type sits between the flavor and the ABI
+            # (`app-core-universal-fdroid-release.apk`), so it is stripped out
+            # of the middle the same way, then re-added as its own name token.
+            buildtype=""
+            case "$abi" in
+              *-fdroid) buildtype="-fdroid"; abi="${abi%-fdroid}" ;;
+            esac
+            abi="${abi%-release}"
+            new_name="Curio-${vname}-${vcode}-${flavor}${buildtype}-${abi}-Android${min_android}+.apk"
+            size=$(du -h "$apk" | cut -f1)
+            case "$abi" in
+              universal)   desc="Every Android $min_android+ device — the safe default (largest download)" ;;
+              arm64-v8a)   desc="Modern 64-bit phones and tablets (most devices since ~2017)" ;;
+              armeabi-v7a) desc="Older 32-bit phones (before 2017)" ;;
+              x86_64)      desc="64-bit emulators / Chromebooks" ;;
+              x86)         desc="32-bit emulators" ;;
+              *)           desc="See project README" ;;
+            esac
+            if [ -n "$buildtype" ]; then
+              desc="The FOSS core app prepared for the F-Droid store build (universal)"
+            fi
+            echo "| \`$new_name\` | $desc | ~$size |" >> "$body"
+            # Renamed IN PLACE, so the files stay beside their edition's directory
+            # and the publish step's glob below still finds them.
+            mv "$apk" "$(dirname "$apk")/$new_name"
+          done
+
+          # Hard guard: every expected split APK must exist after renaming, so a
+          # naming drift in AGP (which cannot be verified locally per repo rules)
+          # fails the release loudly instead of publishing a partial set.
+          # v204 — the release buildType's ndk abiFilters restrict native libs
+          # to armeabi-v7a + arm64-v8a (x86/x86_64 are emulator-only legacy),
+          # so the release emits ONLY the two arm splits + universal.
+          #
+          # v465 — AND THE GUARD IS PER EDITION. The two flavor names are written
+          # out here on purpose, exactly as the ABI list above is: this is the
+          # belt-and-braces check that a published release carries BOTH editions,
+          # so it must fail when one of them silently stops being built rather
+          # than read whichever names happen to be present. Adding a third
+          # edition means adding it here too.
+          #
+          # v485 — AND THE F-DROID APK. The core edition's fdroid build type
+          # ships beside them (the F-Droid store's FOSS build: core only, no
+          # full, by the member's own rule), so its universal APK is checked
+          # for the same reason the other three are.
+          # v486 — THE F-DROID CHECK IS SWITCHED OFF with the build (see the
+          # build step): uncomment both when the build comes back.
+          for flavor in core full; do
+            for expected in universal armeabi-v7a arm64-v8a; do
+              if [ ! -f "${flavor}/release/Curio-${vname}-${vcode}-${flavor}-${expected}-Android${min_android}+.apk" ]; then
+                echo "::error::Expected release APK missing after rename: $flavor / $expected"
+                exit 1
+              fi
+            done
+          done
+          # if [ ! -f "core/release/Curio-${vname}-${vcode}-core-fdroid-universal-Android${min_android}+.apk" ]; then
+          #   echo "::error::Expected F-Droid APK missing after rename: core-fdroid / universal"
+          #   exit 1
+          # fi
+
+          echo "" >> "$body"
+          echo "**How do I know which one to install?**" >> "$body"
+          echo "- **Unsure?** Use the \`universal\` APK — it works on every device." >> "$body"
+          echo "- Check your device's CPU ABI: open **Settings → About phone** and look for processor/ABI info, or run \`adb shell getprop ro.product.cpu.abi\`." >> "$body"
+          echo "- The ABI is the CPU architecture; any device running Android ${min_android}+ whose ABI matches can install that APK." >> "$body"
+
+          echo "--- Release body ---"
+          cat "$body"
+          echo "--- Release APKs ---"
+          ls -la
+
+      - name: Determine prerelease status
+        id: prerelease
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          if [[ "$TAG" == *alpha* || "$TAG" == *beta* || "$TAG" == *rc* ]]; then
+            echo 'value=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'value=false' >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Publish GitHub release
+        uses: softprops/action-gh-release@v3
+        with:
+          prerelease: ${{ steps.prerelease.outputs.value }}
+          # The install-guide body from the rename step is prepended to GitHub's
+          # auto-generated release notes (commit list since the last tag).
+          body_path: release-body.md
+          generate_release_notes: true
+          # v465 — one directory per edition now (apk/<flavor>/release/); the
+          # rename step above left the renamed files beside their edition.
+          files: app/build/outputs/apk/*/release/*.apk
+          fail_on_unmatched_files: true

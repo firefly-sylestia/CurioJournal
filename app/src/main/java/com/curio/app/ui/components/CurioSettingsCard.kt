@@ -1,0 +1,199 @@
+package com.curio.app.ui.components
+
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.dp
+import com.curio.app.data.AppPreferences
+import com.curio.app.features.settings.settingsCardAccentInk
+import com.curio.app.features.settings.settingsCardChipTint
+import com.curio.app.features.settings.settingsCardTintLift
+import com.curio.app.ui.theme.CurioIcon
+import com.curio.app.ui.theme.curioCardShadow
+
+/**
+ * Shared paper-card primitives for Profile + Settings — one visual language
+ * for both screens so they can never drift apart (28dp cards with bare-icon
+ * headers, arrow rows for navigation, inset dividers). v115 — the icons are
+ * BARE (no colored chip box behind them).
+ */
+
+/**
+ * v426 — THE PAGE CARD'S FILL: ONE value for the whole Profile + Settings card
+ * family, so the two screens can never drift apart again.
+ *
+ * The card is the scheme's own card rung ([surfaceContainerLow], the rung the
+ * theme's own ladder calls "a card") carrying a whisper of the hero's accent
+ * ([settingsCardTintLift]). On a dark page that whisper pulls the plate a
+ * little DARKER than the rung, which is what makes a Curio card read as glass
+ * on the page instead of as a lit slab.
+ *
+ * **The Settings family used to ask for a HIGHER rung**
+ * (`surfaceContainerHigh`, the "pill inside a card" step) as its card fill,
+ * which was invisible on the app's own neutral greys but not under a theme
+ * whose ladder carries colour: with a named theme in dark mode that plate came
+ * out at nearly TWICE the luminance of the Profile card beside it (L 0.225 vs
+ * 0.158 — 1.94x), so Settings read as a bright panel where Profile read as
+ * quiet glass (member: "in profile the xp progress settings etc background is
+ * good, but inside the settings the appearance and its sub pages background is
+ * still bad, fix it please in dark mode"). Both screens answer this function
+ * now, so a settings row and a Profile card are the same plate in every theme —
+ * dark, light, named or not.
+ */
+@Composable
+fun curioSettingsCardFill(): Color = lerp(
+    MaterialTheme.colorScheme.surfaceContainerLow,
+    settingsCardTintLift(),
+    0.30f
+)
+
+/** 28dp paper card — the shared container for Profile and Settings cards.
+ *  Elevation (not an outline) defines the card on the page; pass a custom
+ *  [shadowElevation] to lift or flatten it. AMOLED cards wear the scheme's
+ *  faint grey step (real shadows are invisible on pure black, so the
+ *  container step IS the elevation there). */
+@Composable
+fun CurioSettingsCard(
+    shadowElevation: Dp = 4.dp,
+    modifier: Modifier = Modifier,
+    content: @Composable ColumnScope.() -> Unit
+) {
+    // v411 — the card's own fill, named so the elevation below can be tuned
+    // against the real surface instead of a guessed one.
+    // v426 — and SHARED with the settings option card ([curioSettingsCardFill]).
+    val cardFill = curioSettingsCardFill()
+    Surface(
+        shape = RoundedCornerShape(28.dp),
+        // v27n — every theme wears the faint container step as its elevation
+        // (the black-glass shine edge keeps AMOLED cards defined on pure
+        // black; the old hairline outline is gone).
+        // v31 — a small tint of the PAGE BACKGROUND shade (in every theme):
+        // the card no longer reads as a stark cream block; it carries a
+        // whisper of the background so Profile/Settings cards melt into the
+        // page. The step stays large enough that text (onSurface roles)
+        // keeps its contrast in light, dark, pastel and AMOLED.
+        // v42 — the background tint is COLOR-TINTED now: light/pastel cards
+        // carry a whisper of the brand rose instead of flat cream, and AMOLED
+        // cards lift to a soft GREY GLASS instead of pure black (raised grey
+        // plates, not black slabs).
+        // v72 — the tint HUE follows the hero the page wears
+        // ([settingsCardTintLift]): the lane accent when the shared hero
+        // follows a Spin lane, the azure twin when the sky-azure hero is on,
+        // the rose otherwise — same strength as before, matching hue.
+        // v78 — light Curio only (the AMOLED grey-glass step + tonal-lift
+        // drop are gone with dark mode).
+        color = cardFill,
+        // v131 — explicit content ink. The card fill is a CUSTOM lerp (not a
+        // scheme token), and the row titles inside rely on LocalContentColor:
+        // the default contentColorFor(customFill) resolved BLACK in dark mode,
+        // making every uncolored row label (CurioSettingsRow titles, switch /
+        // segmented labels, card headers) invisible on the near-black card.
+        // Pinning it to the theme's onSurface keeps dark plum in light mode
+        // and renders crisp cream in dark mode.
+        contentColor = MaterialTheme.colorScheme.onSurface,
+        tonalElevation = 3.dp,
+        shadowElevation = shadowElevation,
+        // v411 — THE SHADOW IS THE EDGE. This card used to wear the shared
+        // hairline on top of its fill (v408/v409); the member asked for the
+        // other language — "soft shadow no border just shadow instead of
+        // borders" — so the hairline is gone everywhere and the warm, wide
+        // [curioCardShadow] is what lifts the plate off the page. It is
+        // applied BEFORE the fill, which is what puts it under the card
+        // instead of blurring over it. A cream card on a white page plus a
+        // soft shadow reads as paper, where cream plus a boxed hairline read
+        // as a drawn rectangle.
+        modifier = modifier
+            .fillMaxWidth()
+            .curioCardShadow(RoundedCornerShape(28.dp), shadowElevation)
+            // v28 — dark mode: soft light glow so the elevation reads on
+            // midnight (black shadows are invisible).
+            .curioDarkGlow(shadowElevation, RoundedCornerShape(28.dp))
+            .categoryEdgeShine(RoundedCornerShape(28.dp))
+            // v81 — dark: a faint radial inner glow in the hero hue on the
+            // card (One UI pushed-in glass; self-gating, light is a no-op).
+            .curioInnerGlow(RoundedCornerShape(28.dp), settingsCardChipTint(), strength = 0.10f)
+    ) { Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp), content = content) }
+}
+
+/** Icon-card header — bare accent icon + title + subtitle (v115: the
+ *  colored chip box behind the glyph is gone — just the icon, matching
+ *  every settings row). */
+@Composable
+fun CurioCardHeader(icon: String, title: String, subtitle: String, modifier: Modifier = Modifier) {
+    Row(modifier = modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+        // v115 — the icon is BARE: no chip box behind it. The accent ink
+        // follows the hero the page wears ([settingsCardAccentInk]): lane
+        // accent under Adaptive Hero, the azure twin when the sky-azure
+        // hero is on, the rose otherwise — never a mismatched fixed coral.
+        CurioIcon(
+            icon, null,
+            tint = settingsCardAccentInk(),
+            size = 21.dp
+        )
+        Column(modifier = Modifier.weight(1f)) {
+            Text(title, style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold))
+            Text(subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        }
+    }
+}
+
+/** Navigable setting row — bare accent icon + label/subtitle + forward
+ *  arrow. v115 — the icon is BARE: the soft coral chip box is gone, so
+ *  every row reads as a clean tappable option (the info-row language),
+ *  not a colored block. */
+@Composable
+fun CurioSettingsRow(icon: String, title: String, subtitle: String, onClick: () -> Unit) {
+    Surface(onClick = onClick, color = Color.Transparent, shape = RoundedCornerShape(18.dp), modifier = Modifier.fillMaxWidth()) {
+        Row(modifier = Modifier.padding(horizontal = 4.dp, vertical = 15.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            // v115 — bare glyph at the info-row size (21dp, accent ink).
+            CurioIcon(icon, null, tint = settingsCardAccentInk(), size = 21.dp)
+            Column(modifier = Modifier.weight(1f)) {
+                Text(title, style = MaterialTheme.typography.bodyLarge)
+                Text(subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            }
+            CurioForwardArrow(tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.45f), size = 17.dp)
+        }
+    }
+}
+
+/** Non-interactive informational row — icon + label/subtitle. */
+@Composable
+fun CurioSettingsInfoRow(icon: String, title: String, subtitle: String) {
+    Row(modifier = Modifier.padding(horizontal = 4.dp, vertical = 13.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+        CurioIcon(icon, null, tint = MaterialTheme.colorScheme.onSurfaceVariant, size = 21.dp)
+        Column(modifier = Modifier.weight(1f)) {
+            Text(title, style = MaterialTheme.typography.bodyLarge)
+            Text(subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        }
+    }
+}
+
+/** Inset divider aligned to row content (icon column), shared by both screens. */
+@Composable
+fun CurioSettingsDivider() {
+    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.55f), modifier = Modifier.padding(start = 33.dp))
+}
+
+/** Shared 12-hour clock label ("9:00 AM") used by Profile + Settings reminder selectors. */
+fun formatHour(hour: Int): String {
+    val normalized = hour.coerceIn(0, 23)
+    val suffix = if (normalized < 12) "AM" else "PM"
+    val display = when (val h = normalized % 12) { 0 -> 12 else -> h }
+    return "$display:00 $suffix"
+}

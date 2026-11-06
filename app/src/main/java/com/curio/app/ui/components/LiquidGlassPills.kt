@@ -1,0 +1,947 @@
+package com.curio.app.ui.components
+
+import android.content.Context
+import android.os.Build
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.spring
+import androidx.compose.foundation.interaction.InteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.CornerBasedShape
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.compositionLocalOf
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.DpOffset
+import androidx.compose.ui.unit.dp
+import com.curio.app.data.AppPreferences
+import com.curio.app.ui.theme.isCurioDarkTheme
+import androidx.compose.ui.util.lerp
+import com.kyant.backdrop.BackdropEffectScope
+import com.kyant.backdrop.backdrops.LayerBackdrop
+import com.kyant.backdrop.backdrops.layerBackdrop
+import com.kyant.backdrop.backdrops.rememberLayerBackdrop
+import com.kyant.backdrop.drawBackdrop
+import com.kyant.backdrop.effects.blur
+import com.kyant.backdrop.effects.lens
+import com.kyant.backdrop.effects.vibrancy
+import com.kyant.backdrop.highlight.Highlight
+import com.kyant.backdrop.shadow.Shadow
+
+/**
+ * v227 — LIQUID GLASS PILLS (experiment, Experiments toggle, default OFF).
+ *
+ * The three floating nav-style capsules — the bottom tab bar, the Topic
+ * Reveal category/favorite bar and the Pet Designer studio bar — can render
+ * as real liquid-glass: a real-time frosted capture of whatever is behind
+ * them (vibrancy + blur + lens refraction, the `io.github.kyant0:backdrop`
+ * recipe that vFlow's glass bar popularised) instead of the solid elevated
+ * fill. Requires Android 12+ (RenderEffect); [isLiquidGlassPillsActive]
+ * gates every consumer so older devices silently keep the current look.
+ *
+ * v228 — SELF-CAPTURE GUARD. The NavHost records the whole page-content
+ * subtree into [backdrop] AFTER drawing it (see `layerBackdrop`: draw, then
+ * `recordLayer` re-invokes the draw chain into the GraphicsLayer). Pills
+ * that live INSIDE that subtree — the Reveal bar and the Pet Designer
+ * studio bar — would draw a second time during the record pass and sample
+ * the very GraphicsLayer being recorded, producing a cyclic render node
+ * that crashes HWUI with a RenderThread stack overflow (SIGSEGV in
+ * `RenderNode.prepareTreeImpl`, ~500 alternating frames). During a record
+ * pass [isCapturingBackdrop] is true and [liquidGlassCapsule] paints a
+ * plain translucent capsule instead of sampling the backdrop.
+ */
+object CurioGlassPills {
+
+    /**
+     * The NavHost-root [LayerBackdrop] recording page content. Set once by
+     * CurioNavHost (rememberLayerBackdrop + a layerBackdrop() mark on the
+     * content wrapper) and read by every glass capsule — mirrors the
+     * out-of-band handoff pattern of [CurioNavTint].
+     */
+    var backdrop by mutableStateOf<LayerBackdrop?>(null)
+
+    /**
+     * True while the NavHost's capture layer is re-recording the page
+     * subtree into its GraphicsLayer. UI-thread only (draw phase), so a
+     * plain var is safe — no snapshot state, it must NOT invalidate
+     * composition mid-draw.
+     */
+    @Volatile
+    var isCapturingBackdrop: Boolean = false
+
+    // v292i — cached application context for non-composable device
+    // capability checks ([canUseLiquidGlass]). Set once by CurioNavHost.
+    @Volatile
+    var appContext: android.content.Context? = null
+
+    /**
+     * v484/v487 — THE FROST, AS A FEW NUMBERS.
+     *
+     * v484 answered *"the frosted blur doesnt refract and its too opaque make it
+     * 40 mybe"* with a thin 0.40 wash. Living with it, the member's next report
+     * was *"the nav bar's own labels look smudgy … make it heavy, a real blurred,
+     * thinner tint without the wash"* — and reading the recipe explains both
+     * halves:
+     *
+     *  - **the blur was being quartered.** The frost asked for `blur(21dp)` and
+     *    then multiplied it by [AppPreferences.glassBlurScaleState], whose default
+     *    is **0.25** — that slider was tuned for the CLEAR recipe's own 8dp, so
+     *    the frost that shipped was a 5.25dp smudge: enough to make text mush,
+     *    not enough to read as a soft out-of-focus page. The blurred, washer-like
+     *    middle is exactly what the member was looking at. The frost now spends
+     *    [BlurDp] at the slider's own default ([blurFactor] centres on it), so the
+     *    blur is heavy by construction and the slider still moves it.
+     *  - **the pane was painted white.** v482/v484's wash carried a 62% pull toward
+     *    white — that milky paint OVER a weak blur is the "smudge". The frosted
+     *    pane is now a THIN TINT of the surface's own colour ([Wash]) with only a
+     *    whisper of lift ([LightLift]/[DarkLift]): the heavy blur is the look, and
+     *    the tint is what keeps a pane recognisable as the surface it belongs to.
+     *    The manual top-down sheen gradient is gone too — the `drawBackdrop` rim
+     *    highlight already catches the light, and the extra gradient was a second
+     *    wash on top of the first.
+     *
+     * Everything lives here so **no surface invents its own** — the floating
+     * pills, the nav bar and the sheets'/dialogs' panels are frosted out of this
+     * one recipe, and the dropdowns inherit it by using [liquidGlassCapsule].
+     */
+    object Frost {
+        /**
+         * How much tint the frosted pane carries. Thin on purpose: at 0.18 the
+         * heavy blur behind it is what you see, and the tint only says which
+         * surface this is. (v484's 0.40 over a quarter-strength blur was paint.)
+         */
+        const val Wash = 0.18f
+
+        /**
+         * The same thin pane on a SHEET or a DIALOG, where there is more text to
+         * keep legible and less of the page to show. Still far thinner than the
+         * old wash, and paired with [OpaquePanel] wherever no window blur lands.
+         */
+        const val PanelWash = 0.34f
+
+        /**
+         * How far a LIGHT pane breathes toward white. A whisper now (0.62 was the
+         * milky part of the smudge): the blurred page supplies the brightness.
+         */
+        const val LightLift = 0.12f
+
+        /**
+         * How far a DARK pane lifts its OWN colour. Deliberately small: the frost
+         * must not turn a dark pane grey, which is exactly what the old
+         * `lerp(…, White, 0.62f)` in dark did — and why the smudge only ever read
+         * in light mode.
+         */
+        const val DarkLift = 0.05f
+
+        /**
+         * The frost's OWN blur radius — the heavy, real blur that IS the look.
+         * Spent whole at the blur slider's default (see [blurFactor]).
+         */
+        const val BlurDp = 21f
+
+        /**
+         * The frost radius a small COMPACT surface (a chip, a small pill) gets.
+         * A 21dp blur on a 32dp chip is a flat colour, not a pane; 10dp keeps the
+         * blur reading on a surface too small to show much of the page anyway.
+         */
+        const val CompactBlurDp = 10f
+
+        /**
+         * The Appearance "Blur" slider's own default — the value the frost's blur
+         * is centred on, so the DEFAULT is the full [BlurDp] and the slider
+         * reaches ~40% below it and ~2.5× above it.
+         */
+        const val BlurScaleDefault = 0.25f
+
+        /**
+         * The multiplier the frost spends on the blur slider. `1f` at the
+         * slider's default, floored so the frost can never become the weak
+         * smudge this pass exists to remove.
+         */
+        fun blurFactor(scale: Float): Float =
+            (scale / BlurScaleDefault).coerceIn(0.4f, 2.5f)
+
+        /**
+         * How much more opaque a panel stays when there is NO window blur behind
+         * it (pre-Android-12, blur switched off, Lite mode — see
+         * [com.curio.app.ui.components.liquidglass.windowBlurAvailable]). A
+         * translucent sheet with a sharp page behind it reads as a mistake, so
+         * without a blur to hide behind, a panel stays readable instead.
+         */
+        const val OpaquePanel = 0.94f
+
+        /**
+         * The same wash for a CLEAR-glass panel (the Clear-glass option): the
+         * blurred page does most of the work, so barely any colour sits on top.
+         */
+        const val ClearWash = 0.22f
+
+        /**
+         * v488 — THE PANEL'S OWN FROST WHEN THERE IS NO BLUR BEHIND IT.
+         *
+         * The member, after v487 thinned the frost: *"the frost should be app wide
+         * with the option … bottom sheets, dialogs and dropdowns"* — the panels
+         * still read as flat colour. They did, and the reason is a plain
+         * regression of v487: `curioFrostedPanel` reaches for [OpaquePanel] when
+         * `windowBlurAvailable` is false (Android 12, cross-window blur switched
+         * off, Lite mode, or a window the platform refuses), and v487 had just cut
+         * the colour it draws there to a 12% whisper — so the pane that exists to
+         * look frosted became the plain container colour at 94% opacity. A FLAT
+         * SLAB is exactly what the member was looking at.
+         *
+         * With no blur to show, the panel has to BE the frost — so these two lifts
+         * are the milky pane the old recipe drew, kept separate from [LightLift] so
+         * the thin tint a really blurred page sits behind is never thickened by
+         * accident. Light lifts a lot (a light sheet is white glass), dark only a
+         * little (a dark sheet is DARK glass, never a grey slab).
+         */
+        const val PanelOpaqueLightLift = 0.42f
+        const val PanelOpaqueDarkLift = 0.10f
+
+        /**
+         * The veil the SIMULATED recipe (pre-Android-12, [fauxGlassCapsule]) wears.
+         * It cannot blur anything, so it may NOT use the thin [Wash] — a thin pane
+         * over a sharp page reads as a mistake. Kept at a readable middle.
+         */
+        const val FauxWash = 0.62f
+
+        /**
+         * The refraction radius a smudge bends with — half the clear recipe's
+         * 24dp, because a thicker pane bends less. Skipped entirely on the
+         * reader's chrome (see [LocalCurioGlassFrostRefraction]).
+         */
+        const val LensDp = 12f
+    }
+
+}
+
+/**
+ * v293 — DEVICE CAPABILITY CHECK: always returns true.
+ *
+ * Previous versions blocked devices with GPU-family guesses and narrow
+ * denylists, but this was overly aggressive and blocked many capable
+ * devices. The crash recovery system (UncaughtExceptionHandler) now
+ * handles the rare case of actual crashes by auto-disabling glass.
+ */
+fun canUseLiquidGlass(@Suppress("UNUSED_PARAMETER") context: Context): Boolean = true
+
+/**
+ * v488 — THE LENS, DRAWN WITHIN THE LIMIT ITS OWN SHADER ASKS FOR.
+ *
+ * The member, on the glass with refraction turned up: *"when increasing
+ * refraction the break in the middle look bad"*. That break is documented, not a
+ * mystery: `lens(refractionHeight, refractionAmount)` requires **`refractionHeight`
+ * to be in `[0, shape.minCornerRadius]`** — the library's own effect docs say a
+ * larger height *"will have discontinuities at some corners"*.
+ *
+ * Every call site here passed `24.dp.toPx() * refractionScale`, i.e. 24dp at the
+ * default and 48dp at the slider's maximum — while the pills these are drawn on
+ * are 48dp tall (a `CircleShape`'s min corner radius is **24dp**). So the lens was
+ * sitting ON its ceiling at 1× and climbing straight past it above that, and the
+ * press bloom (×1.45) pushed the RESTING pill past it too. The visible result is a
+ * hard seam across the pane — worst in the middle, where the two corner lobes of
+ * the refraction meet.
+ *
+ * So the radius is not tuned down; it is CLAMPED to the shape's own real corner
+ * radius, read from the shape the backdrop is actually being drawn in. Below the
+ * ceiling the tunings behave exactly as before (which is why the default look is
+ * unchanged), and above it the bend simply stops growing instead of breaking. The
+ * amount is clamped to the surface's smaller side, the shader's other stated
+ * limit.
+ */
+internal fun BackdropEffectScope.curioLens(
+    radius: Float,
+    amount: Float = radius,
+    depthEffect: Boolean = false,
+    chromaticAberration: Boolean = false
+) {
+    val box = size
+    val maxRadius = box.minDimension / 2f
+    val cap = when (val s = shape) {
+        // Every corner, taking the SMALLEST: the lens has to fit the tightest
+        // one, and a stadium/circle's four radii are all `minDimension / 2`.
+        is CornerBasedShape -> minOf(
+            minOf(s.topStart.toPx(box, this), s.topEnd.toPx(box, this)),
+            minOf(s.bottomEnd.toPx(box, this), s.bottomStart.toPx(box, this))
+        ).coerceAtMost(maxRadius)
+        // A shape the library draws itself (its smoother rounded rectangles) or
+        // anything else: the smaller side's half is the safe reading, and it is
+        // exactly the stadium's own radius.
+        else -> maxRadius
+    }
+    lens(
+        refractionHeight = radius.coerceIn(0f, cap),
+        refractionAmount = amount.coerceIn(0f, box.minDimension),
+        depthEffect = depthEffect,
+        chromaticAberration = chromaticAberration
+    )
+}
+
+/**
+ * Whether the user WANTS liquid glass (the toggle alone). On Android 12+
+ * this means real refracting glass; below it drives the SIMULATED glass
+ * recipe ([fauxGlassCapsule]) so older devices get the look instead of
+ * silently nothing.
+ */
+fun isLiquidGlassRequested(): Boolean =
+    AppPreferences.liquidGlassPillsState && isLiteGlassAllowed
+
+/**
+ * v454 — LITE MODE holds the glass switch down too.
+ *
+ * Refraction is the single most expensive thing this app draws: a per-frame
+ * blur + lens pass over a live capture of the content behind the pill (and
+ * every level of a glass stack pays its own). Lite mode exists so a weaker
+ * phone can keep up, and every glass surface is optional decoration around
+ * content that is fully readable without it — so the gate lives HERE, at the
+ * one question every glass site already asks ([isLiquidGlassRequested]),
+ * rather than at 33 call sites that would each have to remember it.
+ *
+ * Only the PASS is skipped, never the pill: each site's non-glass branch is
+ * the solid elevated fill it had before glass ever existed (that is what the
+ * toggle being OFF has always done), so nothing vanishes and no layout moves
+ * — the surfaces simply stop being translucent. The switch in Appearance is
+ * untouched, so leaving Lite mode restores exactly the glass that was chosen.
+ */
+private val isLiteGlassAllowed: Boolean
+    get() = !AppPreferences.liteModeState
+
+/**
+ * Whether the glass treatment is active (toggle ON, Android 12+, AND
+ * device capable). The capability check prevents GPU-driver crashes on
+ * budget devices by refusing to enable glass where it would SIGKILL
+ * the RenderThread (see [canUseLiquidGlass]).
+ *
+ * v292i — non-composable: uses [CurioGlassPills.appContext] which is set
+ * once by CurioNavHost. Falls back to SDK check only if context unavailable.
+ *
+ * ── v503 — AND THE "FORCE GLASS" SWITCH BYPASSES BOTH CHECKS ────────────────
+ *
+ * The member chose *"wire it up"* for `AppPreferences.forceGlassEnabled`, whose
+ * own copy promises *"Bypass device capability checks and always enable glass"* —
+ * and until now nothing read it at all, so the switch did nothing. This is the one
+ * question every glass surface asks, so it is where the bypass belongs.
+ *
+ * It skips the CAPABILITY PROBE ([canUseLiquidGlass], the guard against a driver
+ * that would SIGKILL the RenderThread) and the Android 12 floor. It does NOT
+ * override the member's own **Liquid glass** toggle — a switch that turns glass
+ * back ON after someone turned it off would be a setting fighting a setting — so
+ * the request still has to be there.
+ *
+ * Below Android 12 the floor is no longer a wall once forced: no surface can
+ * REFRACT there (there is no `RenderEffect`), but every one of them already has a
+ * simulated recipe in its own modifier (`fauxGlassCapsule`, the same one the nav
+ * bar serves), so the forced look is the simulated glass rather than the solid
+ * fallback. [isInScreenGlassActive] keeps the platform floor, because in-screen
+ * glass needs a real backdrop CAPTURE and there is nothing to capture with.
+ */
+fun isLiquidGlassPillsActive(): Boolean {
+    if (!isLiquidGlassRequested()) return false
+    if (AppPreferences.forceGlassEnabled) return true
+    if (android.os.Build.VERSION.SDK_INT < 31) return false
+    val ctx = CurioGlassPills.appContext
+    return if (ctx != null) canUseLiquidGlass(ctx) else true
+}
+
+/**
+ * v241 — whether IN-SCREEN glass is active: the main toggle AND the separate
+ * "In-screen glass" experiment. In-screen pills each sample a LOCAL backdrop
+ * layer that EXCLUDES them (the pill is a sibling overlay of the captured
+ * Box — exactly the bottom-nav architecture that has never crashed), so the
+ * old v228 self-capture cycle is impossible by construction; the global
+ * capture guard below stays as belt-and-braces.
+ *
+ * v256 — API-GATED again: below Android 12 there is no RenderEffect, and
+ * the simulated recipe read badly on these small floating pills (the user
+ * call). Only the BOTTOM NAV and TOPIC REVEAL keep simulated glass on old
+ * devices — every in-screen pill falls back to its classic solid path.
+ */
+fun isInScreenGlassActive(): Boolean =
+    // v242 — merged into the single Liquid glass toggle (Appearance).
+    isLiquidGlassRequested() && android.os.Build.VERSION.SDK_INT >= 31
+
+/**
+ * v451 — THE SCREEN'S GLASS, AS AN AMBIENT (the app-wide adoption door).
+ *
+ * The member: *"liquid glass to more buttons and things app wide, many doesn't
+ * have it"*, and, asked what recipe: **real refraction, capture per screen**.
+ *
+ * Real refraction has one hard rule (the v228/v260 cyclic-render-node rule):
+ * **a pill may only sample a capture of what sits BEHIND it, and the pill itself
+ * must be OUTSIDE the captured subtree.** That is why every existing site threads
+ * a `LayerBackdrop` down as a parameter — and why, with 33 call sites in 18 files,
+ * most of the app never got one: each new pill needs its own plumbing.
+ *
+ * This is that plumbing, once. A screen declares ONE [rememberCurioGlassScreen],
+ * marks the content the pills sit over with [CurioGlassScreen.capture], and wraps
+ * the pills in [CurioGlassScreen.Provide]; from there **every descendant that asks
+ * ([Modifier.curioAmbientGlass], [ambientGlassOn]) gets real glass with no further
+ * parameters** — including the shared components (`CurioBackButton`, chips, menus,
+ * docks) that have no way to receive a backdrop of their own.
+ *
+ * Adoption is three lines:
+ * ```
+ * val glass = rememberCurioGlassScreen()
+ * Box(Modifier.fillMaxSize().then(glass.capture)) { ...the content... }
+ * glass.Provide { ...the floating pills, as SIBLINGS of that content... }
+ * ```
+ *
+ * Two rules a caller must respect, both of them the same rule twice: the capture
+ * must wrap ONLY the content behind the pills (never a subtree containing them),
+ * and the pills must be composed INSIDE [CurioGlassScreen.Provide] but OUTSIDE the
+ * captured box. A screen that has not adopted this changes nothing: the ambient is
+ * null and every consumer falls back to its solid fill.
+ */
+val LocalCurioGlassBackdrop = compositionLocalOf<LayerBackdrop?> { null }
+
+/**
+ * v484 — WHETHER A FROSTED SURFACE MAY ALSO REFRACT (the reader's one exception).
+ *
+ * v482 dropped the `lens()` pass from the frosted recipe because the per-frame
+ * distortion of a live capture was what made the reader's seven floating pills
+ * shimmer and glitch over a page that is itself re-recording every frame. The
+ * member's answer to that (v484): *"the frosted blur doesnt refract"* — the
+ * smudge should bend what is behind it everywhere ELSE, and the reader's chrome
+ * is the single place that must stay flat.
+ *
+ * So the exception travels with the composition instead of with 100 call sites:
+ * a screen that hands its backdrop down with [CurioGlassScreen.Provide] passes
+ * `refractFrosted = false` once, and every glass surface inside it — including
+ * the shared components, which cannot be told per-site — skips the lens.
+ *
+ * Default `true`: every screen that says nothing refracts.
+ */
+val LocalCurioGlassFrostRefraction = compositionLocalOf { true }
+
+/**
+ * A screen's glass state: whether it refracts at all, and the layer its pills
+ * sample. Null [backdrop] (glass off, or Android below 12) makes every consumer
+ * fall back to its own solid fill, so a screen can adopt this unconditionally.
+ */
+class CurioGlassScreen internal constructor(
+    internal val backdrop: LayerBackdrop?,
+    val on: Boolean
+) {
+    /**
+     * Marks the content the screen's floating pills sit OVER. Apply it to the
+     * box that draws the content — never to an ancestor of the pills themselves.
+     */
+    val capture: Modifier
+        get() = if (on && backdrop != null) Modifier.layerBackdrop(backdrop) else Modifier
+
+    /**
+     * Hands the backdrop to every pill drawn inside [content].
+     *
+     * v484 — [refractFrosted] is the reader's door (see
+     * [LocalCurioGlassFrostRefraction]): pass `false` on the one page whose chrome
+     * must not bend what is behind it. Every other screen leaves it alone.
+     */
+    @Composable
+    fun Provide(
+        refractFrosted: Boolean = true,
+        content: @Composable () -> Unit
+    ) {
+        CompositionLocalProvider(
+            LocalCurioGlassBackdrop provides backdrop,
+            LocalCurioGlassFrostRefraction provides refractFrosted
+        ) { content() }
+    }
+}
+
+/**
+ * One capture per screen, hoisted where both the content and the pills can see
+ * it. The `rememberLayerBackdrop` is created unconditionally (a hook cannot be
+ * conditional) and simply not handed out when glass is off.
+ */
+@Composable
+fun rememberCurioGlassScreen(): CurioGlassScreen {
+    val active = isInScreenGlassActive()
+    // NOTE the two hooks are SEPARATE on purpose: `rememberLayerBackdrop()` is
+    // itself @Composable, so it cannot be called from inside `remember { … }`'s
+    // (non-composable) calculation lambda — it is called here in the composition
+    // and only its RESULT is remembered over in the next line.
+    val layer = rememberLayerBackdrop()
+    return remember(active, layer) {
+        CurioGlassScreen(if (active) layer else null, active)
+    }
+}
+
+/** Whether this screen refracts — i.e. a backdrop is in reach and glass is on. */
+@Composable
+fun ambientGlassOn(): Boolean = LocalCurioGlassBackdrop.current != null
+
+/**
+ * The same ambient hand-off for a screen that ALREADY keeps a capture of its own
+ * (there are ~30 of them for their header pills). One line where the backdrop is
+ * already in hand:
+ *
+ * ```
+ * ProvideCurioGlass(glassBackdrop) { ...the header row, chips, menus, docks... }
+ * ```
+ *
+ * and every shared component drawn inside gets real refraction without a new
+ * parameter anywhere — [Modifier.curioAmbientGlass], [ambientGlassOn] and
+ * `CurioBackButton` all read it. Nothing is provided when the screen's capture is
+ * absent or glass is off, so the wrap is safe unconditionally.
+ */
+@Composable
+fun ProvideCurioGlass(
+    backdrop: LayerBackdrop?,
+    active: Boolean = isInScreenGlassActive(),
+    // v484 — the same reader exception as [CurioGlassScreen.Provide].
+    refractFrosted: Boolean = true,
+    content: @Composable () -> Unit
+) {
+    CompositionLocalProvider(
+        LocalCurioGlassBackdrop provides if (active) backdrop else null,
+        LocalCurioGlassFrostRefraction provides refractFrosted
+    ) { content() }
+}
+
+/**
+ * The glass coat for a floating surface, taken from the AMBIENT backdrop.
+ *
+ * Returns `this` unchanged on a screen that has not adopted a capture (or with
+ * glass off), so a caller can write it unconditionally:
+ *
+ * ```
+ * Surface(
+ *     color = if (ambientGlassOn()) Color.Transparent else solid,
+ *     shadowElevation = if (ambientGlassOn()) 0.dp else 10.dp,
+ *     modifier = Modifier.curioAmbientGlass(solid, shape = RoundedCornerShape(50))
+ * ) { ... }
+ * ```
+ *
+ * The container is the surface's own solid fill: it is what the wash and the
+ * refraction are tinted with, so the glass reads as that fill under a lens rather
+ * than as a new colour. The shadow belongs to the glass (see [liquidGlassCapsule]),
+ * which is why a caller drops its own elevation while the glass is on.
+ */
+@Composable
+fun Modifier.curioAmbientGlass(
+    container: Color,
+    shape: Shape = CircleShape,
+    washAlpha: Float = 0.45f,
+    blurMultiplier: Float = 1f,
+    interactionSource: InteractionSource? = null
+): Modifier {
+    val backdrop = LocalCurioGlassBackdrop.current ?: return this
+    return this.then(
+        Modifier.liquidGlassCapsule(
+            container = container,
+            washAlpha = washAlpha,
+            backdrop = backdrop,
+            shape = shape,
+            interactionSource = interactionSource,
+            blurMultiplier = blurMultiplier
+        )
+    )
+}
+
+/**
+ * The capture onDraw for the NavHost's [com.kyant.backdrop.backdrops.rememberLayerBackdrop]:
+ * flags the record pass so in-subtree glass capsules fall back to a plain
+ * fill (see the v228 note on [CurioGlassPills]).
+ */
+internal fun androidx.compose.ui.graphics.drawscope.ContentDrawScope.curioGlassCaptureDraw() {
+    CurioGlassPills.isCapturingBackdrop = true
+    try {
+        drawContent()
+    } finally {
+        CurioGlassPills.isCapturingBackdrop = false
+    }
+}
+
+/**
+ * Turn a floating capsule into liquid glass. Apply INSTEAD of the solid
+ * Surface fill: the caller keeps its Surface with a TRANSPARENT color and
+ * no elevation, and this modifier draws the blurred backdrop + rim
+ * highlight + soft shadow + the translucent container wash itself.
+ *
+ * No-op when the experiment is off, on Android < 12, or before the NavHost
+ * has published its capture layer — callers must keep their classic path.
+ */
+/**
+ * The frost fill for a pane: white in light, a lifted dark in dark.
+ *
+ * The numbers are [CurioGlassPills.Frost]'s — shared with the sheets' and
+ * dialogs' panels (see `curioFrostedPanel`) so a floating pill and a sheet are
+ * frosted out of the same recipe rather than out of two that merely look alike.
+ */
+internal fun frostColor(container: Color, dark: Boolean): Color =
+    androidx.compose.ui.graphics.lerp(
+        container,
+        Color.White,
+        if (dark) CurioGlassPills.Frost.DarkLift else CurioGlassPills.Frost.LightLift
+    )
+
+/**
+ * v243 — SIMULATED glass for pre-Android-12 devices (no RenderEffect, so
+ * no real backdrop blur/refraction). Draws a theme-aware frosted veil, a
+ * top-down sheen and a bright rim over the capsule so the look still reads
+ * "liquid glass" — just without live refraction of the content behind it.
+ */
+@Composable
+fun Modifier.fauxGlassCapsule(
+    container: Color,
+    // v260 — optional explicit corner radius: the simulated recipe defaults
+    // to a stadium (min(w,h)/2), which mismatches surfaces whose shape
+    // animates (the explore bubble's expanding panel).
+    corner: Dp? = null
+): Modifier {
+    val dark = isCurioDarkTheme()
+    // v245 — CRISPER, not frosty: real per-frame blur is impossible below
+    // Android 12, so the recipe leans clear-pane (light veil, strong sheen +
+    // rim) instead of milk. The Appearance Blur slider drives the veil too —
+    // at the default 25% the capsule reads near-clear.
+    // v482 — the FROSTED (smudged) look: a near-opaque white veil instead of
+    // the clear pane, so pre-12 devices read the same smudged white the real
+    // glass recipe draws (see `liquidGlassCapsule`). The Blur slider no longer
+    // thins it — that slider belongs to the clear recipe.
+    val frosted = AppPreferences.glassFrostedState
+    val veilScale = 0.30f + 0.70f * AppPreferences.glassBlurScaleState.coerceIn(0f, 2f)
+    val veil = if (frosted) {
+        // v484/v487 — the same theme-own frost colour the real recipe draws (see
+        // [CurioGlassPills.Frost.Wash]), at [CurioGlassPills.Frost.FauxWash] —
+        // NOT the thin Wash: this recipe has no blur to hide behind, and a
+        // 0.18 pane over a sharp page reads as a mistake rather than as glass.
+        frostColor(container, dark).copy(alpha = CurioGlassPills.Frost.FauxWash)
+    } else {
+        Color.White.copy(alpha = (if (dark) 0.05f else 0.34f) * veilScale)
+    }
+    val sheen = if (dark) Color.White.copy(alpha = 0.22f) else Color.White.copy(alpha = 0.75f)
+    val rim = if (dark) Color.White.copy(alpha = 0.32f) else Color.White.copy(alpha = 0.90f)
+    return this.drawWithContent {
+        drawContent()
+        val r = CornerRadius(corner?.toPx() ?: minOf(size.width, size.height) / 2f)
+        // Frosted veil — the "blur" stand-in.
+        drawRoundRect(color = veil, cornerRadius = r)
+        // Top-down sheen — light catching the pane.
+        drawRoundRect(
+            brush = Brush.verticalGradient(
+                listOf(sheen, Color.Transparent, Color.Transparent, sheen.copy(alpha = sheen.alpha * 0.4f))
+            ),
+            cornerRadius = r
+        )
+        // Bright rim.
+        drawRoundRect(
+            color = rim,
+            cornerRadius = r,
+            style = Stroke(width = 1.dp.toPx())
+        )
+    }
+}
+
+/**
+ * v243 — a LIGHTER faux-glass coat for surfaces that keep their own fill
+ * (the classic nav bar on old devices): sheen + rim only, no veil, so the
+ * bar's dynamic container color still reads.
+ */
+@Composable
+fun Modifier.curioFauxGlassSheen(corner: Dp? = null): Modifier {
+    val dark = isCurioDarkTheme()
+    val sheen = if (dark) Color.White.copy(alpha = 0.10f) else Color.White.copy(alpha = 0.40f)
+    val rim = if (dark) Color.White.copy(alpha = 0.20f) else Color.White.copy(alpha = 0.70f)
+    return this.drawWithContent {
+        drawContent()
+        val r = CornerRadius(corner?.toPx() ?: minOf(size.width, size.height) / 2f)
+        drawRoundRect(
+            brush = Brush.verticalGradient(listOf(sheen, Color.Transparent)),
+            cornerRadius = r
+        )
+        drawRoundRect(color = rim, cornerRadius = r, style = Stroke(width = 1.dp.toPx()))
+    }
+}
+
+@Composable
+fun Modifier.liquidGlassCapsule(
+    container: Color,
+    // v230 — scroll-morph support: the translucent wash over the refracted
+    // backdrop. The floating nav pills keep the default 40%; the Home
+    // menu/profile pills and the detail back/more pills pass a stronger
+    // wash while the scroll morph is young (so the handoff from their
+    // resting SOLID hero fill doesn't pop) easing down to ~45% when fully
+    // scrolled.
+    washAlpha: Float = 0.40f,
+    // v241 — explicit LOCAL backdrop for in-screen pills. When null, falls
+    // back to the NavHost's whole-page capture (bottom-bar overlay sites).
+    // In-screen callers MUST pass their own local capture: one that records
+    // only what sits BEHIND the pill, with the pill itself OUTSIDE the
+    // captured subtree — sampling a capture that includes the pill is what
+    // produced the v228 cyclic render node.
+    backdrop: LayerBackdrop? = null,
+    // v241 — force the CLEAR-glass recipe regardless of the Clear-glass
+    // toggle: the in-screen floating pills are requested to read as fully
+    // clear, refracting glass (blur 2dp, wash cut to ~a third).
+    alwaysClear: Boolean = false,
+    // v241 — capsule shape. CircleShape for the round pills; wide bars
+    // (Pet Designer studio bar) pass RoundedCornerShape(50) so the glass
+    // clips to a stadium instead of an ellipse.
+    shape: Shape = CircleShape,
+    // v260 — CRASH FIX: opt-in for the GLOBAL NavHost capture. Only callers
+    // that sit OUTSIDE the captured subtree (the floating bottom nav) may
+    // sample it — an in-screen caller with backdrop == null used to fall
+    // through to the global capture, sampled a layer containing ITSELF, and
+    // produced the v228 cyclic render node again: RenderThread SIGSEGV
+    // (stack overflow in prepareTreeImpl) on Samsung A35 / Android 16.
+    // In-screen callers without a local capture now get the SAFE simulated
+    // recipe instead — never the global layer.
+    useGlobalCapture: Boolean = false,
+    // v246 — TOUCH FEEL returns: pass the pill's click InteractionSource
+    // and holding it springs the whole capsule slightly SMALLER while the
+    // lens refraction blooms at the corners under the finger — the tactile
+    // press behavior from before the blob reverts.
+    interactionSource: InteractionSource? = null,
+    // v291 — COMPACT glass for small surfaces (chip bars, small pills):
+    // skips lens refraction (invisible on <50dp capsules) and reduces
+    // blur to a minimum, cutting drawBackdrop cost by ~60% per chip.
+    compact: Boolean = false,
+    // v292g — force FROST regardless of the Clear-glass toggle: chips
+    // should always read as frosted glass even when glassClarity is ON.
+    forceFrost: Boolean = false,
+    // v3xx — the GLASS TOOLBAR header style: a stronger blur multiplier
+    // (the app-wide "Glass toolbar header" option wants its bar noticeably
+    // more frosted than the small pills — 1.6× the standard 8dp frost).
+    blurMultiplier: Float = 1f
+): Modifier {
+    if (!isLiquidGlassRequested()) return this
+    // v243 — pre-Android-12: no RenderEffect → serve the simulated glass
+    // recipe so those users get the look instead of nothing.
+    // v3xx — the "Real blur (older devices)" experiment was REMOVED: old
+    // devices always serve the static faux-glass veil.
+    if (android.os.Build.VERSION.SDK_INT < 31) {
+        return this.fauxGlassCapsule(container)
+    }
+    val effectiveBackdrop = backdrop
+        ?: (if (useGlobalCapture) CurioGlassPills.backdrop else null)
+        ?: return this.fauxGlassCapsule(container)
+    // Hoisted — isCurioDarkTheme() is @Composable and the shadow lambda
+    // below is NOT a composable context.
+    val dark = isCurioDarkTheme()
+    // v233 — CLEAR GLASS (experiment): drop the heavy frost so the capsule
+    // reads like the bright refraction blob under a finger press rather
+    // than milky frosted glass.
+    // v292g — forceFrost overrides glassClarity so chips always frost.
+    val clear = (AppPreferences.glassClarityState || alwaysClear) && !forceFrost
+    // ── v482 — THE FROSTED (SMUDGED) LOOK ───────────────────────────
+    //
+    // The member: *"make it whitish frosty glass not transparent at all more
+    // smudged … the reader it has really glitchy"*. When this is ON (the
+    // default) the glass stops being a clear refracting pane and becomes a
+    // heavy SMUDGE: the lens refraction pass is dropped entirely — it is the
+    // per-frame distortion of the live capture, and it was what made the
+    // reader's seven floating pills shimmer and glitch over a page that is
+    // itself re-recording — and the surface wears a near-opaque WHITE frost
+    // wash instead of the translucent container tint. The toggle lives in
+    // Experiments → Liquid glass (see `AppPreferences.glassFrostedState`).
+    val frosted = AppPreferences.glassFrostedState
+    // v484 — the reader's chrome is the one place a frosted pane must not refract
+    // (see [LocalCurioGlassFrostRefraction]); hoisted here because the draw
+    // lambdas below are plain scopes, not composable ones.
+    val frostRefracts = LocalCurioGlassFrostRefraction.current
+    // v242 — user tuning (Appearance → Liquid glass): multipliers around
+    // the tuned defaults. Hoisted here; the draw lambdas are plain scopes.
+    val blurScale = AppPreferences.glassBlurScaleState
+    val refrScale = AppPreferences.glassRefractionScaleState
+    val reflScale = AppPreferences.glassReflectionScaleState.coerceIn(0f, 2f)
+    // v246 — spring-driven press progress (0 at rest → 1 while held).
+    // v247 — Apple-style feel: the press-IN is fast and crisp (high
+    // stiffness, near-critically damped — no wobble on the way down), the
+    // RELEASE is softer and slightly underdamped so the capsule springs
+    // back with one gentle overshoot, like iOS control centers.
+    val press = remember(interactionSource) { Animatable(0f) }
+    if (interactionSource != null) {
+        val pressed by interactionSource.collectIsPressedAsState()
+        LaunchedEffect(pressed) {
+            press.animateTo(
+                if (pressed) 1f else 0f,
+                spring(
+                    dampingRatio = if (pressed) 0.85f else 0.55f,
+                    stiffness = if (pressed) 900f else 380f
+                )
+            )
+        }
+    }
+    return this
+        // v246 — press shrink: the capsule eases ~4% down toward its middle
+        // while held, releasing with the same spring.
+        .graphicsLayer {
+            val s = lerp(1f, 0.96f, press.value)
+            scaleX = s
+            scaleY = s
+        }
+        // v228 — outer guard: during a capture record pass, skip the
+        // backdrop-drawing inner node entirely and paint a plain capsule,
+        // so the pill never samples its own recording layer. The guard also
+        // carries the v233 PARALLAX EDGE GLOW (after drawContent, so it
+        // rides on top of the rendered glass).
+        .drawWithContent {
+            // v243 — the guard must ONLY flatten pills that sample the
+            // GLOBAL NavHost capture (backdrop == null): during its record
+            // pass such a pill would sample a layer containing itself.
+            // Local-backdrop pills sit OUTSIDE their captured subtree, so
+            // the global re-records that fire on every scroll frame must
+            // not touch them — this condition is why the in-screen pills
+            // never showed glass (they were flattened permanently).
+            // v260 — only GLOBAL samplers (useGlobalCapture) reference the
+            // layer being recorded here, so only they must flatten. Local-
+            // backdrop pills sit outside their captured subtree and must
+            // keep drawing through global re-records (the v243 fix).
+            if (CurioGlassPills.isCapturingBackdrop && useGlobalCapture) {
+                drawRoundRect(
+                    color = container.copy(alpha = 0.88f),
+                    cornerRadius = CornerRadius(
+                        minOf(size.width, size.height) / 2f
+                    )
+                )
+            } else {
+                drawContent()
+                drawGlassTiltEdgeGlow()
+            }
+        }
+        .then(
+            Modifier.drawBackdrop(
+                backdrop = effectiveBackdrop,
+                shape = { shape },
+                effects = {
+                    vibrancy()
+                    // v482/v484 — FROSTED: one heavy blur (~21dp at the default
+                    // scale) and, since v484, the lens as well — the smudge is the
+                    // blur PLUS the bend, and the reader's chrome is the one place
+                    // the bend is skipped (see `frostRefracts` below).
+                    if (frosted) {
+                        // v487 — THE HEAVY BLUR, SPENT WHOLE. 21dp was always the
+                        // authored number; multiplying it by the clear recipe's
+                        // 0.25 default is what shipped a 5.25dp smudge (see
+                        // [CurioGlassPills.Frost]). The blur slider still moves it,
+                        // centred on its own default.
+                        blur(
+                            (if (compact) CurioGlassPills.Frost.CompactBlurDp
+                            else CurioGlassPills.Frost.BlurDp).dp.toPx() *
+                                CurioGlassPills.Frost.blurFactor(blurScale) * blurMultiplier
+                        )
+                        // v484 — THE SMUDGE REFRACTS AGAIN. The lens is what makes
+                        // the pane bend what is behind it at its edges; v482 dropped
+                        // it for the reader (whose chrome re-records every frame and
+                        // shimmered). It is back everywhere else, at
+                        // [CurioGlassPills.Frost.LensDp] —
+                        // half the clear recipe's radius, because a thicker pane bends
+                        // less — and climbs with the press like the clear one does.
+                        // The reader passes `refractFrosted = false` (see
+                        // [LocalCurioGlassFrostRefraction]).
+                        if (frostRefracts) {
+                            // v488 — through [curioLens], so a high Refraction
+                            // stops growing at the pane's own corner radius
+                            // instead of breaking the shader's limit.
+                            val smudgeR = CurioGlassPills.Frost.LensDp.dp.toPx() *
+                                refrScale * (1f + 0.45f * press.value)
+                            curioLens(smudgeR)
+                        }
+                    } else if (compact) {
+                        // v291 — compact mode: no lens (invisible on <50dp
+                        // capsules but each call adds a per-pixel distortion
+                        // pass). v292 — user call: chips read too flat — the
+                        // frost blur went back UP to 3dp so small capsules get
+                        // the same milky-frosted depth as the big panes.
+                        // v292c — REVERTED the frost boost (user call: chips
+                        // must read as LIQUID GLASS again, not milky plastic).
+                        // Back to the light clear-refraction recipe: minimal
+                        // blur, no lens — crisp refraction at a fraction of
+                        // the per-pixel cost.
+                        blur(0.5f.dp.toPx() * blurScale)
+                    } else {
+                        blur((if (clear) 1f.dp else 8f.dp).toPx() * blurScale * blurMultiplier)
+                        // v246 — refraction blooms under the finger: the lens
+                        // deepens with press progress, so the corners visibly
+                        // bend the content while the pill is held.
+                        // v488 — and it stops at the pane's corner radius (see
+                        // [curioLens]) rather than breaking past it.
+                        val lensR = 24f.dp.toPx() * refrScale * (1f + 0.45f * press.value)
+                        curioLens(lensR)
+                    }
+                },
+                highlight = { Highlight.Default.copy(alpha = reflScale) },
+                shadow = {
+                    Shadow.Default.copy(
+                        color = Color.Black.copy(alpha = if (dark) 0.20f else 0.10f),
+                        // v245 — the outer glow shifts with the phone's tilt.
+                        offset = tiltGlowOffset()
+                    )
+                },
+                // The translucent wash over the refracted backdrop — 40% like
+                // the reference glass bar, so the tint reads but content shows.
+                // Clear-glass cuts it to roughly a third. v292 — compact
+                // surfaces take a ~35% STRONGER wash so the small chips read
+                // properly frosty instead of clear-plastic.
+                onDrawSurface = {
+                    if (frosted) {
+                        // v487 — THE PANE IS A THIN TINT OF ITS OWN COLOUR.
+                        //
+                        // v484's 0.40 wash still carried a 62% pull toward white,
+                        // and over a quarter-strength blur that milky paint WAS the
+                        // smudge the member reported. The heavy blur is the look now;
+                        // the tint only says which surface this is. The manual
+                        // top-down sheen gradient is gone with it — `drawBackdrop`'s
+                        // own rim highlight already catches the light, so the extra
+                        // gradient was a second wash stacked on the first.
+                        val frost = frostColor(container, dark)
+                        drawRect(frost.copy(alpha = CurioGlassPills.Frost.Wash))
+                    } else {
+                        // v292c — wash back to the standard recipe (the v292/
+                        // v292b compact multipliers made chips read milky-frosted
+                        // instead of clear liquid glass).
+                        drawRect(container.copy(alpha = washAlpha * if (clear) 0.20f else 1f))
+                    }
+                }
+            )
+        )
+}
+
+/**
+ * v241 — PARALLAX TILT LIGHT ARC (fixes the PERFECT CIRCLE). The v233
+ * version stroked a FULL white circle whose gradient center shifted with
+ * tilt — with Glass parallax ON, any tilt painted a literal perfect circle
+ * on every always-glass surface. The cue is now a TOP-EDGE light arc: an
+ * ~110° stroke hugging the capsule's top rim that SLIDES sideways with
+ * tiltX and fades in with tilt magnitude — light catching the pane's top
+ * edge as the phone moves, never a full ring, invisible when level. Call
+ * INSIDE a DrawScope after drawContent(). Reads tilt snapshot state
+ * directly, so sensor updates invalidate just this draw — zero
+ * recomposition.
+ */
+/**
+ * v245 — TILT-REACTIVE OUTER GLOW. The soft outer shadow every glass
+ * capsule already wears IS the glow the user means; its offset now shifts
+ * AGAINST the device tilt (the pane leans toward the light), so tilting
+ * moves the glow around the capsule. Reads the tilt snapshot state
+ * directly — draw-only invalidation, zero recomposition.
+ */
+internal fun tiltGlowOffset(): DpOffset {
+    // v270 — glass parallax tilt REMOVED (user call: useless / not working).
+    // The sensor listener is gone; the glow rests at its default offset.
+    return DpOffset(0f.dp, 4f.dp)
+}
+
+internal fun androidx.compose.ui.graphics.drawscope.DrawScope.drawGlassTiltEdgeGlow() {
+    // v245 — RETIRED. The in-capsule light arc read as a wrong, painted-on
+    // effect. The tilt cue is now the capsule's OUTER GLOW: the soft outer
+    // shadow shifts against the device tilt via [tiltGlowOffset], so the
+    // pane visibly floats as you move the phone. Kept as a no-op so the
+    // call sites stay untouched.
+    return
+}

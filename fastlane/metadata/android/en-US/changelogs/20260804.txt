@@ -1,0 +1,17 @@
+• Fixed Explore overlay crashes on Android 16 by attaching through an owner-propagating host before composing, with notification-only fallback to prevent restart loops.
+• Fixed CI compile errors in the topic card gradient and torn paper under-sheet path.
+• Smart Density 2x now reliably shrinks the Spin deck on every device.
+• Cabinet search, sorting, bulk selection/deletion, and faster loading are polished.• Detail paper seams are thinner, seeded, wavy, and gap-free.
+• Detail-page scrolling is smoother without reducing image, paper, or content quality.
+• Tablets and landscape are fully adapted: the three tabs move to a left-edge rail, page content centers in a comfortable column, and the Cabinet and category grids add columns on wide screens.
+• The landed topic now EXPANDS out of the shuffle card into the reveal page — a true shared-element morph from the card's own position — instead of the page sliding in.
+• Tapping the Shuffle tab while already on the shuffle page no longer re-opens it — a deck launched from a category ("spin/artists") counts as the Shuffle tab too.
+• Fixed the Profile hero's Level · Saved · Lanes labels hugging the left edge — they're centered under their values again.
+• Detail-page scrolling is smoother: two per-frame frosted-glass blur passes over flat colors were GPU-expensive no-ops and are now static glows.
+• The adaptive layout now reaches deeper: Settings arranges its cards in a two-column grid on tablets, the six capture-format chips wrap instead of scrolling sideways, and the detail page gives its reading column wider tablet gutters.
+• Opening a topic from Browse Topics is now a pure read-only peek: no Start-exploring button, no like/dislike, nothing recorded in recents, and "Already watched" confirms instantly without a dialog. Back always returns to your exact scroll position.
+• The reveal morph is smoother and snappier both ways — the topic expands out of the card on a quick even ease (less pre-grow delay), the text below blooms in with a gentle stagger, and backing out fades cleanly instead of sliding.
+• The "Already watched" pill on the topic page is redesigned — it fills with the category accent and a check when marked done, color-animated.
+• The dots orbiting the Shuffle button are bigger, glow softly, and shimmer in phase as they spin, with a smooth fade/scale entrance.
+• The topic reveal hero card now matches the Spin ticket pixel-for-pixel — same gradient stops, same glyph size and position, same corner radius — so the morph reads as the same card expanding instead of a visual jump.
+• Onboarding's Skip / Next controls are anchored to the bottom edge on every screen instead of floating high under the banner.

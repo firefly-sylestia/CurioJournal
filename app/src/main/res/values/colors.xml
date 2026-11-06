@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Bootstrap colors mirror the Midnight Signal Compose palette. -->
+    <color name="curio_cream_white">#F8FBFF</color>
+    <color name="curio_coral_blush">#1264C5</color>
+    <color name="curio_deep_plum">#081B33</color>
+</resources>

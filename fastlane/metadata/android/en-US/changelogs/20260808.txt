@@ -1,0 +1,2 @@
+• Color fixes for pastel mode: background watermarks are clearly visible again, and the Spin deck's peek cards now wear proper pastel card colors
+• The deck card look is now four separate experimental toggles (Settings → Appearance → Deck cards): top-lit gradient, tinted card edges, soft shadows, roomier two-line titles — each off by default

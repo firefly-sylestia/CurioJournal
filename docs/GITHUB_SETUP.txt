@@ -1,0 +1,53 @@
+========================================================
+CURIO — GITHUB REPO SETUP (copy-paste these)
+========================================================
+The automation token can't edit repo settings, so these
+are the values to paste into the GitHub web UI.
+
+OPEN: https://github.com/firefly-sylestia/Curio/settings
+
+--------------------------------------------------------
+1. DESCRIPTION  (paste this whole line)
+--------------------------------------------------------
+A curiosity journal for Android — spin a topic, explore it for real, and capture it with notes, quotes, mood boards, sound bites and field notes.
+
+--------------------------------------------------------
+2. TOPICS  (add each tag on the main repo page:
+   https://github.com/firefly-sylestia/Curio — "About" box
+   on the right, click the gear icon → Topics)
+--------------------------------------------------------
+android
+kotlin
+jetpack-compose
+curiosity
+journaling
+offline-first
+material-design
+custom-design
+
+--------------------------------------------------------
+3. WEBSITE / HOMEPAGE  (leave empty — no product site)
+--------------------------------------------------------
+
+--------------------------------------------------------
+4. LICENSE  (leave as "None" — decided: no license,
+   all rights reserved. No LICENSE file in the repo.)
+--------------------------------------------------------
+
+--------------------------------------------------------
+5. OPTIONAL — PRIVATE VULNERABILITY REPORTING
+   OPEN: https://github.com/firefly-sylestia/Curio/settings/security_analysis
+   Enable "Private vulnerability reporting" so people can
+   report security issues privately (the token couldn't
+   toggle this; SECURITY.md already mentions it).
+--------------------------------------------------------
+
+--------------------------------------------------------
+6. Done — what the repo now has (already pushed)
+--------------------------------------------------------
+- CONTRIBUTING.md  — how to report bugs / request features & topics, dev setup, PR flow
+- SECURITY.md      — supported versions + how to report vulnerabilities
+- CODE_OF_CONDUCT.md — Contributor Covenant 2.1 (enforcement via GitHub Issues)
+- No LICENSE file  (per decision)
+
+App version to include in bug reports: Profile → Support & diagnostics → Version

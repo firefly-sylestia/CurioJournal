@@ -1,0 +1,2 @@
+• Experiments regrouped: main card, deck peek cards and controls each get their own section
+• Topic Reveal: the Start exploring / Already watched buttons moved up under the hero card — the bottom dock is gone and the page reads taller

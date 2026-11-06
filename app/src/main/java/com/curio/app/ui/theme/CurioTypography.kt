@@ -1,0 +1,455 @@
+package com.curio.app.ui.theme
+
+import androidx.compose.material3.Typography
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.Font
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.sp
+import com.curio.app.R
+
+/**
+ * Curio's typography — see Curio typography contract.
+ *
+ * Display / headline: Curio's bundled `geom.ttf` variable font. Heavy weight
+ * (700+) for headlines and titles.
+ *
+ * Body / UI text: a clean neutral sans (M3 default) for readability in
+ * long essay/journal entries.
+ *
+ * Rule of thumb: `geom` for anything short and emotional (titles, empty-state
+ * copy, button labels). Neutral sans for anything long or functional.
+ */
+
+/** Display/headline font family — geom.ttf. Variable font, all weights. */
+val GeomFontFamily: FontFamily = FontFamily(
+    Font(R.font.geom, FontWeight.Normal),
+    Font(R.font.geom, FontWeight.Medium),
+    Font(R.font.geom, FontWeight.SemiBold),
+    Font(R.font.geom, FontWeight.Bold),
+    Font(R.font.geom, FontWeight.ExtraBold)
+)
+
+/** Material Symbols glyph font family — for CurioIcon rendering. */
+val MaterialSymbolsFontFamily: FontFamily = FontFamily(
+    Font(R.font.material_symbols_outlined, FontWeight.Normal),
+    Font(R.font.material_symbols_outlined, FontWeight.Bold)
+)
+
+/**
+ * VT323 — THE PIXEL FACE (SIL Open Font License 1.1; the licence text ships in
+ * `res/raw/vt323_license.txt`).
+ *
+ * A terminal face: every glyph is built on the same pixel grid, so it reads as a
+ * CRT or a split-flap sign rather than as type. It is the time capsule's own
+ * face — the member asked for *"digital that clocl tyle font for the whole
+ * page"* — and it belongs to that page and to nothing else.
+ *
+ * ⚠️ ONE FACE, DELIBERATELY (see [PatrickHandFontFamily]'s note): VT323 ships a
+ * single regular file, so declaring Bold/SemiBold entries pointing at it would
+ * make every weight request match an "exact" descriptor whose glyphs are the
+ * regular face, and the synthesis that gives the page its heavy phosphor weight
+ * would never happen.
+ */
+val PixelFontFamily: FontFamily = FontFamily(
+    Font(R.font.vt323)
+)
+
+/**
+ * Patrick Hand — the handwritten note font for the paper text fields
+ * (journal, quotes, review, notes, captions, field notes). Google Fonts
+ * ships Patrick Hand as a SINGLE regular file (there is no bold or italic
+ * TTF), so the family declares ONLY that one face — and Compose's font
+ * matcher therefore can never find an exact match for a Bold / Italic
+ * request. When a request mismatches the loaded font, the text stack's
+ * `fontSynthesis` (set explicitly on styled spans in `buildRichAnnotated`)
+ * applies FAKE BOLD (stroke) and OBLIQUE from the single file.
+ *
+ * This must stay a single entry: declaring Bold / Italic entries that all
+ * point at the SAME regular TTF makes every request match an "exact"
+ * descriptor whose glyphs are the regular face — the mismatch that triggers
+ * synthesis never happens, and bold/italic silently render as regular
+ * (the "bold/italic stopped working" regression).
+ *
+ * The ruled-line cadence stays on `bodyLarge.lineHeight` (24sp), so notes
+ * keep their notebook alignment on paper.
+ */
+val PatrickHandFontFamily: FontFamily = FontFamily(
+    Font(R.font.patrick_hand_regular)
+)
+
+/**
+ * Changa One — the chunky display face for the bottom nav pill labels
+ * (v184). Google Fonts ships Changa One as a SINGLE Regular file (it has
+ * no Bold/Italic TTF — the face IS the heavy weight), so like
+ * [PatrickHandFontFamily] this is a single-entry family: a Bold request
+ * would trigger fake-bold synthesis, so callers pair it with
+ * `FontWeight.Normal` (the glyphs are already display-heavy). OFL
+ * (Reserved Font Name "Changa") — license text at
+ * `app/third_party/changa_one_OFL.txt`.
+ */
+val ChangaOneFontFamily: FontFamily = FontFamily(
+    Font(R.font.changa_one_regular)
+)
+
+/**
+ * Bungee — the bold retro display face (OFL), bundled at `res/font/bungee_regular.ttf`
+ * (v... — share-card redesign). Retro poster slab for the Collage "Curious Explorer"
+ * title and the Editorial broadsheet masthead/headline. Like Changa One, Google Fonts
+ * ships a single Regular file (the glyphs ARE the heavy display weight), so this is a
+ * single-entry family — callers pair it with `FontWeight.Normal`. License at
+ * `app/third_party/bungee_OFL.txt`.
+ */
+val BungeeFontFamily: FontFamily = FontFamily(
+    Font(R.font.bungee_regular)
+)
+
+/**
+ * Playfair Display — the literary serif voice (OFL). A variable font (wght
+ * 400–900) bundled at `res/font/playfair_display.ttf`; used for the BOOKS
+ * share-card title for a classic book-jacket feel. Single file, weight
+ * resolved via the wght axis. License at `app/third_party/playfair_display_OFL.txt`.
+ */
+val PlayfairDisplayFontFamily: FontFamily = FontFamily(
+    Font(R.font.playfair_display, FontWeight.Normal),
+    Font(R.font.playfair_display, FontWeight.Medium),
+    Font(R.font.playfair_display, FontWeight.SemiBold),
+    Font(R.font.playfair_display, FontWeight.Bold)
+)
+
+/**
+ * Pirata One — the adventure/treasure-map display face (OFL). Bundled at
+ * `res/font/pirata_one.ttf`; used for the DISCOVERIES share-card title for
+ * a nautical-map feel. Single-entry family (one Regular file) — callers
+ * pair it with `FontWeight.Normal`. License at `app/third_party/pirata_one_OFL.txt`.
+ */
+val PirataOneFontFamily: FontFamily = FontFamily(
+    Font(R.font.pirata_one)
+)
+
+/**
+ * Lora — the editorial serif voice (OFL). A variable font (wght 400–700)
+ * bundled at `res/font/lora.ttf` (v35). Used for long-form reading text —
+ * the Topic Reveal teaser/quick-fact, action-card instructions, and intro
+ * copy — so Curio's UI pairs the geometric geom titles with a warm,
+ * curated-magazine body. Same multi-entry pattern as [GeomFontFamily]: the
+ * file is variable, so each weight entry resolves via the wght axis.
+ */
+val LoraFontFamily: FontFamily = FontFamily(
+    Font(R.font.lora, FontWeight.Normal),
+    Font(R.font.lora, FontWeight.Medium),
+    Font(R.font.lora, FontWeight.SemiBold),
+    Font(R.font.lora, FontWeight.Bold)
+)
+
+/**
+ * THE WRITING CANVAS' serif — the SAME Lora file as [LoraFontFamily], but as
+ * a SINGLE-entry family.
+ *
+ * The writing surfaces (a journal page, a chapter review) let the member put
+ * bold / italic on their own words, and a request has to be able to MISMATCH
+ * for the text stack to synthesise the weight. [LoraFontFamily] declares four
+ * entries that all point at one variable file, so a Bold request matches an
+ * "exact" descriptor whose glyphs are still the regular face — which is why
+ * bold silently rendered as regular in the canvas while italic (never
+ * declared, so always synthesised) worked. Same doctrine as
+ * [PatrickHandFontFamily]: one entry, so the fake-bold/oblique synthesis the
+ * tools depend on actually happens.
+ *
+ * Only the writing surfaces use this family, so the rest of the app keeps the
+ * multi-entry [LoraFontFamily] exactly as it was.
+ */
+val WritingFontFamily: FontFamily = FontFamily(
+    Font(R.font.lora)
+)
+
+/**
+ * Cormorant Garamond — an elegant high-contrast display serif (OFL).
+ * Variable font (wght 300–700) bundled at `res/font/cormorant_garamond.ttf`.
+ * Used for literary/historical share-card titles needing a refined,
+ * museum-label feel. License at `app/third_party/cormorant_garamond_OFL.txt`.
+ */
+val CormorantGaramondFontFamily: FontFamily = FontFamily(
+    Font(R.font.cormorant_garamond, FontWeight.Normal),
+    Font(R.font.cormorant_garamond, FontWeight.Medium),
+    Font(R.font.cormorant_garamond, FontWeight.SemiBold),
+    Font(R.font.cormorant_garamond, FontWeight.Bold)
+)
+
+/**
+ * Bebas Neue — a tall condensed sans display face (OFL). Single Regular
+ * file (the glyphs are already uppercase-heavy). Used for poster-style
+ * share-card titles (Films, Directors, Wildcard). License at
+ * `app/third_party/bebas_neue_OFL.txt`.
+ */
+val BebasNeueFontFamily: FontFamily = FontFamily(
+    Font(R.font.bebas_neue)
+)
+
+/**
+ * Space Mono — a monospaced face (OFL) with a technical/code feel.
+ * Used for science/tech share-card titles and monospace body accents.
+ * License at `app/third_party/space_mono_OFL.txt`.
+ */
+val SpaceMonoFontFamily: FontFamily = FontFamily(
+    Font(R.font.space_mono)
+)
+
+/**
+ * DM Serif Display — a high-contrast didone serif (OFL). Used for
+ * editorial/fashion-style share-card titles. License at
+ * `app/third_party/dm_serif_display_OFL.txt`.
+ */
+val DMSerifDisplayFontFamily: FontFamily = FontFamily(
+    Font(R.font.dm_serif_display)
+)
+
+/**
+ * Sora — a clean geometric sans (OFL). Variable font; used for modern
+ * minimal share-card titles. License at `app/third_party/sora_OFL.txt`.
+ */
+val SoraFontFamily: FontFamily = FontFamily(
+    Font(R.font.sora, FontWeight.Normal),
+    Font(R.font.sora, FontWeight.Medium),
+    Font(R.font.sora, FontWeight.SemiBold),
+    Font(R.font.sora, FontWeight.Bold)
+)
+
+/**
+ * Corben — a rounded display serif (OFL). Single Regular file; used for
+ * playful/food share-card titles. License at `app/third_party/corben_OFL.txt`.
+ */
+val CorbenFontFamily: FontFamily = FontFamily(
+    Font(R.font.corben)
+)
+
+/**
+ * Maven Pro — a soft geometric sans (OFL). Variable font; used for
+ * modern UI-style share-card titles. License at
+ * `app/third_party/maven_pro_OFL.txt`.
+ */
+val MavenProFontFamily: FontFamily = FontFamily(
+    Font(R.font.maven_pro, FontWeight.Normal),
+    Font(R.font.maven_pro, FontWeight.Medium),
+    Font(R.font.maven_pro, FontWeight.SemiBold),
+    Font(R.font.maven_pro, FontWeight.Bold)
+)
+
+/**
+ * BioRhyme — an organic modern serif (OFL) with biomorphic double-story
+ * forms; the glyphs literally suggest cell biology. Variable font
+ * (wdth + wght axes) bundled at `res/font/biorhyme.ttf`; used for the
+ * BIOLOGY share-card title. License at `app/third_party/biorhyme_OFL.txt`.
+ */
+val BioRhymeFontFamily: FontFamily = FontFamily(
+    Font(R.font.biorhyme, FontWeight.Normal),
+    Font(R.font.biorhyme, FontWeight.Medium),
+    Font(R.font.biorhyme, FontWeight.SemiBold),
+    Font(R.font.biorhyme, FontWeight.Bold)
+)
+
+/**
+ * Fraunces — an old-style display serif (OFL) with wonky optical sizes and
+ * a distinctly literary voice (book-jacket DNA). Variable font
+ * (SOFT/WONK/opsz/wght) bundled at `res/font/fraunces.ttf`; used for the
+ * BOOKS share-card title. License at `app/third_party/fraunces_OFL.txt`.
+ */
+val FrauncesFontFamily: FontFamily = FontFamily(
+    Font(R.font.fraunces, FontWeight.Normal),
+    Font(R.font.fraunces, FontWeight.Medium),
+    Font(R.font.fraunces, FontWeight.SemiBold),
+    Font(R.font.fraunces, FontWeight.Bold)
+)
+
+/**
+ * Oxanium — a technical geometric sans (OFL) with sharp angular terminals,
+ * built for lab/engineering labelling. Variable font (wght) bundled at
+ * `res/font/oxanium.ttf`; used for the CHEMISTRY share-card title. License
+ * at `app/third_party/oxanium_OFL.txt`.
+ */
+val OxaniumFontFamily: FontFamily = FontFamily(
+    Font(R.font.oxanium, FontWeight.Normal),
+    Font(R.font.oxanium, FontWeight.Medium),
+    Font(R.font.oxanium, FontWeight.SemiBold),
+    Font(R.font.oxanium, FontWeight.Bold)
+)
+
+/**
+ * Rye — a chunky frontier slab serif (OFL) with a worn wood-print feel,
+ * made for expedition maps and aged signage. Single Regular file —
+ * single-entry family (callers pair it with `FontWeight.Normal`). Used for
+ * the DISCOVERIES share-card title. License at `app/third_party/rye_OFL.txt`.
+ */
+val RyeFontFamily: FontFamily = FontFamily(
+    Font(R.font.rye)
+)
+
+/**
+ * Space Grotesk — a modern grotesk (OFL) with techy detailing, the go-to
+ * face for data/finance UI. Variable font (wght) bundled at
+ * `res/font/space_grotesk.ttf`; used for the ECONOMICS share-card title.
+ * License at `app/third_party/space_grotesk_OFL.txt`.
+ */
+val SpaceGroteskFontFamily: FontFamily = FontFamily(
+    Font(R.font.space_grotesk, FontWeight.Normal),
+    Font(R.font.space_grotesk, FontWeight.Medium),
+    Font(R.font.space_grotesk, FontWeight.SemiBold),
+    Font(R.font.space_grotesk, FontWeight.Bold)
+)
+
+/**
+ * Anton — an ultra-condensed bold sans (OFL) used across classic movie
+ * posters. Single Regular file (the glyphs ARE the heavy weight) —
+ * single-entry family (callers pair it with `FontWeight.Normal`). Used for
+ * the FILMS share-card title. License at `app/third_party/anton_OFL.txt`.
+ */
+val AntonFontFamily: FontFamily = FontFamily(
+    Font(R.font.anton)
+)
+
+/**
+ * Limelight — an art-deco cinema-marquee face (OFL). Single Regular file —
+ * single-entry family (callers pair it with `FontWeight.Normal`). Used for
+ * the DIRECTORS share-card title (marquee neon). License at
+ * `app/third_party/limelight_OFL.txt`.
+ */
+val LimelightFontFamily: FontFamily = FontFamily(
+    Font(R.font.limelight)
+)
+
+/**
+ * The editorial body voice — Lora at a relaxed reading size/leading, for
+ * quick-facts, instructions and long intro copy (v35). Slightly larger
+ * than bodyLarge with zero tracking for the serif's natural rhythm.
+ */
+val CurioEditorialBody: TextStyle = TextStyle(
+    fontFamily = LoraFontFamily,
+    fontWeight = FontWeight.Normal,
+    fontSize = 17.sp,
+    lineHeight = 27.sp,
+    letterSpacing = 0.sp
+)
+
+/** The editorial LEAD — a bolder serif line for the first sentence of a
+ *  fact or a highlighted takeaway (v35). */
+val CurioEditorialLead: TextStyle = TextStyle(
+    fontFamily = LoraFontFamily,
+    fontWeight = FontWeight.SemiBold,
+    fontSize = 18.sp,
+    lineHeight = 29.sp,
+    letterSpacing = 0.sp
+)
+
+/**
+ * Curio typography set — Material 3 defaults overridden with geom where appropriate.
+ *
+ * Display family uses geom (700+ weight). Body family uses M3 default sans.
+ */
+val CurioTypography: Typography = Typography(
+    // Display — big hero numbers, app name in splash, section openers
+    displayLarge = TextStyle(
+        fontFamily = GeomFontFamily,
+        fontWeight = FontWeight.ExtraBold,
+        fontSize = 57.sp,
+        lineHeight = 64.sp,
+        letterSpacing = (-0.25).sp
+    ),
+    displayMedium = TextStyle(
+        fontFamily = GeomFontFamily,
+        fontWeight = FontWeight.Bold,
+        fontSize = 45.sp,
+        lineHeight = 52.sp
+    ),
+    displaySmall = TextStyle(
+        fontFamily = GeomFontFamily,
+        fontWeight = FontWeight.Bold,
+        fontSize = 36.sp,
+        lineHeight = 44.sp
+    ),
+    // Headline — screen titles, big buttons
+    headlineLarge = TextStyle(
+        fontFamily = GeomFontFamily,
+        fontWeight = FontWeight.Bold,
+        fontSize = 32.sp,
+        lineHeight = 40.sp
+    ),
+    headlineMedium = TextStyle(
+        fontFamily = GeomFontFamily,
+        fontWeight = FontWeight.SemiBold,
+        fontSize = 28.sp,
+        lineHeight = 36.sp
+    ),
+    headlineSmall = TextStyle(
+        fontFamily = GeomFontFamily,
+        fontWeight = FontWeight.SemiBold,
+        fontSize = 24.sp,
+        lineHeight = 32.sp
+    ),
+    // Title — section headers, card titles, dialog titles
+    // v35 — stepped up to Bold for stronger section-title hierarchy.
+    titleLarge = TextStyle(
+        fontFamily = GeomFontFamily,
+        fontWeight = FontWeight.Bold,
+        fontSize = 22.sp,
+        lineHeight = 28.sp
+    ),
+    titleMedium = TextStyle(
+        fontFamily = GeomFontFamily,
+        fontWeight = FontWeight.Medium,
+        fontSize = 16.sp,
+        lineHeight = 24.sp,
+        letterSpacing = 0.15.sp
+    ),
+    titleSmall = TextStyle(
+        fontFamily = GeomFontFamily,
+        fontWeight = FontWeight.Medium,
+        fontSize = 14.sp,
+        lineHeight = 20.sp,
+        letterSpacing = 0.1.sp
+    ),
+    // Body — long-form content, form fields, settings copy (M3 default neutral)
+    bodyLarge = TextStyle(
+        fontFamily = FontFamily.Default,
+        fontWeight = FontWeight.Normal,
+        fontSize = 16.sp,
+        lineHeight = 24.sp,
+        // v35 — tightened 0.5 → 0.3sp for a calmer, more modern read.
+        letterSpacing = 0.3.sp
+    ),
+    bodyMedium = TextStyle(
+        fontFamily = FontFamily.Default,
+        fontWeight = FontWeight.Normal,
+        fontSize = 14.sp,
+        lineHeight = 20.sp,
+        letterSpacing = 0.25.sp
+    ),
+    bodySmall = TextStyle(
+        fontFamily = FontFamily.Default,
+        fontWeight = FontWeight.Normal,
+        fontSize = 12.sp,
+        lineHeight = 16.sp,
+        letterSpacing = 0.4.sp
+    ),
+    // Label — buttons, chips, captions
+    labelLarge = TextStyle(
+        fontFamily = GeomFontFamily,
+        fontWeight = FontWeight.SemiBold,
+        fontSize = 14.sp,
+        lineHeight = 20.sp,
+        letterSpacing = 0.1.sp
+    ),
+    labelMedium = TextStyle(
+        fontFamily = GeomFontFamily,
+        fontWeight = FontWeight.Medium,
+        fontSize = 12.sp,
+        lineHeight = 16.sp,
+        letterSpacing = 0.5.sp
+    ),
+    labelSmall = TextStyle(
+        fontFamily = GeomFontFamily,
+        fontWeight = FontWeight.Medium,
+        fontSize = 11.sp,
+        lineHeight = 16.sp,
+        letterSpacing = 0.5.sp
+    )
+)
