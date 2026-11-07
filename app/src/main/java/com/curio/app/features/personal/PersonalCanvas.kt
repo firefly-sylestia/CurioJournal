@@ -47,6 +47,8 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.runtime.Composable
+import kotlinx.coroutines.launch
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.CompositionLocalProvider
@@ -4295,7 +4297,15 @@ internal fun PersonalCanvas(
                     val nextId = state.blockIds.getOrNull(nextIndex)
                     val nextBlock = nextId?.let { state.block(it) }
                     if (row != null) {
-                        Column {
+                        // v527 — THE ROW BREATHES. Fanning a stack out changes
+                        // how many lines it takes, and a layout that changes
+                        // shape in one frame reads as a glitch; this lets the
+                        // page's own space follow the change.
+                        Column(
+                            modifier = Modifier.animateContentSize(
+                                spring(dampingRatio = 0.9f, stiffness = 320f)
+                            )
+                        ) {
                         PersonalPrintArrangement(
                             ids = row,
                             sizeOf = { member -> state.photoSize(member) }
@@ -4358,6 +4368,61 @@ internal fun PersonalCanvas(
                                             onOpenPhoto(member.photo.orEmpty(), bounds)
                                         }
                                     )
+                                }
+                            }
+                        }
+                        // ── v527 — FAN THE STACK OUT, AND GATHER IT BACK ──
+                        //
+                        // A row of prints is one shape on the page, and there
+                        // are times the member wants to see the pictures one
+                        // under another (to write between them, to check them)
+                        // without dragging each one out by its menu. This is
+                        // that, in one press: every member of the row goes onto
+                        // its own line, and one press gathers them back.
+                        //
+                        // The presses are STAGGERED rather than all at once, so
+                        // the stack opens like a hand of cards — first print
+                        // first — and the mark turns as it goes: straight lines
+                        // closed, spread lines open.
+                        val fannedOut = row.size > 1 && row.all { state.isPhotoSeparated(it) }
+                        val fan = remember(row.first()) { Animatable(0f) }
+                        LaunchedEffect(fannedOut) {
+                            fan.animateTo(
+                                if (fannedOut) 1f else 0f,
+                                spring(dampingRatio = 0.70f, stiffness = 300f)
+                            )
+                        }
+                        if (enabled && row.size > 1) {
+                            val fanScope = rememberCoroutineScope()
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(top = 1.dp),
+                                contentAlignment = Alignment.CenterEnd
+                            ) {
+                                Surface(
+                                    onClick = {
+                                        val open = !fannedOut
+                                        fanScope.launch {
+                                            row.forEachIndexed { at, member ->
+                                                state.setPhotoSeparated(member, open)
+                                                if (at < row.lastIndex) delay(60)
+                                            }
+                                        }
+                                    },
+                                    shape = CircleShape,
+                                    color = Color.Transparent,
+                                    modifier = Modifier.size(26.dp)
+                                ) {
+                                    Box(
+                                        Modifier.fillMaxSize(),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        FanGlyph(
+                                            open = fan.value,
+                                            ink = ink.copy(alpha = 0.36f)
+                                        )
+                                    }
                                 }
                             }
                         }
@@ -8456,6 +8521,37 @@ private fun HeadingBadge(level: Int) {
  * menu opens, staggered by [delayMillis] down the list, so the five options
  * arrive as one movement rather than as five icons appearing at once.
  */
+/**
+ * v527 — THE FAN MARK.
+ *
+ * Three prints drawn as one shape: closed, they sit on top of each other (a
+ * stack); open, they spread into three lines. [open] is the animation's own
+ * value, so the mark leans between the two states exactly as the page does —
+ * it never cuts from one picture to the other.
+ */
+@Composable
+private fun FanGlyph(open: Float, ink: Color) {
+    Canvas(Modifier.size(width = 18.dp, height = 18.dp)) {
+        val width = size.width
+        val height = size.height
+        val cardW = width * 0.56f
+        val cardH = height * 0.26f
+        // Closed, the three share the mark's middle; open, they take the top,
+        // the middle and the bottom of it.
+        val spread = (height - cardH) * 0.5f * open
+        listOf(-1f, 0f, 1f).forEach { slot ->
+            val top = (height - cardH) / 2f + slot * spread
+            val left = (width - cardW) / 2f + slot * (width * 0.07f) * open
+            drawRoundRect(
+                color = ink.copy(alpha = if (slot == 0f) 1f else 0.62f),
+                topLeft = Offset(left, top),
+                size = Size(cardW, cardH),
+                cornerRadius = CornerRadius(1.5.dp.toPx())
+            )
+        }
+    }
+}
+
 @Composable
 private fun PrintSizePreview(
     option: PersonalPhotoSize,
