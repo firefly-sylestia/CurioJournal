@@ -1,9 +1,6 @@
-ADD:
-- Journal: **settings, rebuilt as a page** — four groups (the page, the habit, the pages, about), a glyph on every row, and the value where there is one instead of a wall of cards.
-- Journal: the calendar's week now starts on Monday and steps through the whole week reliably.
-- Journal: **pictures can leave a stack** — the picture in your hand steps one cell over inside its row with a sideways drag, a hard sideways pull takes it clean out of the stack, and the size menu gains **On its own line** for the same thing without the gesture.
-- Journal: **Settings ▸ Snap photos into stacks** — the automatic snapping and size adjustment can be turned off, and with it off a picture stays on its own line exactly where you drop it.
-
 FIX:
-- Journal: the calendar build error from the first pass (an enum range the compiler cannot iterate) — the month grid compiles.
-- Journal: a dragged picture now lands on the row your finger is actually over (measured rows, not counted slots), and the landing cell preview matches it.
+- Journal: **the picture in your hand stays on the page.** The sideways step is one cell and the pull is clamped to the picture's own width, so a held photo leans out of its row instead of sliding off screen (the "floats with a bar to its right and goes out of screen" report).
+- Journal: **the guides are gone.** The dashed landing room and the cell bar no longer draw at all; the rows shift to show the room and the picture itself is the preview.
+- Journal: **a drop lands on the slot you put it in.** A print no longer snaps to the edge of the row it was brought against, so the picture goes where the finger is and every row between the two places shifts by exactly that room.
+- Journal: the page's rows are measured again after the guide pass (each row reports its own height and place, which the carry's arithmetic reads).
+- Journal: one snap switch, not two — Settings → The page keeps "Snap photos into stacks", wired to the same preference the writing page watches.

@@ -79,7 +79,6 @@ import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
-import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
@@ -3160,54 +3159,23 @@ internal class PersonalEditorState(initial: PersonalDoc) {
         if (from !in ids.indices) return to
         if (blocks[ids[from]]?.isPhoto != true) return to
         // v513 — THE SETTING. With snapping OFF the print lands at the exact slot
-        // the finger put it at: no run is adopted, no cell is chosen for it. That
-        // is the member's *"with it off that picture stays separate and where it
-        // was dropped"*, and [dropBlock]'s own mark keeps it there.
-        if (!snapPhotos) return to.coerceIn(0, ids.lastIndex)
-        fun isPrint(index: Int): Boolean =
-            index in ids.indices && blocks[ids[index]]?.isPhoto == true
-        fun standsAlone(index: Int): Boolean =
-            index in ids.indices && blocks[ids[index]]?.photoSeparated == true
-        // The run the finger is pointing at: the print at the landing slot, or
-        // the one just above it when the finger has already crossed it.
-        val anchor = when {
-            isPrint(to) -> to
-            isPrint(to - 1) -> to - 1
-            else -> return to
-        }
-        var start = anchor
-        var end = anchor
-        // v513 — A PRINT ON ITS OWN LINE IS A WALL the run does not climb over,
-        // in either direction. Dropping straight ON one still joins it (the drop
-        // clears its mark, see dropBlock), which is how a separated picture is
-        // put back into a stack.
-        if (!standsAlone(anchor)) {
-            while (isPrint(start - 1) && !standsAlone(start - 1)) start--
-            while (isPrint(end + 1) && !standsAlone(end + 1)) end++
-        }
-        val below = end + 1
-        // ── AND A PRINT THAT IS ALREADY IN THE ROW STAYS IN IT (v403) ────────
+        // the finger put it at: no run is adopted, no cell is chosen for it, and
+        // [dropBlock]'s own mark keeps it there.
         //
-        // The first cut snapped every drop to one of the run's two edges, so a
-        // print that already shared the row got thrown to the run's head when
-        // the member simply pressed on it again — "sometimes it upgroups" — and
-        // a print sitting against the run from above or below was "moved" to
-        // where it already stood, which is a drag with no answer.
+        // v514 — AND WITH SNAPPING ON IT STILL LANDS WHERE THE FINGER IS.
         //
-        // So: a cell of the run is re-ordered inside it, a print that already
-        // touches the run from either side is left exactly where it is, and
-        // only a print arriving from somewhere else is brought against the run
-        // — as the row's FIRST cell when the finger was travelling down (the
-        // member is dropping onto the row's head) and as its LAST cell when the
-        // finger was travelling up.
-        val landing = when {
-            from in start..end -> to
-            from == start - 1 || from == end + 1 -> from
-            takeLeft -> start
-            below in ids.indices -> below
-            else -> start
-        }
-        return landing.coerceIn(0, ids.lastIndex)
+        // v403 snapped every arriving print to one of the run's two edges, which
+        // is why a picture put in one place came back a cell away ("it doesnt
+        // drop to the place i put"). Two prints are still a row — they are
+        // ADJACENT in the order, and the drawing pass groups adjacent prints with
+        // no snap at all — so the drop is simply the slot the held block's centre
+        // is over, and every row between the old place and the new one shifts by
+        // exactly that room (`shiftFor`), which is the movement the member asked
+        // for: "move the image in its place and shift them".
+        //
+        // `takeLeft` is kept for the caller's sake: there is no end to choose now
+        // that the landing is the slot.
+        return to.coerceIn(0, ids.lastIndex)
     }
 
     /**
@@ -4177,36 +4145,15 @@ internal fun PersonalCanvas(
                     else spring(dampingRatio = 0.82f, stiffness = 700f),
                     label = "canvasBlockShift-$index"
                 )
-                // The LANDING GHOST: a bar of the carried block's own height at
-                // the edge it will land on, so the page says where — and WHAT —
-                // is about to arrive (v397).
-                val targetIdx = rowDrag.targetIndex(state.blockIds.lastIndex)
-                val showDropLine = rowDrag.isDragging && !isDragged &&
-                    !block.isAudio && !state.keepsChecklistRows &&
-                    index == targetIdx && rowDrag.fromIndex != targetIdx
-
-                // All blocks share the same shift-and-drop-line wrapper.
-                // Photo and text blocks slide to make room when a voice note
-                // is carried; audio and checklist blocks handle their own
-                // shift inside PersonalMovableBlock / PersonalTodoRow.
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        // v389e — EVERY ROW REPORTS ITS OWN HEIGHT, whether it can
-                        // be carried or not. The order's arithmetic is measured
-                        // against the rows the finger passes (see
-                        // PersonalRowDragState.dragBy), and until now only the
-                        // blocks that carry themselves (a print, a voice note, a
-                        // to-do row) reported one — so on a journal page every
-                        // paragraph was charged the carried note's own height,
-                        // and the drop-line ran ahead of the finger. A row that is
-                        // drawn is a row that is measured.
+                        // Every drawn row reports its own height and its own
+                        // place, which is what the carry arithmetic is measured
+                        // against (see PersonalRowDragState.place / measure).
                         .onSizeChanged { measured ->
                             rowDrag.measure(id, measured.height.toFloat())
                         }
-                        // v513 — AND WHERE THE ROW SITS. A drop lands on the row
-                        // the finger is actually over now, not on one counted in
-                        // slots — see PersonalRowDragState.indexAtContent.
                         .onGloballyPositioned { coordinates ->
                             rowDrag.place(
                                 id,
@@ -4215,130 +4162,6 @@ internal fun PersonalCanvas(
                             )
                         }
                         .graphicsLayer { translationY = blockShift }
-                        .then(
-                            if (showDropLine) Modifier.drawWithContent {
-                                // v397 — THE LANDING GHOST.
-                                //
-                                // A bare 2dp bar said "somewhere around here"; a
-                                // ghost of the carried block's OWN height says what
-                                // is landing and exactly how much room it takes —
-                                // the hover preview a page needs when the thing in
-                                // hand is a print being stacked among other prints,
-                                // or a voice note between paragraphs (user request:
-                                // "proper hover preview same pass for voice
-                                // recorder in animation, and proper preview of
-                                // photo stacing with snap"). The band sits at the
-                                // TOP of the target on the way down and at its
-                                // BOTTOM on the way up, so the preview is always on
-                                // the side the block is travelling towards.
-                                //
-                                // drawWithContent so it sits ON TOP of the text,
-                                // not behind it.
-                                drawContent()
-                                val band = rowDrag.carriedHeight.coerceIn(0f, size.height)
-                                val lead = if (rowDrag.goingDown) 0f else size.height - band
-                                if (band > 0f) {
-                                    // ── v400 — THE PREVIEW IS THE THING, NOT A BAR ──
-                                    //
-                                    // This used to be a flat wash with a solid
-                                    // rule on the landing edge, which said "about
-                                    // here" and nothing more. It is now the
-                                    // carried block's own SHAPE, sketched: a light
-                                    // fill inside a dashed outline of exactly the
-                                    // room it will take, so the page previews what
-                                    // is arriving (a waveform strip, a paragraph,
-                                    // a print) before it lands (user request:
-                                    // "instead of that color line use proper preview
-                                    // and smooth animations").
-                                    val radius = CornerRadius(10.dp.toPx())
-                                    val hairline = 1.2.dp.toPx()
-                                    drawRoundRect(
-                                        color = accent.copy(alpha = 0.09f),
-                                        topLeft = Offset(0f, lead),
-                                        size = Size(size.width, band),
-                                        cornerRadius = radius
-                                    )
-                                    drawRoundRect(
-                                        color = accent.copy(alpha = 0.5f),
-                                        topLeft = Offset(hairline, lead + hairline),
-                                        size = Size(
-                                            (size.width - hairline * 2f).coerceAtLeast(0f),
-                                            (band - hairline * 2f).coerceAtLeast(0f)
-                                        ),
-                                        cornerRadius = radius,
-                                        style = Stroke(
-                                            width = hairline,
-                                            pathEffect = PathEffect.dashPathEffect(
-                                                floatArrayOf(7.dp.toPx(), 6.dp.toPx())
-                                            )
-                                        )
-                                    )
-                                    // ── v403 — NO RULE, AND A PRINT'S OWN CELL ────
-                                    //
-                                    // The solid rule that sat on the landing edge
-                                    // is gone: a line says "somewhere on this
-                                    // edge", and the member asked for the THING
-                                    // instead ("stop using lines for preview").
-                                    // What is left is the dashed room the block
-                                    // will take.
-                                    //
-                                    // And when a PRINT is being brought against
-                                    // another print, the room drawn is the CELL
-                                    // it will take in the row the two are about
-                                    // to become — the half of the measure on the
-                                    // side the finger is travelling — so the page
-                                    // answers "these two go together" while the
-                                    // print is still in the air.
-                                    //
-                                    // Both are drawn INSIDE the room's own
-                                    // branch, so `radius`, `hairline`, `lead`
-                                    // and `band` are the room they describe.
-                                    val carriedRef = rowDrag.draggedId
-                                    val carriedIsPrint =
-                                        carriedRef?.let { state.block(it)?.isPhoto } == true
-                                    // v513 — a print that was pulled OUT of the
-                                    // stack is not taking a cell in it any more,
-                                    // so the cell preview stands down and the
-                                    // ordinary room is drawn instead (see
-                                    // PersonalRowDragState.pulledOut).
-                                    if (carriedIsPrint && carriedRef != id && block.isPhoto &&
-                                        !rowDrag.pulledOut
-                                    ) {
-                                        val cellWidth = (size.width * 0.5f).coerceAtLeast(1f)
-                                        // v406 — the SAME value the drop uses
-                                        // (see printDropIndex), so the dashed
-                                        // cell in the air is the cell taken.
-                                        val cellLeft =
-                                            if (rowDrag.takeLeftCell) 0f
-                                            else size.width - cellWidth
-                                        drawRoundRect(
-                                            color = accent.copy(alpha = 0.10f),
-                                            topLeft = Offset(cellLeft, lead),
-                                            size = Size(cellWidth, band),
-                                            cornerRadius = radius
-                                        )
-                                        drawRoundRect(
-                                            color = accent.copy(alpha = 0.55f),
-                                            topLeft = Offset(
-                                                cellLeft + hairline,
-                                                lead + hairline
-                                            ),
-                                            size = Size(
-                                                (cellWidth - hairline * 2f).coerceAtLeast(0f),
-                                                (band - hairline * 2f).coerceAtLeast(0f)
-                                            ),
-                                            cornerRadius = radius,
-                                            style = Stroke(
-                                                width = hairline,
-                                                pathEffect = PathEffect.dashPathEffect(
-                                                    floatArrayOf(7.dp.toPx(), 6.dp.toPx())
-                                                )
-                                            )
-                                        )
-                                    }
-                                }
-                            } else Modifier
-                        )
                 ) {
                 if (block.isPhoto) {
                     // ── THE ROW OF PRINTS (v389d, v396) ───────────────────

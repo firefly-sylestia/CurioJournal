@@ -648,7 +648,12 @@ internal fun PersonalMovableBlock(
     // that changes at cell lines only), so the glide is one animation per step
     // rather than one per frame.
     val sideShift by animateFloatAsState(
-        targetValue = if (sideFollow && isDragged) drag.flipSteps * (blockWidth + gapPx) else 0f,
+        // v514 — ONE CELL IS THE PREVIEW, the drop does the rest. Charging every
+        // notch a full cell put the picture up to two cells off its row while it
+        // was still in the air, which read as it sliding out of the page.
+        targetValue = if (sideFollow && isDragged) {
+            drag.flipSteps.coerceIn(-1, 1) * (blockWidth + gapPx)
+        } else 0f,
         animationSpec = spring(dampingRatio = 0.78f, stiffness = 620f),
         label = "movableBlockSideShift"
     )
@@ -722,11 +727,22 @@ internal fun PersonalMovableBlock(
                 // v513 — a pulled-out picture follows the finger; a stepping one
                 // glides a cell at a time. Both are read HERE (the pull straight
                 // from the gesture's own state), so neither recomposes a row.
+                // v514 — AND NOTHING IN HAND LEAVES THE PAGE.
+                //
+                // The pull used to follow the finger as far as it went, and the
+                // sideways step was charged a whole cell per notch, so a picture
+                // picked up near an edge slid out of the window and stayed there
+                // until it was dropped (reports: "it also moves out of screen",
+                // "in its own lane … it floats with a bar to its right and also
+                // goes out of screen"). Both are clamped to the print's own
+                // width now: the thing being held leans out of its slot far
+                // enough to read as "out of the row", and never off the page.
+                val sideRoom = (blockWidth * 0.9f).coerceAtLeast(0f)
                 translationX = when {
                     !sideFollow -> 0f
                     !isDragged -> 0f
-                    drag.pulledOut -> drag.pullOffsetX
-                    else -> sideShift
+                    drag.pulledOut -> drag.pullOffsetX.coerceIn(-sideRoom, sideRoom)
+                    else -> sideShift.coerceIn(-sideRoom, sideRoom)
                 }
                 scaleX = heldSize
                 scaleY = heldSize

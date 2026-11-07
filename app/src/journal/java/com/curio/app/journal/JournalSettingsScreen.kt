@@ -86,7 +86,6 @@ fun JournalSettingsScreen(
     var reminder by remember {
         mutableStateOf(AppPreferences.isJournalGoalReminderEnabled(context))
     }
-
     Column(
         modifier = Modifier
             .fillMaxSize()
