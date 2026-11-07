@@ -565,7 +565,11 @@ internal fun PersonalWritingPage(
                     Intent.FLAG_GRANT_READ_URI_PERMISSION
                 )
             }
-            editor.insertPhoto(uri.toString())
+            // v517 — ONE DOOR, TWO KINDS. The picker offers pictures and clips;
+            // the MIME type decides which block the URI becomes, so the page
+            // needed no second button in the dock.
+            val isClip = context.contentResolver.getType(uri)?.startsWith("video/") == true
+            if (isClip) editor.insertVideo(uri.toString()) else editor.insertPhoto(uri.toString())
         }
     }
 
@@ -1117,7 +1121,7 @@ internal fun PersonalWritingPage(
                 ) {
                     PersonalToolDock(
                         state = editor,
-                        onPickPhoto = { photoPicker.launch(arrayOf("image/*")) },
+                        onPickPhoto = { photoPicker.launch(arrayOf("image/*", "video/*")) },
                         showJournalTools = showJournalTools,
                         journalAccent = journalAccent,
                         onJournalAccent = onJournalAccent,

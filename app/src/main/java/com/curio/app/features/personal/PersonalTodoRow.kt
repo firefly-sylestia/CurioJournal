@@ -721,7 +721,11 @@ internal fun PersonalMovableBlock(
                     drag.anchor(id, top)
                 }
             }
-            .zIndex(if (isDragged) 1f else 0f)
+            // v517 — THE HELD BLOCK IS THE TOP LAYER. At 1f it shared a plane
+            // with its neighbours, so a carried print could slide UNDER a text
+            // block or another print it was passing (the member: "sometimes the
+            // holded image layer is behind the texts or behind a certain image").
+            .zIndex(if (isDragged) 10f else 0f)
             .graphicsLayer {
                 translationY = shift + (if (drag.draggedId == id) drag.travelY else 0f)
                 // v513 — a pulled-out picture follows the finger; a stepping one

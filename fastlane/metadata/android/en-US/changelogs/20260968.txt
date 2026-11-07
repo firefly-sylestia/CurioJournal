@@ -1,0 +1,6 @@
+ADD:
+- Journal: **video on the page.** The page's photo door now takes clips too (the file's type decides which block it becomes), and a clip lands as a real block: its first frame in a 16:9 frame, a play mark, tap to expand full screen, and a small × in the corner to remove it. It moves like any other block (hold and drag).
+- Journal: the held block is now the **top layer**, so a picture being carried can no longer slip under a paragraph or another print while it travels.
+
+NOTE:
+- A clip needs a still to show before it plays; on some devices that still appears a moment after the block lands.

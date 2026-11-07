@@ -201,9 +201,18 @@ data class PersonalBlock(
      * only place all four can read it from. `false` is the default and is what
      * every page written before this version means, so the codec omits it.
      */
-    val photoSeparated: Boolean = false
+    val photoSeparated: Boolean = false,
+    /**
+     * v517 — AN ATTACHED VIDEO's content URI (persisted read permission), or
+     * null. A video block has no text of its own: it is the clip, drawn as a
+     * still that plays where it sits and opens full screen on a tap.
+     */
+    val video: String? = null
 ) {
     val isPhoto: Boolean get() = photo != null
+
+    /** True for a video block. */
+    val isVideo: Boolean get() = video != null
 
     /** True for a voice-note block (a recording, no text of its own). */
     val isAudio: Boolean get() = audio != null
@@ -218,11 +227,11 @@ data class PersonalDoc(
 ) {
     /** True when there is nothing worth saving (empty text, no photos). */
     val isEmpty: Boolean
-        get() = blocks.none { it.isPhoto || it.text.isNotBlank() }
+        get() = blocks.none { it.isPhoto || it.isVideo || it.text.isNotBlank() }
 
     /** Plain text of the canvas — used for previews, search and word counts. */
     val plainText: String
-        get() = blocks.filterNot { it.isPhoto }
+        get() = blocks.filterNot { it.isPhoto || it.isVideo }
             .joinToString("\n\n") { it.text }
             .trim()
 
@@ -354,6 +363,7 @@ object PersonalDocCodec {
             b.addProperty("id", block.id)
             b.addProperty("text", block.text)
             b.addProperty("photo", block.photo)
+            block.video?.let { clip -> b.addProperty("vid", clip) }
             b.addProperty("caption", block.caption)
             if (block.photoSize.isNotEmpty()) b.addProperty("ps", block.photoSize)
             // v401 — the print's own little label. Every key is omitted at its
@@ -458,6 +468,7 @@ object PersonalDocCodec {
                 text = text,
                 runs = runs,
                 photo = b.get("photo")?.takeIf { !it.isJsonNull }?.asString,
+                video = b.get("vid")?.takeIf { !it.isJsonNull }?.asString,
                 caption = b.str("caption"),
                 // v389 — absent on an older note, which reads as a page-wide
                 // print: exactly how that note already looked.

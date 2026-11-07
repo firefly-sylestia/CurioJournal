@@ -2844,6 +2844,11 @@ internal class PersonalEditorState(initial: PersonalDoc) {
         insertAtCaret { PersonalBlock(id = newBlockId(), photo = uri) }
     }
 
+    /** v517 — a clip lands like a print: at the caret, as a block of its own. */
+    fun insertVideo(uri: String) {
+        insertAtCaret { PersonalBlock(id = newBlockId(), video = uri) }
+    }
+
     /**
      * v389 — a finished VOICE NOTE lands at the caret exactly like a picture:
      * what came before, the recording (its file, its length, its waveform), and
@@ -4429,6 +4434,22 @@ internal fun PersonalCanvas(
                                 onOpen = { bounds -> onOpenPhoto(block.photo.orEmpty(), bounds) }
                             )
                         }
+                    }
+                } else if (block.isVideo) {
+                    // v517 — A CLIP IN THE PAGE. Movable like every other block,
+                    // carrying its own remove door, with the player inside it.
+                    PersonalMovableBlock(
+                        id = id, index = index, state = state,
+                        drag = rowDrag, enabled = enabled,
+                        heldLift = 14.dp
+                    ) {
+                        PersonalVideoBlock(
+                            uri = block.video.orEmpty(),
+                            ink = ink,
+                            accent = accent,
+                            enabled = enabled,
+                            onRemove = { state.removeBlock(id) }
+                        )
                     }
                 } else if (block.isAudio) {
                     // v389 — a voice note in the page: the waveform is the block, and
