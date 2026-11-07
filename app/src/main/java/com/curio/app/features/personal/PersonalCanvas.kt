@@ -4218,45 +4218,68 @@ internal fun PersonalCanvas(
                                 coordinates.size.height.toFloat()
                             )
                         }
-                        .graphicsLayer { translationY = blockShift }
-                        // ── v522 — THE HOLE THE PRINT WILL FILL ────────────
+                        // ── v526 — THE HOLE IS DRAWN WHERE THE HOLE IS ─────
                         //
-                        // The rows now slide apart while a print is carried
-                        // (see `rowHoldsCarried`), which is the space; this is
-                        // what makes it read as a PLACE rather than a gap — the
-                        // carried print's own silhouette, sunk into the paper
-                        // with a soft shadow under its edge. Nothing dashed, no
-                        // bar: only the shape and its shadow, exactly the "soft
-                        // shadow sits in the space" the member asked for.
+                        // v522 drew the landing silhouette UNDER the row's own
+                        // translation and ON TOP of its content, which is exactly
+                        // the three things the member saw: it slid with the row
+                        // instead of staying in the space ("showing wrong
+                        // place"), it covered the pictures it was meant to sit
+                        // between ("the preview shadow shows above the images"),
+                        // and its height was the carried print's rather than the
+                        // row's, so it spilled onto whatever was below it
+                        // ("wrong view").
+                        //
+                        // Fixed by where in the chain it is drawn, and in what
+                        // order:
+                        //
+                        //  · OUTSIDE `graphicsLayer`, so the row's shift does not
+                        //    carry it — the row slides away and the silhouette
+                        //    stays in the slot the row left, which IS the hole.
+                        //  · BEFORE `drawContent()`, so it is paper under the
+                        //    row rather than a wash over it.
+                        //  · No taller than the row it sits in, so it can never
+                        //    reach the next row's prints.
                         .then(
                             if (landingHere) Modifier.drawWithContent {
-                                drawContent()
-                                val room = rowDrag.carriedHeight
-                                if (room > 0f) {
-                                    val radius = CornerRadius(14.dp.toPx())
+                                // The space the row left is the row's own height
+                                // at most — never the carried print's, which may
+                                // be taller than the row that is moving out of
+                                // its way.
+                                val room = rowDrag.carriedHeight.coerceAtMost(size.height)
+                                if (room > 0f && size.height > 0f) {
+                                    val radius = CornerRadius(12.dp.toPx())
                                     val width = size.width
-                                    // The shadow is stacked from wide and faint to
-                                    // narrow and firmer — a blur, drawn by hand,
-                                    // so no layer or RenderEffect is needed.
-                                    listOf(10.dp to 0.045f, 6.dp to 0.065f, 3.dp to 0.09f)
+                                    // The shadow is stacked wide-and-faint to
+                                    // narrow-and-firmer: a blur drawn by hand, so
+                                    // no layer or RenderEffect is needed. It is
+                                    // drawn INSIDE the room, not below it, so the
+                                    // soft edge belongs to the hole.
+                                    listOf(7.dp to 0.040f, 4.dp to 0.055f, 2.dp to 0.075f)
                                         .forEach { (behind, alpha) ->
                                             val step = behind.toPx()
+                                                .coerceAtMost((room - 1f).coerceAtLeast(0f))
                                             drawRoundRect(
                                                 color = Color.Black.copy(alpha = alpha),
                                                 topLeft = Offset(0f, step),
-                                                size = Size(width, room),
+                                                size = Size(
+                                                    width,
+                                                    (room - step).coerceAtLeast(1f)
+                                                ),
                                                 cornerRadius = radius
                                             )
                                         }
                                     drawRoundRect(
-                                        color = accent.copy(alpha = 0.075f),
+                                        color = accent.copy(alpha = 0.055f),
                                         topLeft = Offset(0f, 0f),
                                         size = Size(width, room),
                                         cornerRadius = radius
                                     )
                                 }
+                                drawContent()
                             } else Modifier
                         )
+                        .graphicsLayer { translationY = blockShift }
                 ) {
                 if (block.isPhoto) {
                     // ── THE ROW OF PRINTS (v389d, v396) ───────────────────
@@ -4345,16 +4368,42 @@ internal fun PersonalCanvas(
                         // while the member is inside that row — its caption in
                         // hand — which is the "show it below a certain image when
                         // that's selected" they asked for.
-                        if (enabled && state.captionFocusedId != null &&
-                            row.contains(state.captionFocusedId)
-                        ) {
+                        // ── v526 — AND THE LINE IT MADE CAN BE TAKEN BACK ──
+                        //
+                        // The door writes a line under the row and then — because
+                        // it only showed while the print's caption had the caret —
+                        // it disappeared the instant the new line took the caret,
+                        // leaving the member with a blank line and no way to undo
+                        // it. The door now stays for that line too (an empty line
+                        // directly under the row, with the caret in it) and carries
+                        // a cross that removes it. One press writes, one press
+                        // takes it back, and neither is a guess.
+                        val rowAnchor = state.blockIds.indexOf(row.last())
+                        val lineUnder = state.blockIds.getOrNull(rowAnchor + 1)
+                            ?.takeIf { candidate ->
+                                val under = state.block(candidate) ?: return@takeIf false
+                                !under.isPhoto && !under.isAudio &&
+                            state.text(candidate).isBlank()
+                            }
+                        val doorOpen = enabled && (
+                            (state.captionFocusedId != null &&
+                                row.contains(state.captionFocusedId)) ||
+                                (lineUnder != null && state.focusedId == lineUnder)
+                            )
+                        if (doorOpen) {
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .padding(top = 2.dp)
                                     .clip(RoundedCornerShape(8.dp))
-                                    .clickable { state.insertLineAfter(row.last()) }
-                                    .padding(horizontal = 6.dp, vertical = 7.dp),
+                                    .clickable {
+                                        // Only writes when there is nothing there
+                                        // to write into.
+                                        if (lineUnder == null) {
+                                            state.insertLineAfter(row.last())
+                                        }
+                                    }
+                                    .padding(start = 6.dp, end = 2.dp, top = 5.dp, bottom = 5.dp),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 Text(
@@ -4365,9 +4414,56 @@ internal fun PersonalCanvas(
                                 Spacer(Modifier.width(7.dp))
                                 Text(
                                     "Write here",
+                                    modifier = Modifier.weight(1f),
                                     style = MaterialTheme.typography.labelSmall,
                                     color = ink.copy(alpha = 0.42f)
                                 )
+                                if (lineUnder != null) {
+                                    val close = remember(row.last()) { CurioMenuToggle() }
+                                    Box {
+                                        Surface(
+                                            onClick = { close.buttonClick() },
+                                            shape = CircleShape,
+                                            color = Color.Transparent,
+                                            modifier = Modifier.size(26.dp)
+                                        ) {
+                                            Box(
+                                                Modifier.fillMaxSize(),
+                                                contentAlignment = Alignment.Center
+                                            ) {
+                                                CurioIcon(
+                                                    CurioIcons.Close,
+                                                    "Remove this line",
+                                                    tint = ink.copy(alpha = 0.40f),
+                                                    size = 13.dp
+                                                )
+                                            }
+                                        }
+                                        DropdownMenu(
+                                            expanded = close.open,
+                                            onDismissRequest = { close.dismissed() },
+                                            properties = MenuKeepKeyboardProperties
+                                        ) {
+                                            DropdownMenuItem(
+                                                text = {
+                                                    Text(
+                                                        "Remove this line",
+                                                        style = MaterialTheme.typography
+                                                            .bodyMedium.copy(
+                                                                fontFamily = WritingFontFamily
+                                                            ),
+                                                        color = MaterialTheme.colorScheme
+                                                            .onSurface
+                                                    )
+                                                },
+                                                onClick = {
+                                                    close.close()
+                                                    state.removeBlock(lineUnder)
+                                                }
+                                            )
+                                        }
+                                    }
+                                }
                             }
                         }
                         }
