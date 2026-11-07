@@ -4280,10 +4280,16 @@ internal fun PersonalCanvas(
                                 }
                             }
                         }
-                        // v514 — WRITE HERE. A quiet door under the row, so a
-                        // line of words can go between two groups (and split the
-                        // row) without hunting for the end of the page.
-                        if (enabled) {
+                        // v519 — THE DOOR BELONGS TO THE PICTURE YOU ARE IN.
+                        //
+                        // It used to sit under EVERY row of prints, which read as
+                        // furniture rather than an offer. It now appears only
+                        // while the member is inside that row — its caption in
+                        // hand — which is the "show it below a certain image when
+                        // that's selected" they asked for.
+                        if (enabled && state.captionFocusedId != null &&
+                            row.contains(state.captionFocusedId)
+                        ) {
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()

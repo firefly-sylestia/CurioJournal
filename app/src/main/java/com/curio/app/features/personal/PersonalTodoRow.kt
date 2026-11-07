@@ -177,6 +177,18 @@ internal class PersonalRowDragState {
     val pulledOut: Boolean get() = abs(travelX.floatValue) >= PULL_OUT_PX
 
     /**
+     * v519 — THE RAW SIDEWAYS TRAVEL, for the picture's own layer.
+     *
+     * The step ([flipSteps]) only changes at cell lines, which is right for what
+     * the DROP does and wrong for what the hand sees: below one cell the picture
+     * did not move at all, so a held print felt nailed to the middle of the page
+     * (the report: "it doesnt go to left or right it stays on tehh middle
+     * stuck"). The layer follows this value directly, clamped to the print's own
+     * width, and the step still decides the cell on release.
+     */
+    val travelXVisual: Float get() = travelX.floatValue
+
+    /**
      * THE SIDEWAYS OFFSET A PULLED-OUT BLOCK WEARS.
      *
      * Read only inside `graphicsLayer` (see PersonalMovableBlock), so following
@@ -741,12 +753,15 @@ internal fun PersonalMovableBlock(
                 // goes out of screen"). Both are clamped to the print's own
                 // width now: the thing being held leans out of its slot far
                 // enough to read as "out of the row", and never off the page.
+                // v519 — IT MOVES UNDER THE FINGER. One clamp, one value: the
+                // picture leans exactly as far as the hand goes, never further
+                // than its own width (so it cannot leave the page), and the step
+                // is no longer what the eye is waiting for.
                 val sideRoom = (blockWidth * 0.9f).coerceAtLeast(0f)
-                translationX = when {
-                    !sideFollow -> 0f
-                    !isDragged -> 0f
-                    drag.pulledOut -> drag.pullOffsetX.coerceIn(-sideRoom, sideRoom)
-                    else -> sideShift.coerceIn(-sideRoom, sideRoom)
+                translationX = if (sideFollow && isDragged) {
+                    drag.travelXVisual.coerceIn(-sideRoom, sideRoom)
+                } else {
+                    0f
                 }
                 scaleX = heldSize
                 scaleY = heldSize

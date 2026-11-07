@@ -1,0 +1,3 @@
+FIX:
+- Journal: **a held picture follows your finger sideways**, immediately and continuously, clamped to its own width so it cannot leave the page. It used to wait for a whole cell of travel before moving at all, which felt like it was stuck in the middle.
+- Journal: **"Write here" now appears only under the picture row you are working in** (its caption in hand), instead of under every row of prints.
