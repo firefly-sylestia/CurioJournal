@@ -1,2 +1,5 @@
 ADD:
 - Journal: **the space a carried picture will fill is now drawn.** While you hold a print, the row it is heading for shows its silhouette sunk into the paper with a soft shadow under the edge — no dashed lines, no bar, just the place it will land.
+
+FIX:
+- Journal: **a picture now comes away when you mean it.** The hold is a fifth of a second instead of the platform's half second, and every pixel your thumb moves is followed from the first one, so a print no longer sits still while you are already pulling at it.
