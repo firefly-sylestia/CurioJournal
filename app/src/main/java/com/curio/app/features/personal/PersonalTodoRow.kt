@@ -9,6 +9,7 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.drag
 import androidx.compose.foundation.gestures.waitForUpOrCancellation
@@ -407,6 +408,28 @@ internal class PersonalRowDragState {
         private set
     var landing by mutableFloatStateOf(1f)
         private set
+
+    /**
+     * v530 — THE PRINT THE MEMBER HAS PICKED UP, WITHOUT A FINGER ON IT.
+     *
+     * A press-and-hold on a picture fought the page: the hold fired before the
+     * scroll had decided what the finger meant, so dragging down the page over
+     * a print picked it up instead of scrolling. Picking a print up is now a
+     * TAP — the print lifts and waits — and only then does a drag move it. A
+     * finger that lands on a picture to scroll never arms anything, and the
+     * second tap (or the drop) puts it back down.
+     */
+    var armedId by mutableStateOf<String?>(null)
+        private set
+
+    fun arm(id: String, index: Int, slotStride: Float, fingerRootY: Float) {
+        begin(id, index, slotStride, fingerRootY)
+        armedId = id
+    }
+
+    fun disarm() {
+        armedId = null
+    }
 
     /**
      * v389e — WHERE THE FINGER IS, in the window's own pixels.
@@ -839,43 +862,99 @@ internal fun PersonalMovableBlock(
                     // fifth of a second and then the finger is followed from
                     // where it is (see [detectHoldThenDrag]), which is the whole
                     // difference between "it resists" and "it came with me".
-                    detectHoldThenDrag(
-                        holdMillis = LIFT_HOLD_MS,
-                        onStart = { offset ->
-                            if (blockHeight > 0f) {
-                                drag.begin(
-                                    id, index, blockHeight + gapPx,
-                                    blockRootTop + offset.y
+                    // ── v530 — TAP TO PICK UP, THEN DRAG ─────────────
+                    //
+                    // Not "hold to pick up": a hold is the same gesture as the
+                    // beginning of a scroll, so the page lost every drag that
+                    // started on a picture. A TAP lifts the print and leaves it
+                    // standing (armed); while it stands, the finger moves it and
+                    // nothing else; a second tap or the drop puts it down. A
+                    // finger that only means to scroll never arms anything.
+                    // Only a PICTURE is picked up this way: a tap on words is
+                    // the member putting their caret in them, and arming a line
+                    // of text would make the next scroll drag the paragraph.
+                    // The words and the voice notes keep the hold they had.
+                    if (state.block(id)?.isPhoto != true) {
+                        detectDragGesturesAfterLongPress(
+                            onDragStart = { offset ->
+                                if (blockHeight > 0f) {
+                                    drag.begin(
+                                        id, index, blockHeight + gapPx,
+                                        blockRootTop + offset.y
+                                    )
+                                }
+                            },
+                            onDrag = { change, amount ->
+                                change.consume()
+                                drag.dragBy(
+                                    amount.x, amount.y,
+                                    state.blockIds, state.blockIds.lastIndex
                                 )
-                            }
-                        },
-                        onDrag = { change, amount ->
-                            change.consume()
-                            drag.dragBy(amount.x, amount.y, state.blockIds, state.blockIds.lastIndex)
-                        },
-                        onEnd = {
-                            // v513 — ONE DROP, ONE EDIT.
-                            //
-                            // The block is named by id, not by the slot it started
-                            // in: a picture can trade cells inside its row on the
-                            // way down, and the finger's row is the landing (see
-                            // PersonalEditorState.dropBlock, which also applies
-                            // the sideways steps and the snap preference).
-                            drag.draggedId?.let { held ->
-                                state.dropBlock(
-                                    id = held,
-                                    to = drag.targetIndex(state.blockIds.lastIndex),
-                                    takeLeft = drag.takeLeftCell,
-                                    flip = drag.flipSteps
+                            },
+                            onDragEnd = {
+                                drag.draggedId?.let { held ->
+                                    state.dropBlock(
+                                        id = held,
+                                        to = drag.targetIndex(state.blockIds.lastIndex),
+                                        takeLeft = drag.takeLeftCell,
+                                        flip = drag.flipSteps
+                                    )
+                                }
+                                drag.commit()
+                                scope.launch { drag.settle(id) }
+                            },
+                            onDragCancel = { drag.reset() }
+                        )
+                    } else if (drag.armedId == id) {
+                        detectDragGestures(
+                            onDragStart = { offset ->
+                                if (blockHeight > 0f) {
+                                    drag.begin(
+                                        id, index, blockHeight + gapPx,
+                                        blockRootTop + offset.y
+                                    )
+                                }
+                            },
+                            onDrag = { change, amount ->
+                                change.consume()
+                                drag.dragBy(
+                                    amount.x, amount.y,
+                                    state.blockIds, state.blockIds.lastIndex
                                 )
+                            },
+                            onDragEnd = {
+                                // One drop, one edit (see the note this came
+                                // from): the finger's row is the landing, and
+                                // the commit is what puts the print down.
+                                drag.draggedId?.let { held ->
+                                    state.dropBlock(
+                                        id = held,
+                                        to = drag.targetIndex(state.blockIds.lastIndex),
+                                        takeLeft = drag.takeLeftCell,
+                                        flip = drag.flipSteps
+                                    )
+                                }
+                                drag.commit()
+                                drag.disarm()
+                                scope.launch { drag.settle(id) }
+                            },
+                            onDragCancel = {
+                                drag.reset()
+                                drag.disarm()
                             }
-                            // v397 — commit, then slide the last few pixels home
-                            // (see PersonalRowDragState.settle).
-                            drag.commit()
-                            scope.launch { drag.settle(id) }
-                        },
-                        onCancel = { drag.reset() }
-                    )
+                        )
+                    } else {
+                        detectTapGestures(
+                            onTap = { offset ->
+                                if (blockHeight > 0f) {
+                                    drag.arm(
+                                        id, index, blockHeight + gapPx,
+                                        blockRootTop + offset.y
+                                    )
+                                }
+                            }
+                        )
+                    }
                 }
             )
     ) {
