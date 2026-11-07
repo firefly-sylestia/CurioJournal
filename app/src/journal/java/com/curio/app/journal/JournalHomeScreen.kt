@@ -392,23 +392,72 @@ private fun DayBlock(
             .padding(horizontal = 22.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
-        // THE DATE IS ONE LINE — day, month and year at the same size, on the
-        // same baseline. The numeral used to be a 76sp slab with the month
-        // tucked beside it, which read as two unrelated numbers and left the
-        // year stranded in the header ("the dates look small and unnoticed",
-        // "the year is too [small]", "place the year in the same row of date
-        // and month"). One formatted string cannot misalign: it is the day the
-        // member reads, in the order their own locale writes it.
-        Text(
-            date.format(DateTimeFormatter.ofPattern("d MMMM yyyy", locale)),
-            style = MaterialTheme.typography.displaySmall.copy(
-                fontFamily = FrauncesFontFamily,
-                fontWeight = FontWeight.SemiBold,
-                fontSize = 40.sp,
-                lineHeight = 44.sp
-            ),
-            color = ink
-        )
+        // ── v528 — THE DAY, SET LIKE A DATE ──────────────────────────────
+        //
+        // One string at one size ("1 November 2026") said the date but read as
+        // a caption: every part of it weighed the same, so nothing was the
+        // subject. The member's own layout, and the better one: the NUMBER is
+        // the subject and takes the size of a headline, the month and the
+        // weekday sit in two lines beside it (what the day IS, what it is
+        // CALLED), and the year stands on the right on its own — the long frame
+        // the rest hangs from, not a third thing in the sentence.
+        val weekday = date.dayOfWeek
+            .getDisplayName(java.time.format.TextStyle.FULL, locale)
+        val monthName = date.month
+            .getDisplayName(java.time.format.TextStyle.FULL, locale)
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = 2.dp),
+            verticalAlignment = Alignment.Top
+        ) {
+            Text(
+                date.dayOfMonth.toString(),
+                style = MaterialTheme.typography.displayLarge.copy(
+                    fontFamily = FrauncesFontFamily,
+                    fontWeight = FontWeight.SemiBold,
+                    fontSize = 76.sp,
+                    lineHeight = 74.sp
+                ),
+                color = ink
+            )
+            Spacer(Modifier.width(12.dp))
+            Column(
+                modifier = Modifier
+                    .weight(1f)
+                    .padding(top = 6.dp),
+                verticalArrangement = Arrangement.spacedBy(1.dp)
+            ) {
+                Text(
+                    monthName,
+                    style = MaterialTheme.typography.titleLarge.copy(
+                        fontFamily = FrauncesFontFamily,
+                        fontWeight = FontWeight.SemiBold,
+                        fontSize = 23.sp,
+                        lineHeight = 26.sp
+                    ),
+                    color = ink.copy(alpha = 0.92f)
+                )
+                Text(
+                    weekday,
+                    style = MaterialTheme.typography.labelLarge.copy(
+                        letterSpacing = 0.9.sp,
+                        fontSize = 13.sp
+                    ),
+                    color = accentInk.copy(alpha = 0.68f)
+                )
+            }
+            Text(
+                date.year.toString(),
+                style = MaterialTheme.typography.titleMedium.copy(
+                    fontFamily = FrauncesFontFamily,
+                    fontWeight = FontWeight.Medium,
+                    fontSize = 18.sp,
+                    letterSpacing = 1.2.sp
+                ),
+                color = ink.copy(alpha = 0.34f)
+            )
+        }
 
         WeekDates(
             today = today,
@@ -431,8 +480,10 @@ private fun DayBlock(
         if (habit.isNotEmpty()) {
             Text(
                 habit,
-                style = MaterialTheme.typography.labelMedium,
-                color = ink.copy(alpha = 0.45f)
+                style = MaterialTheme.typography.labelMedium.copy(
+                    letterSpacing = 0.2.sp
+                ),
+                color = ink.copy(alpha = 0.58f)
             )
         }
     }
