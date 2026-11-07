@@ -819,7 +819,7 @@ internal fun PersonalMovableBlock(
                 // v525 — the settle the just-dropped print wears (see
                 // PersonalRowDragState.landing). Scale only: nothing about the
                 // layout moves after the finger is up.
-                val settle = if (landingId == id) landing else 1f
+                val settle = if (drag.landingId == id) drag.landing else 1f
                 scaleX = heldSize * settle
                 scaleY = heldSize * settle
                 rotationZ = heldAngle
