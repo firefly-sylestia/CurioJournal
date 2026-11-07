@@ -1,6 +1,7 @@
 package com.curio.app.journal
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -157,7 +158,6 @@ fun JournalHomeScreen(
             item("greeting") {
                 GreetingHead(
                     name = name,
-                    year = today.toLocalDate().year.toString(),
                     accentInk = accentInk,
                     ink = ink,
                     onOpenSettings = onOpenSettings
@@ -201,13 +201,21 @@ fun JournalHomeScreen(
                             color = accentInk.copy(alpha = 0.75f)
                         )
                         Spacer(Modifier.weight(1f))
-                        if (todayPages.size > 1) {
-                            Text(
-                                "${todayPages.size} pages",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = ink.copy(alpha = 0.4f)
-                            )
-                        }
+                        // v516 — ANOTHER PAGE FOR THE SAME DAY. The day is a
+                        // container, not a single sheet: this starts a fresh page
+                        // on today's date without touching the one already
+                        // written.
+                        Text(
+                            if (todayPages.isEmpty()) "Start" else "+ New page",
+                            style = MaterialTheme.typography.labelMedium.copy(
+                                fontWeight = FontWeight.SemiBold
+                            ),
+                            color = accentInk.copy(alpha = 0.8f),
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(50))
+                                .clickable { onOpenDay(today, null) }
+                                .padding(horizontal = 10.dp, vertical = 4.dp)
+                        )
                     }
                     TodayWriting(
                         pages = todayPages,
@@ -308,60 +316,52 @@ private fun FloatingDoor(
 @Composable
 private fun GreetingHead(
     name: String,
-    year: String,
     accentInk: Color,
     ink: Color,
     onOpenSettings: () -> Unit
 ) {
-    Row(
+    Column(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(start = 22.dp, end = 14.dp, top = 4.dp),
-        verticalAlignment = Alignment.Top
+            .padding(start = 22.dp, end = 14.dp, top = 0.dp)
     ) {
-        Column(modifier = Modifier.weight(1f)) {
-            Text(
-                if (name.isBlank()) "Hello" else "Hello, $name",
-                style = MaterialTheme.typography.displaySmall.copy(
-                    fontFamily = FrauncesFontFamily,
-                    fontWeight = FontWeight.SemiBold,
-                    fontSize = 36.sp,
-                    lineHeight = 40.sp
-                ),
-                color = ink
-            )
-            Spacer(Modifier.height(4.dp))
-            Text(
-                "Anything exciting today?",
-                style = MaterialTheme.typography.titleMedium.copy(
-                    fontFamily = FrauncesFontFamily,
-                    fontWeight = FontWeight.Medium,
-                    fontSize = 18.sp,
-                    lineHeight = 23.sp
-                ),
-                color = accentInk.copy(alpha = 0.82f)
-            )
-        }
-        Column(horizontalAlignment = Alignment.End) {
-            Text(
-                year,
-                style = MaterialTheme.typography.displaySmall.copy(
-                    fontFamily = FrauncesFontFamily,
-                    fontWeight = FontWeight.Medium,
-                    fontSize = 30.sp,
-                    lineHeight = 34.sp
-                ),
-                color = ink.copy(alpha = 0.22f)
-            )
-            IconButton(onClick = onOpenSettings) {
+        // THE GEAR SITS ABOVE THE DATE, at the page's end edge (the member:
+        // "make the settings above the year"). It is the only control up here,
+        // so it gets its own line rather than crowding the greeting.
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.End
+        ) {
+            IconButton(onClick = onOpenSettings, modifier = Modifier.size(36.dp)) {
                 CurioIcon(
                     CurioIcons.Settings,
                     "Settings",
                     tint = ink.copy(alpha = 0.5f),
-                    size = 20.dp
+                    size = 19.dp
                 )
             }
         }
+        Text(
+            if (name.isBlank()) "Hello" else "Hello, $name",
+            style = MaterialTheme.typography.displaySmall.copy(
+                fontFamily = FrauncesFontFamily,
+                fontWeight = FontWeight.SemiBold,
+                fontSize = 34.sp,
+                lineHeight = 38.sp
+            ),
+            color = ink
+        )
+        Spacer(Modifier.height(3.dp))
+        Text(
+            "Anything exciting today?",
+            style = MaterialTheme.typography.titleMedium.copy(
+                fontFamily = FrauncesFontFamily,
+                fontWeight = FontWeight.Medium,
+                fontSize = 17.sp,
+                lineHeight = 22.sp
+            ),
+            color = accentInk.copy(alpha = 0.82f)
+        )
     }
 }
 
@@ -392,40 +392,23 @@ private fun DayBlock(
             .padding(horizontal = 22.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
-        Row(verticalAlignment = Alignment.Bottom) {
-            Text(
-                date.dayOfMonth.toString(),
-                style = MaterialTheme.typography.displayLarge.copy(
-                    fontFamily = FrauncesFontFamily,
-                    fontWeight = FontWeight.SemiBold,
-                    fontSize = 76.sp,
-                    lineHeight = 78.sp
-                ),
-                color = ink
-            )
-            Spacer(Modifier.width(14.dp))
-            Column(
-                modifier = Modifier.padding(bottom = 8.dp),
-                verticalArrangement = Arrangement.spacedBy(1.dp)
-            ) {
-                Text(
-                    date.format(DateTimeFormatter.ofPattern("EEEE", locale)),
-                    style = MaterialTheme.typography.titleSmall.copy(
-                        fontWeight = FontWeight.SemiBold
-                    ),
-                    color = accentInk.copy(alpha = 0.85f)
-                )
-                Text(
-                    date.format(DateTimeFormatter.ofPattern("MMMM", locale)),
-                    style = MaterialTheme.typography.titleLarge.copy(
-                        fontFamily = FrauncesFontFamily,
-                        fontWeight = FontWeight.Medium,
-                        fontSize = 22.sp
-                    ),
-                    color = ink
-                )
-            }
-        }
+        // THE DATE IS ONE LINE — day, month and year at the same size, on the
+        // same baseline. The numeral used to be a 76sp slab with the month
+        // tucked beside it, which read as two unrelated numbers and left the
+        // year stranded in the header ("the dates look small and unnoticed",
+        // "the year is too [small]", "place the year in the same row of date
+        // and month"). One formatted string cannot misalign: it is the day the
+        // member reads, in the order their own locale writes it.
+        Text(
+            date.format(DateTimeFormatter.ofPattern("d MMMM yyyy", locale)),
+            style = MaterialTheme.typography.displaySmall.copy(
+                fontFamily = FrauncesFontFamily,
+                fontWeight = FontWeight.SemiBold,
+                fontSize = 40.sp,
+                lineHeight = 44.sp
+            ),
+            color = ink
+        )
 
         WeekDates(
             today = today,
@@ -437,24 +420,20 @@ private fun DayBlock(
             onOpenDay = onOpenDay
         )
 
-        if (goal > 0 || streak > 0) {
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                if (goal > 0) {
-                    CountPill(
-                        text = "$words of $goal words",
-                        accent = accent,
-                        accentInk = accentInk
-                    )
-                }
-                if (streak > 0) {
-                    CountPill(
-                        text = if (streak == 1) "1-day streak" else "$streak-day streak",
-                        accent = accent,
-                        accentInk = accentInk,
-                        glyph = CurioIcons.LocalFire
-                    )
-                }
-            }
+        // NO PILLS. The counts used to wear an accent-tinted capsule with an
+        // icon, which read as two badges before the day had any words in it
+        // ("better 0 of 500 words, dont like the highlight and pill"). A line of
+        // quiet type says the same thing and gets out of the page's way.
+        val habit = buildList {
+            if (goal > 0) add("$words of $goal words")
+            if (streak > 0) add(if (streak == 1) "1-day streak" else "$streak-day streak")
+        }.joinToString("   ·   ")
+        if (habit.isNotEmpty()) {
+            Text(
+                habit,
+                style = MaterialTheme.typography.labelMedium,
+                color = ink.copy(alpha = 0.45f)
+            )
         }
     }
 }
@@ -534,37 +513,6 @@ private fun WeekDates(
     }
 }
 
-/** A number about the habit, in a small pill — "0 of 500 words", "4-day streak". */
-@Composable
-private fun CountPill(
-    text: String,
-    accent: Color,
-    accentInk: Color,
-    glyph: String? = null
-) {
-    Surface(
-        shape = CircleShape,
-        color = accent.copy(alpha = 0.10f)
-    ) {
-        Row(
-            modifier = Modifier.padding(horizontal = 11.dp, vertical = 6.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(5.dp)
-        ) {
-            if (glyph != null) {
-                CurioIcon(glyph, null, tint = accentInk.copy(alpha = 0.8f), size = 13.dp)
-            }
-            Text(
-                text,
-                style = MaterialTheme.typography.labelSmall.copy(
-                    fontWeight = FontWeight.Medium
-                ),
-                color = accentInk.copy(alpha = 0.9f)
-            )
-        }
-    }
-}
-
 // ── WHAT HAS BEEN WRITTEN ───────────────────────────────────────────────────
 
 /**
@@ -580,12 +528,22 @@ private fun TodayWriting(
 ) {
     when {
         pages.isEmpty() -> {
-            JournalBlankDay(
-                prompt = "Write something about today…",
+            // NOTHING IS DRAWN WHERE NOTHING IS WRITTEN. The old empty state was
+            // a dashed/filled card that looked like a page already waiting, so a
+            // day with no words still read as content (the member: "there should
+            // not be any box if there is nothing").
+            Text(
+                "Write today",
+                style = MaterialTheme.typography.titleMedium.copy(
+                    fontFamily = FrauncesFontFamily,
+                    fontWeight = FontWeight.Medium
+                ),
+                color = personalAccentInk(),
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 22.dp),
-                onClick = onStart
+                    .padding(horizontal = 22.dp)
+                    .clickable(onClick = onStart)
+                    .padding(vertical = 2.dp)
             )
         }
 

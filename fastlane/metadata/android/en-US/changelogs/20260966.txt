@@ -1,0 +1,6 @@
+CHANGED:
+- Home: **the date is one line now** — day, month and year together at 40sp in the display face, so the date is the first thing the page says instead of a number and a year that read as two separate facts.
+- Home: the settings gear sits **above** the date, on its own line at the page's end edge.
+- Home: the word count is **quiet text**, not a pill — “0 of 500 words” and the streak share one muted line with no fill, no tint and no icon.
+- Home: an unwritten day draws **no box at all** — just a bare “Write today” line.
+- Home: **+ New page** beside today's label starts another page on the same day without touching the one already written.
