@@ -369,18 +369,43 @@ internal class PersonalRowDragState {
      * during the settle is never clobbered by the first one's animation.
      */
     suspend fun settle(id: String) {
-        val from = travel.floatValue
-        if (from != 0f) {
-            animate(
-                initialValue = from,
-                targetValue = 0f,
-                animationSpec = spring(dampingRatio = 0.9f, stiffness = 420f)
-            ) { value, _ ->
-                if (draggedId == id) travel.floatValue = value
-            }
+        if (draggedId != id) return
+        // ── v525 — NO SLIDE AFTER THE DROP ─────────────────────────────
+        //
+        // v397 animated whatever travel was left back to zero — but by then the
+        // page had already re-ordered, so the print sat in its NEW slot with the
+        // OLD offset still on it and slid a whole slot past the place the
+        // preview had shown. That slide is what read as "the rows moved again
+        // after I let go". The offset comes off in ONE frame now: the print
+        // appears exactly where the gap and the shadow said it would, and what
+        // is left of the release is the print settling on the paper.
+        travel.floatValue = 0f
+        travelX.floatValue = 0f
+        landingId = id
+        landing = 0.985f
+        animate(
+            initialValue = 0.985f,
+            targetValue = 1f,
+            animationSpec = spring(dampingRatio = 0.55f, stiffness = 500f)
+        ) { value, _ ->
+            if (landingId == id) landing = value
         }
-        if (draggedId == id) reset()
+        if (landingId == id) landingId = null
+        reset()
     }
+
+    /**
+     * v525 — THE PRINT THAT HAS JUST LANDED, and how far its settle has to go.
+     *
+     * Only the block named here wears [landing], so the ease is the dropped
+     * print's own and the rest of the page is perfectly still once the finger
+     * is up — which is the whole complaint ("no row shift visible after the
+     * drop").
+     */
+    var landingId by mutableStateOf<String?>(null)
+        private set
+    var landing by mutableFloatStateOf(1f)
+        private set
 
     /**
      * v389e — WHERE THE FINGER IS, in the window's own pixels.
@@ -791,8 +816,12 @@ internal fun PersonalMovableBlock(
                 } else {
                     0f
                 }
-                scaleX = heldSize
-                scaleY = heldSize
+                // v525 — the settle the just-dropped print wears (see
+                // PersonalRowDragState.landing). Scale only: nothing about the
+                // layout moves after the finger is up.
+                val settle = if (landingId == id) landing else 1f
+                scaleX = heldSize * settle
+                scaleY = heldSize * settle
                 rotationZ = heldAngle
             }
             .then(lifted)

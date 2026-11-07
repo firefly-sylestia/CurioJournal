@@ -77,6 +77,9 @@ import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
+import androidx.compose.animation.core.Animatable
+import androidx.compose.foundation.Canvas
+import kotlinx.coroutines.delay
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.SolidColor
@@ -5270,6 +5273,15 @@ private fun PersonalPrintArrangement(
         // instead of the column's whole width, which is what made a Small and a
         // Half beside it come out the same size.
         val stackedShare = stacked.maxOf { weightOf(it) }
+        // v525 — THE TWO BESIDE THE FRAME ADD UP TO IT.
+        //
+        // Each stacked print kept its own height, so the pair beside a tall
+        // frame ended wherever their two heights did and the three had a
+        // ragged foot. The two share the frame's own height now (less the gap
+        // between them), so the shape closes flush: one frame, and exactly the
+        // frame's height divided beside it.
+        val stackedHeight = ((heightOf(tall) - PRINT_ROW_GAP) /
+            stacked.size.coerceAtLeast(1)).coerceAtLeast(48.dp)
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(PRINT_ROW_GAP),
@@ -5285,7 +5297,7 @@ private fun PersonalPrintArrangement(
                 stacked.forEach { id ->
                     cell(
                         id,
-                        heightOf(id),
+                        stackedHeight,
                         Modifier.fillMaxWidth(weightOf(id) / stackedShare)
                     )
                 }
@@ -5293,8 +5305,16 @@ private fun PersonalPrintArrangement(
         }
         return
     }
-    // FOUR — two lines of two. (The row's limit is four, so nothing longer
-    // arrives; a page with more prints simply starts the next row.)
+    // ── v525 — FOUR IS A SQUARE ──────────────────────────────────────
+    //
+    // Two lines of two used to take each print's OWN weight and height, so four
+    // prints of four sizes made two ragged lines that happened to share a
+    // column — not the square a run of four photographs is. All four cells are
+    // the same cell now (equal weight, one height), which is the shape the
+    // member draws in their head when they add the fourth picture. The height
+    // is the SMALLEST of the four, so a page-height print can never push the
+    // square past the measure it sits in.
+    val squareHeight = ids.minOf { heightOf(it) }
     Column(
         modifier = Modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(PRINT_ROW_GAP)
@@ -5306,8 +5326,8 @@ private fun PersonalPrintArrangement(
                 verticalAlignment = Alignment.Top
             ) {
                 line.forEach { id ->
-                    Box(Modifier.weight(weightOf(id))) {
-                        cell(id, heightOf(id), Modifier.fillMaxWidth())
+                    Box(Modifier.weight(1f)) {
+                        cell(id, squareHeight, Modifier.fillMaxWidth())
                     }
                 }
                 if (line.size == 1) Spacer(Modifier.weight(1f))
@@ -5579,17 +5599,31 @@ private fun PersonalPhotoBlock(
                         // dock's menus used to (see MenuKeepKeyboardProperties).
                         properties = MenuKeepKeyboardProperties
                     ) {
-                        PersonalPhotoSize.entries.forEach { option ->
+                        // ── v525 — THE SIZES ARE SHOWN, NOT SPELLED ──────
+                        //
+                        // The member: *"instead of text small portraights etc,
+                        // use proper icons with preview of the stack"*. Five
+                        // words asked the member to imagine what "Small
+                        // portrait" does to their page. Each row is now the
+                        // print ITSELF at that size — the measure drawn as a
+                        // hairline, the print filled inside it at its own share
+                        // and its own height — so the choice is the shape, and
+                        // each preview grows into place as the menu opens (see
+                        // [PrintSizePreview]), which is the same move the page
+                        // makes when the print changes.
+                        PersonalPhotoSize.entries.forEachIndexed { order, option ->
                             DropdownMenuItem(
-                                text = {
-                                    Text(
-                                        option.label,
-                                        style = MaterialTheme.typography.bodyMedium.copy(
-                                            fontFamily = WritingFontFamily
-                                        ),
-                                        color = MaterialTheme.colorScheme.onSurface
+                                leadingIcon = {
+                                    PrintSizePreview(
+                                        option = option,
+                                        ink = MaterialTheme.colorScheme.onSurface,
+                                        selected = option == size,
+                                        delayMillis = order * 35
                                     )
                                 },
+                                // The preview IS the label; the words stay for a
+                                // screen reader only.
+                                text = {},
                                 trailingIcon = {
                                     if (option == size) {
                                         CurioIcon(
@@ -8315,6 +8349,65 @@ private fun HeadingBadge(level: Int) {
 }
 
 @Composable
+/**
+ * v525 — A SIZE, DRAWN.
+ *
+ * The measure the print will sit in is a hairline rounded box; the print is a
+ * filled box at its own share of that measure and its own height relative to the
+ * tallest size. So "Portrait" is a tall narrow print, "Small" is a short one,
+ * "Page" is the whole measure — read at a glance, without a word.
+ *
+ * It GROWS into place: the fill starts small and springs to its size when the
+ * menu opens, staggered by [delayMillis] down the list, so the five options
+ * arrive as one movement rather than as five icons appearing at once.
+ */
+@Composable
+private fun PrintSizePreview(
+    option: PersonalPhotoSize,
+    ink: Color,
+    selected: Boolean,
+    delayMillis: Int = 0
+) {
+    val grow = remember(option) { Animatable(0.5f) }
+    LaunchedEffect(option) {
+        if (delayMillis > 0) delay(delayMillis.toLong())
+        grow.animateTo(1f, spring(dampingRatio = 0.62f, stiffness = 330f))
+    }
+    val strength = if (selected) 0.80f else 0.40f
+    // The tallest size is the Portrait frame, so every other height is read
+    // against it — the same table the page lays prints out with.
+    val tallest = personalPrintHeight(PersonalPhotoSize.PORTRAIT).value
+    Canvas(
+        Modifier
+            .size(width = 44.dp, height = 34.dp)
+            .semantics { contentDescription = option.label }
+    ) {
+        val pad = 1.dp.toPx()
+        val innerW = size.width - pad * 2
+        val innerH = size.height - pad * 2
+        // The measure — the words' own column, as a hairline.
+        drawRoundRect(
+            color = ink.copy(alpha = 0.16f),
+            topLeft = Offset(pad, pad),
+            size = Size(innerW, innerH),
+            cornerRadius = CornerRadius(2.dp.toPx()),
+            style = Stroke(width = 1.dp.toPx())
+        )
+        // The print, at its own share of that measure and its own height.
+        val printW = (innerW - 3.dp.toPx()) * option.fraction
+        val printH = ((innerH - 4.dp.toPx()) *
+            (personalPrintHeight(option).value / tallest)).coerceAtLeast(5.dp.toPx())
+        val left = pad + (innerW - printW) / 2f
+        val top = pad + (innerH - printH) / 2f
+        drawRoundRect(
+            color = ink.copy(alpha = strength * grow.value),
+            topLeft = Offset(left, top),
+            size = Size(printW * grow.value.coerceAtLeast(0.02f), printH),
+            cornerRadius = CornerRadius(1.5.dp.toPx())
+        )
+    }
+}
+
 private fun PersonalToolButton(
     label: String,
     active: Boolean,
