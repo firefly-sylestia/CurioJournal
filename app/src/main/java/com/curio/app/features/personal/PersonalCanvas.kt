@@ -1674,7 +1674,19 @@ internal class PersonalEditorState(initial: PersonalDoc) {
         pendingRowSplit?.let { asked ->
             if (asked.blockId == id && newText == old.text + "\n") {
                 selections[id] = value.selection
-                return
+                // ── v518 — THE NEWLINE IS KEPT, NEVER EATEN ────────────────
+                //
+                // This used to RETURN here, throwing the keyboard's newline away
+                // because the key handler's deferred split was expected to make
+                // the line a moment later. When that split did not run — a second
+                // request replaced it, the block changed under it, the frame was
+                // busy — the keystroke was gone: the caret stayed on the same
+                // line and the member had to press Enter again, and again (the
+                // report: "the enter would register but it wont go to the next
+                // line, and i will have to tap multiple times"). Now the newline
+                // simply lands; the split trims it off the head as it always did
+                // (see dropBreakCharacter), so a split that happens shows one
+                // break and a split that is lost still shows the member's line.
             }
         }
         // The mask BEFORE this edit — a line's own tools are read from it below,

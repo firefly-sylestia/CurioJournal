@@ -18,6 +18,17 @@ only when the build carrying it is pushed.
 - **The contents pill** → done differently: it became the new-page door above,
   not the calendar door (the member chose the new page).
 
+## Open after 1.5.26
+
+- **Separate a whole stack at once** (the menu/pull works one picture at a time).
+- **Write about one picture** from the picture itself, not the page.
+- **"Write here" is shown under every photo row**; the member wants it only under
+  the row being worked in, and wants the line it makes to be deletable.
+- **Expand/collapse of a stack** and the auto-arrangement still move in ways the
+  member calls unexpected; the motion pass is not finished.
+- **Video** is in (1.5.25) as an inline frame that expands full screen; recording
+  a clip from inside the page is not — the picker only takes existing files.
+
 ## The page's photos
 
 **Shipped in 1.5.21 (v514):**

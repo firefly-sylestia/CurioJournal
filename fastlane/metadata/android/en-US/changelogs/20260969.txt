@@ -1,0 +1,2 @@
+FIX:
+- Journal: **Enter always makes the line.** The row split is deferred a frame, and the newline the keyboard sends in the meantime was being discarded — when the deferred split did not run, the keystroke vanished and Enter had to be pressed again and again. The newline now lands immediately; the split trims it off the head as before, so a successful split shows one break and a lost one still shows your line.
