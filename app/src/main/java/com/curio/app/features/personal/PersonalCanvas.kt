@@ -4166,11 +4166,24 @@ internal fun PersonalCanvas(
                 // where it will land — the same "make room" the to-do rows
                 // have, extended to the rest of the page.
                 val isDragged = rowDrag.draggedId == id
-                // v389 — a PHOTO is carried now too, and a carried block never
-                // shifts on the outer layer: PersonalMovableBlock moves the one
-                // under the finger itself, and shifting it here as well would
-                // double its travel. The same exemption the voice note has.
-                val ownCarry = block.isAudio || block.isPhoto
+                // ── v520 — THE PAGE MAKES ROOM FOR A PRINT ─────────────────
+                //
+                // Every print row used to be exempt from the shift, because the
+                // block under the finger moves itself and shifting its own row as
+                // well would double its travel. The exemption was written for the
+                // WHOLE family, though, so a print being carried past another row
+                // of prints left that row exactly where it was: no hole opened, no
+                // shadow, and the landing was invisible until release (the member:
+                // "the preview of the image going where by moving the other image
+                // to create a space and shadow, well its not working").
+                //
+                // The exemption is now the ROW THAT HOLDS THE CARRIED PRINT, not
+                // every photo: the rows it passes open the gap, and its own row
+                // still does not move twice.
+                val carriedRef = rowDrag.draggedId
+                val rowHoldsCarried = carriedRef != null &&
+                    (carriedRef == id || printRows[id]?.contains(carriedRef) == true)
+                val ownCarry = block.isAudio || (block.isPhoto && rowHoldsCarried)
                 val blockShift by animateFloatAsState(
                     targetValue = if (
                         isDragged || ownCarry || state.keepsChecklistRows
@@ -4179,7 +4192,7 @@ internal fun PersonalCanvas(
                         !rowDrag.isDragging || isDragged ||
                             ownCarry || state.keepsChecklistRows
                     ) snap()
-                    else spring(dampingRatio = 0.9f, stiffness = 460f),
+                    else spring(dampingRatio = 1.0f, stiffness = 420f),
                     label = "canvasBlockShift-$index"
                 )
                 Box(

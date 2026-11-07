@@ -1,0 +1,3 @@
+FIX:
+- Journal: **the page opens a hole for the picture you are carrying.** Print rows used to be exempt from the shift — so carrying a print past another row left that row exactly where it was, with no gap and no shadow. Now only the row that holds the carried print stays put; the rows it passes open the space, so you can see where it will land.
+- Journal: **the shifting rows no longer overshoot.** Their spring is critically damped (no bounce past the target), so two rows can never overlap or cross while making room.

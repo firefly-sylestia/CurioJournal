@@ -637,7 +637,7 @@ internal fun PersonalMovableBlock(
     val shift by animateFloatAsState(
         targetValue = if (isDragged) 0f else drag.shiftFor(index, lastIndex),
         animationSpec = if (isDragged) snap()
-        else spring(dampingRatio = 0.9f, stiffness = 460f),
+        else spring(dampingRatio = 1.0f, stiffness = 420f),
         label = "movableBlockShift"
     )
 
@@ -864,7 +864,7 @@ internal fun PersonalTodoRow(
         // the drop commits, instead of teleporting the instant the finger lifts
         // (see PersonalRowDragState.commit).
         animationSpec = if (isDragged) snap()
-        else spring(dampingRatio = 0.9f, stiffness = 460f),
+        else spring(dampingRatio = 1.0f, stiffness = 420f),
         label = "todoRowShift"
     )
 
