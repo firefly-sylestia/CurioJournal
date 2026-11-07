@@ -14,6 +14,7 @@ import androidx.compose.foundation.gestures.drag
 import androidx.compose.foundation.gestures.waitForUpOrCancellation
 import androidx.compose.ui.input.pointer.PointerInputScope
 import androidx.compose.ui.input.pointer.PointerInputChange
+import androidx.compose.ui.input.pointer.positionChange
 import kotlinx.coroutines.withTimeoutOrNull
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
@@ -1251,6 +1252,8 @@ private suspend fun PointerInputScope.detectHoldThenDrag(
         // taken away (a sheet opening under the hand, a scroll claiming it),
         // and tells us which of the two happened by returning null or the up.
         val finish = drag(down.id) { change ->
+            // `positionChange()` is the extension; the bare name is the
+            // change's Boolean, which is why this needs its import.
             onDrag(change, change.positionChange())
         }
         if (finish != null) onEnd() else onCancel()

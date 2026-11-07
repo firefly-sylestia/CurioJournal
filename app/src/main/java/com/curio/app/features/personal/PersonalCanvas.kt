@@ -8444,7 +8444,6 @@ private fun HeadingBadge(level: Int) {
     }
 }
 
-@Composable
 /**
  * v525 — A SIZE, DRAWN.
  *
@@ -8504,6 +8503,7 @@ private fun PrintSizePreview(
     }
 }
 
+@Composable
 private fun PersonalToolButton(
     label: String,
     active: Boolean,
