@@ -8,6 +8,13 @@ import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.drag
+import androidx.compose.foundation.gestures.waitForUpOrCancellation
+import androidx.compose.ui.input.pointer.PointerInputScope
+import androidx.compose.ui.input.pointer.PointerInputChange
+import kotlinx.coroutines.withTimeoutOrNull
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.Arrangement
@@ -792,8 +799,19 @@ internal fun PersonalMovableBlock(
             .then(
                 if (!enabled) Modifier
                 else Modifier.pointerInput(id, enabled) {
-                    detectDragGesturesAfterLongPress(
-                        onDragStart = { offset ->
+                    // v523 — A SHORT HOLD, and the first pixel counts.
+                    //
+                    // The member: "long press, but with much less travel to
+                    // start". The platform's long press waits half a second
+                    // before the print even lifts, and every pixel moved in
+                    // that half second is thrown away — so the print sat still
+                    // under a finger that was already pulling. This hold is a
+                    // fifth of a second and then the finger is followed from
+                    // where it is (see [detectHoldThenDrag]), which is the whole
+                    // difference between "it resists" and "it came with me".
+                    detectHoldThenDrag(
+                        holdMillis = LIFT_HOLD_MS,
+                        onStart = { offset ->
                             if (blockHeight > 0f) {
                                 drag.begin(
                                     id, index, blockHeight + gapPx,
@@ -805,7 +823,7 @@ internal fun PersonalMovableBlock(
                             change.consume()
                             drag.dragBy(amount.x, amount.y, state.blockIds, state.blockIds.lastIndex)
                         },
-                        onDragEnd = {
+                        onEnd = {
                             // v513 — ONE DROP, ONE EDIT.
                             //
                             // The block is named by id, not by the slot it started
@@ -826,7 +844,7 @@ internal fun PersonalMovableBlock(
                             drag.commit()
                             scope.launch { drag.settle(id) }
                         },
-                        onDragCancel = { drag.reset() }
+                        onCancel = { drag.reset() }
                     )
                 }
             )
@@ -1168,3 +1186,48 @@ internal fun PersonalUndoPill(
         }
     }
 }
+
+/**
+ * v523 — A SHORT HOLD, THEN THE FINGER FROM ITS FIRST PIXEL.
+ *
+ * [detectDragGesturesAfterLongPress] is the platform's half-second hold, and
+ * everything the finger moves during those 500ms is discarded: the print sits
+ * perfectly still while a thumb is already pulling at it, which is exactly what
+ * "it resists before it starts" is. A journal page is a page of paper — a print
+ * should come away as soon as the member clearly means to carry it, not after a
+ * fixed beat of nothing.
+ *
+ * So the hold is [holdMillis] (a fifth of a second, see [LIFT_HOLD_MS]) and the
+ * drag that follows is unfiltered: [onDrag] is handed every pixel from the
+ * point the finger was at when it landed, so the print is already under the
+ * thumb rather than trailing behind it by the hold's own travel.
+ *
+ * A finger that lifts inside the hold was a TAP, not a carry: it returns before
+ * [onStart], which is what keeps a short press on a picture opening it.
+ */
+private suspend fun PointerInputScope.detectHoldThenDrag(
+    holdMillis: Long,
+    onStart: (Offset) -> Unit,
+    onDrag: (PointerInputChange, Offset) -> Unit,
+    onEnd: () -> Unit,
+    onCancel: () -> Unit
+) {
+    awaitEachGesture {
+        val down = awaitFirstDown(requireUnconsumed = false)
+        // Still down when the hold runs out? Then this is a carry.
+        val lifted = withTimeoutOrNull(holdMillis) { waitForUpOrCancellation() }
+        if (lifted != null) return@awaitEachGesture
+        onStart(down.position)
+        // `drag` keeps reporting until the finger lifts or the pointer is
+        // taken away (a sheet opening under the hand, a scroll claiming it),
+        // and tells us which of the two happened by returning null or the up.
+        val finish = drag(down.id) { change ->
+            onDrag(change, change.positionChange())
+        }
+        if (finish != null) onEnd() else onCancel()
+    }
+}
+
+/** How long a finger must stay still before it is carrying (v523). */
+internal const val LIFT_HOLD_MS = 200L
+
