@@ -215,6 +215,16 @@ internal fun PersonalWritingPage(
     voiceRoute: (String) -> String = { CurioRoutes.journalEditor(it) },
     onLoaded: (PersonalNoteEntity) -> Unit = {},
     /**
+     * v516 — START ANOTHER PAGE FOR THIS DAY.
+     *
+     * Given by the journal route (see JournalEditorScreen): it hands the same day
+     * to the new-page route, so the day holds two pages instead of the second
+     * one landing on today. The default is a no-op, so the note-on-a-topic page,
+     * the chapter review and the book review — none of which have days — keep
+     * exactly the page they had.
+     */
+    onNewPage: () -> Unit = {},
+    /**
      * WHERE THE JOURNAL'S OWN COLOUR COMES FROM, and where it goes.
      *
      * A page's colour is only offered when the page WANTS it: [onJournalAccent]
@@ -659,7 +669,6 @@ internal fun PersonalWritingPage(
     // v500 — the contents list (the member: "a 3 dot menu style to browse though
     // contents of the journal in eye view" — asked where it should live, **both
     // views**, so the door is the page's and not the eye's).
-    var contentsOpen by remember { mutableStateOf(false) }
     // v402 — THE PIN IS JUDGED IN THE WINDOW.
     //
     // Every earlier version of this tried to translate a heading's place into the
@@ -1025,24 +1034,16 @@ internal fun PersonalWritingPage(
                     .padding(start = 16.dp, top = 10.dp)
             )
 
-            // v500 — AND THE CONTENTS DOOR, in the page's other corner: the same
-            // rank as the pinned heading (both are facts about the page's shape),
-            // one tap from the list in either mode.
-            PersonalContentsPill(
-                onClick = { contentsOpen = true },
+            // v516 — THE DOOR IS A NEW PAGE NOW, in the contents pill's own
+            // corner and capsule (the member's answer to where a second page
+            // should come from). The contents drawer went with the old pill.
+            PersonalNewPagePill(
+                onClick = onNewPage,
                 modifier = Modifier
                     .align(Alignment.TopEnd)
                     .padding(end = 16.dp, top = 10.dp)
             )
         }
-        }
-
-        if (contentsOpen) {
-            PersonalContentsSheet(
-                headings = personalHeadingsOf(doc),
-                onGo = goToHeading,
-                onDismiss = { contentsOpen = false }
-            )
         }
 
         // The dock rides with the page while it is being WRITTEN and steps

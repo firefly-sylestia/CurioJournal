@@ -136,6 +136,37 @@ private fun roman(n: Int): String {
  * thing"; the list behind this door is the page's STRUCTURE, and three lines is
  * the mark every app uses for that.
  */
+/**
+ * v516 — THE NEW-PAGE DOOR, in the corner the contents pill used to take.
+ *
+ * The member, asked where another page for the same day should come from:
+ * *"inside the journal page in the place of the content 3 line pill"*. So this is
+ * that pill's shape and rank — the page's end corner, the same capsule — with a
+ * plus instead of three lines, because what it does now is make room rather than
+ * list what is already there.
+ */
+@Composable
+internal fun PersonalNewPagePill(
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Surface(
+        onClick = onClick,
+        shape = JournalCapsule.Shape,
+        color = MaterialTheme.colorScheme.surfaceContainerHigh,
+        modifier = modifier.size(JournalCapsule.Height)
+    ) {
+        Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
+            CurioIcon(
+                CurioIcons.Add,
+                "New page",
+                tint = personalAccentInk(),
+                size = 20.dp
+            )
+        }
+    }
+}
+
 @Composable
 internal fun PersonalContentsPill(
     onClick: () -> Unit,

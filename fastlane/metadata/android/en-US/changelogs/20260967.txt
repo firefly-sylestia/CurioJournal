@@ -1,0 +1,6 @@
+ADD:
+- Journal: **another page for the same day, from inside the page.** The three-line contents pill in the page's corner is now a **+** — one tap starts a second page on the same day without leaving the writing, and without touching the page already written. The contents drawer went with the old pill.
+- Journal: Home's “Today” label carries **+ New page** too, and a day with several pages already reads as a shelf you swipe sideways.
+
+CHANGED:
+- Journal: one big date line, the settings gear above it, quiet word/streak text instead of pills, and no empty-state box (1.5.23).

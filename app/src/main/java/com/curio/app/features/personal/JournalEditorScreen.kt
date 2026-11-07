@@ -210,6 +210,15 @@ fun JournalEditorScreen(
             // a door pointing at an id nobody has written would open nothing.
             AppPreferences.setLastJournalId(context, existing.id)
         },
+        // v516 — ANOTHER PAGE, SAME DAY. The current page is already saved by
+        // the page's own autosave/flush, so this only hands the day over.
+        onNewPage = {
+            PendingJournalDay.request(dateMillis)
+            // NOT `launchSingleTop`: the new page shares this route's name, so
+            // singleTop would reuse the page being written instead of opening a
+            // second one.
+            navController.navigate(CurioRoutes.journalEditor(CurioRoutes.PERSONAL_NEW))
+        },
         header = { editing, saving, onEditing, _ ->
             // A journal day's bar has no back button of its own (the date pill
             // takes that corner), so the guarded exit is the system's.

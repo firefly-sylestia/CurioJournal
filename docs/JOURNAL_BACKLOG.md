@@ -3,15 +3,20 @@
 A running list, so nothing said in passing is lost. A line moves to "shipped"
 only when the build carrying it is pushed.
 
-## The editor — NOT STARTED (the three the member asked about directly)
+## The editor
 
-- **Several pages in one day**, created from inside the writing page rather than
-  only from Home. A day is one note today (`PersonalDao.saveNote`), so this
-  needs a real store change, not a button.
-- **Video attachments** — record or pick a video and keep it on the page, beside
-  the pictures and voice notes. There is no video path anywhere in the app yet.
-- **The contents pill** → the calendar door. *Which* pill is still unconfirmed;
-  the likely one is the headings list in the page's top corner.
+- **Several pages in one day** — SHIPPED in 1.5.24: the page's top-corner pill
+  (the old 3-line contents door) now starts another page on the same day, and
+  Home's "Today" label carries "+ New page". A day's pages read as a swipeable
+  shelf on Home, newest first.
+
+**NOT STARTED:**
+
+- **Video attachments** — inline preview that expands full screen. Needs a
+  `video` field on `PersonalBlock`, a codec key, a picker/capture, the media3-ui
+  dependency and a block renderer.
+- **The contents pill** → done differently: it became the new-page door above,
+  not the calendar door (the member chose the new page).
 
 ## The page's photos
 
