@@ -47,6 +47,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.layout.positionInRoot
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -619,6 +620,14 @@ internal fun PersonalMovableBlock(
     content: @Composable () -> Unit
 ) {
     val gapPx = with(LocalDensity.current) { 6.dp.toPx() }
+    // v521 — THE WINDOW, so a carried block has an edge to stop at. Without it
+    // the vertical travel was the raw finger distance and a print could be
+    // dragged clean off the screen and stay there until release (the member:
+    // "still automatically the hold image goes out of the screen when i try to
+    // move it").
+    val windowPx = with(LocalDensity.current) {
+        LocalConfiguration.current.screenHeightDp.dp.toPx()
+    }
     val scope = rememberCoroutineScope()
     var blockHeight by remember(id) { mutableFloatStateOf(0f) }
     // v513 — the cell's own width: a sideways step is one CELL, and the block is
@@ -739,7 +748,19 @@ internal fun PersonalMovableBlock(
             // holded image layer is behind the texts or behind a certain image").
             .zIndex(if (isDragged) 10f else 0f)
             .graphicsLayer {
-                translationY = shift + (if (drag.draggedId == id) drag.travelY else 0f)
+                // v521 — CLAMPED TO THE WINDOW, not to the finger. The block may
+                // travel as far as its own top and the window's foot allow, and
+                // no further; the row shift is added afterwards because that is
+                // the ORDER, not the hand.
+                val heldTravel = if (drag.draggedId == id) {
+                    drag.travelY.coerceIn(
+                        -blockRootTop.coerceAtLeast(0f),
+                        (windowPx - blockRootTop - blockHeight).coerceAtLeast(0f)
+                    )
+                } else {
+                    0f
+                }
+                translationY = shift + heldTravel
                 // v513 — a pulled-out picture follows the finger; a stepping one
                 // glides a cell at a time. Both are read HERE (the pull straight
                 // from the gesture's own state), so neither recomposes a row.

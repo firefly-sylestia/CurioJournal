@@ -1,0 +1,2 @@
+FIX:
+- Journal: **a carried picture cannot leave the window.** The vertical travel is clamped by the block's own top and the screen's foot instead of following the finger off the page.
