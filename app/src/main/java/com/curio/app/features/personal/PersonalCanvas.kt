@@ -6987,6 +6987,16 @@ internal fun PersonalToolDock(
     // was.
     val accentInk = journalDoorAccent(journalAccent)
     val ink = MaterialTheme.colorScheme.onSurfaceVariant
+    // ── v524 — A TITLE'S OWN BAR ───────────────────────────────────────
+    //
+    // The member: *"hide the tools for title, like hide the tools that we dont
+    // need"*. A heading line is set once — it is a name for what follows — and
+    // four of the tools below cannot act on it at all: a title is not a to-do,
+    // is not "small text" (its size IS the heading), is not a bulleted list, and
+    // a quote block is body text by definition. Nine working tools with four
+    // dead ones among them is a bar that has to be read rather than used, so on
+    // a heading line those four step out and the writing ones close up.
+    val onTitleLine = headingLevelOfFocused(state) > 0
     // v428 — THE TOOL ROW REMEMBERS WHERE IT WAS LEFT. A row of tools wider
     // than a phone is scrolled to reach the last of them, and the state used to
     // be `rememberScrollState()` INSIDE the row — so the moment the dock swapped
@@ -7321,6 +7331,7 @@ internal fun PersonalToolDock(
             ) {
                 HeadingBadge(level = focusedHeading)
             }
+            if (!onTitleLine) {
             PersonalToolButton(
                 label = "Todo checkbox",
                 active = active and FLAG_CHECKBOX != 0,
@@ -7377,6 +7388,7 @@ internal fun PersonalToolDock(
                 onClick = { state.toggle(FLAG_QUOTE) }
             ) {
                 CurioIcon(CurioIcons.FormatQuote, null, size = 18.dp)
+            }
             }
             // ── THE ALIGNMENT: ONE TOOL, FOUR CHOICES (v428) ────────────
             //
@@ -7463,7 +7475,10 @@ internal fun PersonalToolDock(
         // floating list somewhere else. The cross at the panel's end puts it
         // away, and so does the door (a second press closes what it opened).
         AnimatedVisibility(
-            visible = openGroup != null && !collapsed,
+            // v524 — a panel cannot outlive its door: the bullet styles are
+            // hidden on a title line, so an open bullet panel goes with them.
+            visible = openGroup != null && !collapsed &&
+                !(onTitleLine && openGroup == PersonalDockGroup.BULLET),
             enter = expandVertically(tween(170)) + fadeIn(tween(130)),
             exit = shrinkVertically(tween(130)) + fadeOut(tween(100))
         ) {
@@ -8330,8 +8345,16 @@ private fun PersonalToolButton(
         // on the dark one alike — and the lit tool is still the solid accent disc
         // it was (v433). The blend is OPAQUE on purpose: a translucent fill lets
         // the bar's own shadow bleed through it (root compile-safety rule 11).
-        color = if (active) accent
-        else lerp(MaterialTheme.colorScheme.surfaceContainerHigh, ink, 0.10f),
+        // ── v524 — AN IDLE TOOL IS A GLYPH, NOT A DISC ─────────────────
+        //
+        // v496 gave every tool a faint disc of its own to say where one tool
+        // ended and the next began; on the journal's paper that read as a wash
+        // under all nine of them — *"remove the unnecessary highlight inside the
+        // bar, its ugly design"*. The bar is already a bar: the tools sit on it
+        // bare, and the ONLY fill in the row is the one that means something,
+        // the solid accent disc of a lit tool (v433). Air between the tools is
+        // the row's own 2dp spacing, not a second surface.
+        color = if (active) accent else Color.Transparent,
         modifier = Modifier
             // v436 — 42dp rather than 36: the dock was called too thin, and a
             // 36dp target is under the 48dp a thumb wants on the row a member
