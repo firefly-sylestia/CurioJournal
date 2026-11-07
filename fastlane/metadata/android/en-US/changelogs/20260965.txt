@@ -1,0 +1,2 @@
+NOTHING VISIBLE:
+- This build is the same journal app; the change is in CI. The workflow now builds and lints only the journal edition, so a push no longer compiles and lints the two archived discovery editions, and it no longer validates or copies the topic catalogs the journal does not contain.

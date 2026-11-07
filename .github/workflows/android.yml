@@ -105,17 +105,12 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - edition: core
-            # The Gradle task's own capitalisation: `assembleCoreRelease`.
-            cap: Core
-          - edition: full
-            cap: Full
-          # v512 — the standalone journal app. It is an edition of this module
-          # (`app/src/journal/`), so it builds through the same task name and
-          # lands in the same place: `app/build/outputs/apk/journal/release/`.
-          # No new signing material is involved — the journal carries the same
-          # release config as the other two, and falls back to debug signing
-          # exactly like they do when the keystore secrets are absent.
+          # v515 — JOURNAL ONLY. The two discovery editions (`core`, `full`) are
+          # archived in the repository but no longer built by this workflow: the
+          # member ships one app, and every push was paying for two extra
+          # compiles, two extra R8 runs and two extra lint runs nothing installs.
+          # They still build locally with `assembleCoreRelease` /
+          # `assembleFullRelease` if they are ever wanted again.
           - edition: journal
             cap: Journal
     # v465c — 60 minutes, not 45: the FULL edition links a vendored 48 MB
@@ -177,41 +172,16 @@ jobs:
       # all, from CI or from a local build. The per-file record goes into the
       # summary — an empty or truncated catalog is the one failure this step
       # exists to catch, and it is invisible in a log line count.
-      - name: Bundle the topic catalogs
+      # v515 — NOTHING TO BUNDLE. The journal edition keeps no topic catalog
+      # (`src/journal/assets` is not a directory the merge ever reads), and the
+      # discovery editions are no longer built here. The step stays as a named
+      # no-op so the summary's `catalogs`/`topics` columns keep their shape.
+      - name: Topic catalogs (none for the journal)
         id: topics
         run: |
-          set -euo pipefail
-          if [ "${{ matrix.edition }}" = "journal" ]; then
-            rm -f app/src/main/assets/topics/*.json
-            echo "catalogs=0" >> "$GITHUB_OUTPUT"
-            echo "topics=0" >> "$GITHUB_OUTPUT"
-            echo "Curio Journal carries no topic catalog — nothing bundled."
-            exit 0
-          fi
-          for edition in core full; do
-            rm -rf "app/src/$edition/assets/topics"
-            mkdir -p "app/src/$edition/assets/topics"
-            cp data/topics/*.json "app/src/$edition/assets/topics/"
-          done
-          catalogs=$(find app/src/core/assets/topics -maxdepth 1 -name '*.json' | wc -l)
-          full_catalogs=$(find app/src/full/assets/topics -maxdepth 1 -name '*.json' | wc -l)
-          if [ "$catalogs" -eq 0 ] || [ "$full_catalogs" -ne "$catalogs" ]; then
-            echo "::error::The topic catalogs did not reach every discovery edition (core=${catalogs}, full=${full_catalogs})."
-            exit 1
-          fi
-          topics=$(python3 - <<'PY'
-          import glob, json
-          total = 0
-          for path in glob.glob("app/src/core/assets/topics/*.json"):
-              with open(path, encoding="utf-8") as handle:
-                  data = json.load(handle)
-              total += len(data if isinstance(data, list) else data.get("topics", []))
-          print(total)
-          PY
-          )
-          echo "catalogs=${catalogs}" >> "$GITHUB_OUTPUT"
-          echo "topics=${topics}" >> "$GITHUB_OUTPUT"
-          echo "Bundled ${catalogs} catalog files carrying ${topics} topics."
+          echo "catalogs=0" >> "$GITHUB_OUTPUT"
+          echo "topics=0" >> "$GITHUB_OUTPUT"
+          echo "Curio Journal carries no topic catalog — nothing bundled."
 
       # PR/push CI builds ONE universal release APK (curioAbiSplits=false
       # disables the per-ABI split packaging in app/build.gradle.kts).
@@ -315,7 +285,11 @@ jobs:
           # topic catalog is the one failure that has already shipped an APK with
           # no data (v412), and a build runner that does not check it is a build
           # runner that will happily package the empty one.
-          ./gradlew validateTopics assemble${{ matrix.cap }}Release -PcurioAbiSplits=false --stacktrace 2>&1 \
+          # v515 — NO `validateTopics`. The journal carries no catalog (nothing
+          # is copied into `src/journal/assets`), so validating the discovery
+          # JSON on every journal push was work with no answer: it checked files
+          # this APK does not contain.
+          ./gradlew assemble${{ matrix.cap }}Release -PcurioAbiSplits=false --stacktrace 2>&1 \
             | tee gradle-build.log
 
       # ── SURFACE 2: THE CHECKS TAB ────────────────────────────────────────
@@ -522,12 +496,7 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - edition: core
-            cap: Core
-          - edition: full
-            cap: Full
-          # v512 — the journal edition lints like any other build the member can
-          # install: `lintJournalRelease`.
+          # v515 — journal only, for the same reason as the build matrix.
           - edition: journal
             cap: Journal
     # ~10 minutes observed, so 45 is pure headroom against a runner that is

@@ -75,3 +75,14 @@ The other editions are unaffected:
 Everything else — the Spin, the Cabinet, the reader, quests, the pet, the
 community layer — is archived in [`../archive/README.md`](../archive/README.md)
 and is not reachable from this edition.
+
+
+## CI is journal-only (v515)
+
+`.github/workflows/android.yml` builds and lints **one** edition: `journal`. The
+`core` and `full` rows were removed from both matrices, so a push now pays for
+one Kotlin compile, one R8 run and one lint run instead of six jobs, and the
+build no longer runs `validateTopics` (the journal contains no catalog) nor
+copies `data/topics/*.json` anywhere. Those editions still build locally with
+`./gradlew assembleCoreRelease` / `assembleFullRelease`; they are simply not
+what this repository ships.
