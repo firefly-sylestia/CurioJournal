@@ -354,7 +354,7 @@ internal class PersonalRowDragState {
             animate(
                 initialValue = from,
                 targetValue = 0f,
-                animationSpec = spring(dampingRatio = 0.7f, stiffness = 900f)
+                animationSpec = spring(dampingRatio = 0.9f, stiffness = 420f)
             ) { value, _ ->
                 if (draggedId == id) travel.floatValue = value
             }
@@ -625,7 +625,7 @@ internal fun PersonalMovableBlock(
     val shift by animateFloatAsState(
         targetValue = if (isDragged) 0f else drag.shiftFor(index, lastIndex),
         animationSpec = if (isDragged) snap()
-        else spring(dampingRatio = 0.72f, stiffness = 900f),
+        else spring(dampingRatio = 0.9f, stiffness = 460f),
         label = "movableBlockShift"
     )
 
@@ -635,7 +635,7 @@ internal fun PersonalMovableBlock(
     // full size — which is what a hand holding a photograph looks like).
     val raise by animateFloatAsState(
         targetValue = if (isDragged) 1f else 0f,
-        animationSpec = spring(dampingRatio = 0.62f, stiffness = 700f),
+        animationSpec = spring(dampingRatio = 0.86f, stiffness = 380f),
         label = "movableBlockRaise"
     )
     val heldSize = 1f + (heldScale - 1f) * raise
@@ -654,7 +654,7 @@ internal fun PersonalMovableBlock(
         targetValue = if (sideFollow && isDragged) {
             drag.flipSteps.coerceIn(-1, 1) * (blockWidth + gapPx)
         } else 0f,
-        animationSpec = spring(dampingRatio = 0.78f, stiffness = 620f),
+        animationSpec = spring(dampingRatio = 0.9f, stiffness = 420f),
         label = "movableBlockSideShift"
     )
 
@@ -845,7 +845,7 @@ internal fun PersonalTodoRow(
         // the drop commits, instead of teleporting the instant the finger lifts
         // (see PersonalRowDragState.commit).
         animationSpec = if (isDragged) snap()
-        else spring(dampingRatio = 0.72f, stiffness = 900f),
+        else spring(dampingRatio = 0.9f, stiffness = 460f),
         label = "todoRowShift"
     )
 

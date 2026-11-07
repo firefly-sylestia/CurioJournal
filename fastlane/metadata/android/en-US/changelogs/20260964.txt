@@ -1,11 +1,6 @@
 ADD:
-- Journal: **the first open asks your name**, and Home greets it in large type with **Anything exciting today?** beneath and the year on the right.
-- Journal: **Home, rebuilt around the day** — the day large, the month under it a step bigger than the week's dates, the word goal and the streak as small pills, and no month count line.
-- Journal: what you wrote today is shown under the day — one page as a card, several as a horizontal shelf — with the time it was written.
-- Journal: **pictures can leave a stack** — the picture in your hand steps a cell over inside its row, a hard sideways pull takes it out, and the size menu gains **On its own line**.
-- Journal: **Settings ▸ Snap photos into stacks** — the automatic snapping and size adjustment can be turned off.
+- Journal: **Write here** — a quiet door under a row of pictures puts a blank line right after it, so words can stand between two groups (and split the row) without hunting for the end of the page.
 
 FIX:
-- Journal: **the calendar opens the day under itself** — tapping a date shows its pages (or an empty state) instead of jumping into the editor.
-- Journal: the "all pages" row on Home is gone, replaced by two floating doors (pages and calendar) beside the pen.
-- Journal: a dragged picture lands on the row your finger is over, and the landing cell preview matches it.
+- Journal: **one motion curve for the page.** Lifts, row shifts and landings now share a soft, high-damping spring (0.86–0.9, stiffness 380–460), so a picture rises, travels and settles as one continuous movement instead of bouncing and snapping into place.
+- Journal: a stack no longer arranges itself around a corner the member did not ask for — the drop is the slot, and the rows between the old and new place shift by exactly that room.

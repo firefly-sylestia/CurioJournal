@@ -2820,6 +2820,26 @@ internal class PersonalEditorState(initial: PersonalDoc) {
      * paragraph ended there). This is what "photos in the same canvas" means —
      * the picture sits exactly where the writer was standing.
      */
+    /**
+     * v514 — WRITE BETWEEN THE PICTURES.
+     *
+     * Consecutive prints are ONE row (see the drawing pass), so words can only
+     * stand between two groups when a TEXT block stands between them. The print
+     * row offers the door below it: a blank line goes right after [id], which
+     * makes the room for the words and splits the row where the member asked
+     * for the break.
+     */
+    fun insertLineAfter(id: String) {
+        val at = order.indexOf(id)
+        if (at < 0) return
+        val fresh = PersonalBlock(id = newBlockId())
+        order.add(at + 1, fresh.id)
+        blocks[fresh.id] = fresh
+        masks[fresh.id] = emptyMask(0)
+        focusedId = fresh.id
+        publish()
+    }
+
     fun insertPhoto(uri: String) {
         insertAtCaret { PersonalBlock(id = newBlockId(), photo = uri) }
     }
@@ -4142,7 +4162,7 @@ internal fun PersonalCanvas(
                         !rowDrag.isDragging || isDragged ||
                             ownCarry || state.keepsChecklistRows
                     ) snap()
-                    else spring(dampingRatio = 0.82f, stiffness = 700f),
+                    else spring(dampingRatio = 0.9f, stiffness = 460f),
                     label = "canvasBlockShift-$index"
                 )
                 Box(
@@ -4177,6 +4197,7 @@ internal fun PersonalCanvas(
                     val nextId = state.blockIds.getOrNull(nextIndex)
                     val nextBlock = nextId?.let { state.block(it) }
                     if (row != null) {
+                        Column {
                         PersonalPrintArrangement(
                             ids = row,
                             sizeOf = { member -> state.photoSize(member) }
@@ -4241,6 +4262,33 @@ internal fun PersonalCanvas(
                                     )
                                 }
                             }
+                        }
+                        // v514 — WRITE HERE. A quiet door under the row, so a
+                        // line of words can go between two groups (and split the
+                        // row) without hunting for the end of the page.
+                        if (enabled) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(top = 2.dp)
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .clickable { state.insertLineAfter(row.last()) }
+                                    .padding(horizontal = 6.dp, vertical = 7.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    "+",
+                                    style = MaterialTheme.typography.titleSmall,
+                                    color = ink.copy(alpha = 0.38f)
+                                )
+                                Spacer(Modifier.width(7.dp))
+                                Text(
+                                    "Write here",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = ink.copy(alpha = 0.42f)
+                                )
+                            }
+                        }
                         }
                     } else if (nextBlock != null && nextId != null &&
                         besideSkips.contains(nextId)
