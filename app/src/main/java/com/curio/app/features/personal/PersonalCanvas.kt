@@ -4184,6 +4184,10 @@ internal fun PersonalCanvas(
                 val rowHoldsCarried = carriedRef != null &&
                     (carriedRef == id || printRows[id]?.contains(carriedRef) == true)
                 val ownCarry = block.isAudio || (block.isPhoto && rowHoldsCarried)
+                // v522 — IS THIS THE ROW THE PRINT WILL LAND ON? Then its hole
+                // is drawn (see the modifier chain below).
+                val landingHere = rowDrag.isDragging && !rowHoldsCarried && !isDragged &&
+                    index == rowDrag.targetIndex(state.blockIds.lastIndex)
                 val blockShift by animateFloatAsState(
                     targetValue = if (
                         isDragged || ownCarry || state.keepsChecklistRows
@@ -4212,6 +4216,44 @@ internal fun PersonalCanvas(
                             )
                         }
                         .graphicsLayer { translationY = blockShift }
+                        // ── v522 — THE HOLE THE PRINT WILL FILL ────────────
+                        //
+                        // The rows now slide apart while a print is carried
+                        // (see `rowHoldsCarried`), which is the space; this is
+                        // what makes it read as a PLACE rather than a gap — the
+                        // carried print's own silhouette, sunk into the paper
+                        // with a soft shadow under its edge. Nothing dashed, no
+                        // bar: only the shape and its shadow, exactly the "soft
+                        // shadow sits in the space" the member asked for.
+                        .then(
+                            if (landingHere) Modifier.drawWithContent {
+                                drawContent()
+                                val room = rowDrag.carriedHeight
+                                if (room > 0f) {
+                                    val radius = CornerRadius(14.dp.toPx())
+                                    val width = size.width
+                                    // The shadow is stacked from wide and faint to
+                                    // narrow and firmer — a blur, drawn by hand,
+                                    // so no layer or RenderEffect is needed.
+                                    listOf(10.dp to 0.045f, 6.dp to 0.065f, 3.dp to 0.09f)
+                                        .forEach { (behind, alpha) ->
+                                            val step = behind.toPx()
+                                            drawRoundRect(
+                                                color = Color.Black.copy(alpha = alpha),
+                                                topLeft = Offset(0f, step),
+                                                size = Size(width, room),
+                                                cornerRadius = radius
+                                            )
+                                        }
+                                    drawRoundRect(
+                                        color = accent.copy(alpha = 0.075f),
+                                        topLeft = Offset(0f, 0f),
+                                        size = Size(width, room),
+                                        cornerRadius = radius
+                                    )
+                                }
+                            } else Modifier
+                        )
                 ) {
                 if (block.isPhoto) {
                     // ── THE ROW OF PRINTS (v389d, v396) ───────────────────
