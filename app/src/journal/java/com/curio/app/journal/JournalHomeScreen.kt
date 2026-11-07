@@ -506,57 +506,67 @@ private fun WeekDates(
     ink: Color,
     onOpenDay: (Long) -> Unit
 ) {
+    // ── v529 — THE WEEK, READ RATHER THAN PICKED ──────────────────────
+    //
+    // Seven equal cells said "a row of buttons": a letter, a number, and
+    // nothing between them. The strip is a CALENDAR line now — the day's
+    // letter small and spaced above, the date under it big enough to be the
+    // thing the eye lands on, and a single dot under the days that already
+    // have writing, so the week tells the member where they have been before
+    // they read a word of it. Today is a filled cell; a written day is marked
+    // in the page's own ink, not a second colour.
     val todayDate = remember(today) { today.toLocalDate() }
-    val monday = remember(todayDate) { shiftDay(today, -(todayDate.dayOfWeek.value - 1).toLong()) }
+    val monday = remember(todayDate) {
+        shiftDay(today, -(todayDate.dayOfWeek.value - 1).toLong())
+    }
     val days = remember(monday) { (0L..6L).map { shiftDay(monday, it) } }
     Row(
         modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(6.dp)
+        horizontalArrangement = Arrangement.spacedBy(5.dp)
     ) {
         days.forEach { millis ->
+            val date = millis.toLocalDate()
             val isToday = millis == today
             val written = writtenDays.contains(millis)
+            val onFill = MaterialTheme.colorScheme.onPrimary
             Surface(
                 onClick = { onOpenDay(millis) },
-                shape = RoundedCornerShape(14.dp),
+                shape = RoundedCornerShape(16.dp),
                 color = if (isToday) accent else Color.Transparent,
                 modifier = Modifier.weight(1f)
             ) {
                 Column(
-                    modifier = Modifier.padding(vertical = 8.dp),
+                    modifier = Modifier.padding(vertical = 9.dp),
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.spacedBy(3.dp)
                 ) {
                     Text(
-                        millis.toLocalDate()
-                            .format(DateTimeFormatter.ofPattern("EEEEE", locale)),
+                        date.format(DateTimeFormatter.ofPattern("EEEEE", locale)),
                         style = MaterialTheme.typography.labelSmall.copy(
-                            fontWeight = FontWeight.SemiBold
+                            fontSize = 10.sp,
+                            letterSpacing = 0.9.sp,
+                            fontWeight = FontWeight.Medium
                         ),
-                        color = when {
-                            isToday -> personalOnAccent().copy(alpha = 0.72f)
-                            else -> ink.copy(alpha = 0.38f)
-                        }
+                        color = if (isToday) onFill.copy(alpha = 0.75f)
+                                else ink.copy(alpha = 0.42f)
                     )
                     Text(
-                        millis.toLocalDate().dayOfMonth.toString(),
-                        style = MaterialTheme.typography.titleSmall.copy(
+                        date.dayOfMonth.toString(),
+                        style = MaterialTheme.typography.titleMedium.copy(
                             fontFamily = FrauncesFontFamily,
-                            fontWeight = FontWeight.SemiBold
+                            fontWeight = FontWeight.SemiBold,
+                            fontSize = 18.sp
                         ),
-                        color = if (isToday) personalOnAccent() else ink.copy(alpha = 0.8f)
+                        color = if (isToday) onFill else ink.copy(alpha = 0.88f)
                     )
-                    Box(
-                        modifier = Modifier
-                            .size(4.dp)
-                            .clip(CircleShape)
-                            .background(
-                                when {
-                                    written && isToday -> personalOnAccent().copy(alpha = 0.9f)
-                                    written -> accentInk.copy(alpha = 0.5f)
-                                    else -> Color.Transparent
-                                }
-                            )
+                    // The mark of a day that already has words in it. An empty
+                    // string keeps every cell the same height, so the row never
+                    // sits at two depths.
+                    Text(
+                        if (written) "•" else " ",
+                        style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp),
+                        color = if (isToday) onFill.copy(alpha = 0.9f)
+                                else accentInk.copy(alpha = 0.85f)
                     )
                 }
             }
