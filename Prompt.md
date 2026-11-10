@@ -2847,6 +2847,48 @@ the drop itself lands on the measured cell (`insertionOffset`), inside its own r
   without losing the gesture); accepted for now.
 - A lone print is not a `printRows` run, so it still previews with the silhouette rather than a ghost cell.
 
+## §111 — CURIOJOURNAL GETS ITS OWN THEME, AND ITS HOME BECOMES A SHEET OF PAPER (branch `journal-redesign`; committed, NOT pushed)
+
+> "we are redesigning curiojournal home not the app home, i told you separate journals build in its own
+> branch" + "folder branch too" + (earlier) "we will not use curio theme a new themeing for the journal"
+> and "not just look chnages but a whole redesign, of the home screen with thoughtful designing".
+
+**The two constraints taken literally.** The work is on the branch **`journal-redesign`**, and every file is in the
+journal's own source set (`app/src/journal/java/com/curio/app/journal/`) — the app's Home, the Curio named themes and
+`features/personal/PersonalTheme.kt` are untouched.
+
+**`JournalLook.kt` (new) — the journal's own theme, not the app's.** A warm cream sheet (`paperRaised` leaves one step
+lighter, `paperShade` under them), a warm brown-black `ink`, an **ox blood** `accent` for today's tab and the nib, and a
+quiet `brass` for stamped small print; Fraunces for display, an `overlineStyle` (10.5sp, +2.4 tracking) and a
+`stampStyle`; two lifts, `LeafLift` 3dp and `DeskLift` 16dp. Every colour is a `@Composable fun` reading
+`isCurioDarkTheme()`, never a `MaterialTheme` override — so no app theme can tint a page. `JournalDoubleRule()` (two
+hairlines, the second half the weight) and `JournalOverline()` are the only ornament.
+
+**`JournalHomeScreen.kt` — restructured, not reskinned.**
+- **Masthead**: `CURIO JOURNAL` small caps with the settings glyph; the double rule; the day at 46sp with the year in
+  brass on the same baseline; "Hello, name" as an italic note under it; the goal and the streak as ONE brass stamped
+  line (the v513 pills are gone — a badge never leads the words).
+- **Week as index tabs**, not chips: seven numerals hanging from a hairline, today's tab filled ox blood with cream
+  type, a written day carrying an ink dot.
+- **Today's page**: the `TODAY'S PAGE` overline with a `Write`/`New page` action, then the day's leaves — one page full
+  width, several as a `LazyRow` of 240dp leaves, and **no card for a blank day** (a rule and "The page is still
+  blank.", the member's boxless rule kept).
+- **The three floating discs are gone.** The foot of the sheet is a **desk bar**: a paper strip with a brass edge, two
+  LABELLED drawers (Pages, Calendar — glyph above name), and a wide filled nib ("Write today" / "Write a page"). It
+  carries the navigation inset itself; the list's `contentPadding` (136dp) clears it. On a tablet the sheet is one
+  column capped at 680dp, and the bar matches it.
+- The data path is untouched: the `produceState` journal read + `PersonalShelfSnapshot`, `todayPages`, `writtenDays`,
+  the streak probe from yesterday when today is blank, `AppPreferences.getJournalGoal/getJournalName`,
+  `isJournalOpenToday`/`getLastJournalId`, and the `PendingJournalDay` handoff all stay as they were.
+
+**`JournalDayCards.kt` — the leaves wear the same paper** on every surface that shows them (home, collection,
+calendar): a 12dp leaf with `LeafLift`, a 2dp pasted edge in the page's own colour or ox blood, the time and the
+length as brass stamps. `JournalPageCard`'s signature is unchanged, so its callers did not move.
+
+**Checks:** brace/paren balance on all three files (0/0) plus a read of every import against its uses; **no Gradle in
+this environment** — CI is the only compile. Branch `journal-redesign`; **committed locally, not pushed**, and no
+version bump (a bump belongs to a push).
+
 ## next prompt
 
 *(The prompt that sat here — the drawer-star / book-cover batch and the desktop+iOS request — is ANSWERED for the

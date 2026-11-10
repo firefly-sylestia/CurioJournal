@@ -25,10 +25,6 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.curio.app.data.PersonalNoteEntity
 import com.curio.app.data.wordCount
-import com.curio.app.features.personal.journalInk
-import com.curio.app.features.personal.journalPaper
-import com.curio.app.features.personal.personalAccent
-import com.curio.app.features.personal.personalAccentInk
 import com.curio.app.features.personal.personalMoodGlyph
 import com.curio.app.ui.theme.CurioIcon
 import com.curio.app.ui.theme.FrauncesFontFamily
@@ -57,24 +53,27 @@ fun JournalPageCard(
     compact: Boolean = false,
     onClick: () -> Unit
 ) {
-    val ink = journalInk()
-    val accent = personalAccent()
-    val accentInk = personalAccentInk()
+    // v535 — the leaf wears the JOURNAL's paper and ink (see JournalLook), not
+    // the app's theme roles: a page pasted into a journal, not a card in a feed.
+    val ink = JournalLook.ink()
+    val accent = JournalLook.accent()
+    val accentInk = JournalLook.accentInk()
     val locale = LocalConfiguration.current.locales[0]
     val mood = page.moodEnum
     val spine = if (page.hasOwnAccent) Color(page.accentArgb) else accent
     Surface(
         onClick = onClick,
-        shape = RoundedCornerShape(if (compact) 18.dp else 20.dp),
-        color = journalPaper(),
-        shadowElevation = 2.dp,
+        shape = RoundedCornerShape(if (compact) 10.dp else 12.dp),
+        color = JournalLook.paperRaised(),
+        shadowElevation = JournalLook.LeafLift,
         modifier = modifier
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
                 .drawBehind {
-                    val bar = 3.dp.toPx()
+                    // A pasted page's edge: a hairline of its own ink, not a bar.
+                    val bar = 2.dp.toPx()
                     drawRoundRect(
                         color = spine,
                         size = Size(bar, size.height),
@@ -87,8 +86,8 @@ fun JournalPageCard(
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
                     page.writtenTimeLabel(locale),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = ink.copy(alpha = 0.45f)
+                    style = JournalLook.stampStyle(),
+                    color = ink.copy(alpha = 0.42f)
                 )
                 Spacer(Modifier.weight(1f))
                 if (mood != null) {
@@ -121,8 +120,8 @@ fun JournalPageCard(
             )
             Text(
                 wordsLabel(page),
-                style = MaterialTheme.typography.labelSmall,
-                color = ink.copy(alpha = 0.4f)
+                style = JournalLook.stampStyle(),
+                color = JournalLook.brass().copy(alpha = 0.62f)
             )
         }
     }
@@ -141,11 +140,11 @@ fun JournalBlankDay(
     modifier: Modifier = Modifier,
     onClick: () -> Unit
 ) {
-    val ink = journalInk()
+    val ink = JournalLook.ink()
     Surface(
         onClick = onClick,
-        shape = RoundedCornerShape(22.dp),
-        color = journalPaper().copy(alpha = 0.55f),
+        shape = RoundedCornerShape(14.dp),
+        color = JournalLook.paperRaised(),
         modifier = modifier
     ) {
         Box(

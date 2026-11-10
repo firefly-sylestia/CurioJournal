@@ -24,7 +24,6 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -37,7 +36,9 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.curio.app.data.AppPreferences
@@ -45,33 +46,35 @@ import com.curio.app.data.PersonalNoteEntity
 import com.curio.app.data.PersonalRepositoryHolder
 import com.curio.app.data.wordCount
 import com.curio.app.features.personal.PersonalShelfSnapshot
-import com.curio.app.features.personal.journalPaperRaised
-import com.curio.app.features.personal.personalAccent
-import com.curio.app.features.personal.personalAccentInk
-import com.curio.app.features.personal.personalOnAccent
 import com.curio.app.features.personal.shiftDay
 import com.curio.app.features.personal.startOfToday
 import com.curio.app.features.personal.toLocalDate
 import com.curio.app.ui.theme.CurioIcon
 import com.curio.app.ui.theme.CurioIcons
-import com.curio.app.ui.theme.FrauncesFontFamily
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 
 /**
- * THE JOURNAL'S HOME — THE DAY, GREETED.
+ * THE JOURNAL'S HOME — A SHEET OF PAPER, OPENED TO THE DAY (v535).
  *
- * The page answers three questions in the order a writer asks them: who is
- * writing ([greeting]), what day it is (the day block), and what has already been
- * written on it (the cards under it). Nothing above the writing is a card: the
- * greeting is type, the date is type, and the only surfaces are the pills that
- * carry a number and the pages themselves.
+ * This screen used to be the app's Home language with the journal's colours on
+ * it: a feed of pills and cards. The member asked for the opposite — *"another
+ * home screen redesign with paper and real journal feel … a whole redesign"*, and
+ * for the journal to stand on its own theme. So the page is now built the way a
+ * paper journal is:
  *
- * The member's own layout, kept to: the year large on the right, the day large
- * on the left, the month under the day a step bigger than the dates below it —
- * and no "N of M days" line anywhere (that measured the month; a journal measures
- * the day). The old "before today" list is gone: the days before today live
- * behind the calendar button, and the collection behind the pages button.
+ *  · a MASTHEAD — the book's name in small caps, a double rule, the day set in
+ *    the display serif with the year in brass beside it, and the greeting as a
+ *    note under it;
+ *  · the WEEK as INDEX TABS hanging from the rule, today's tab ox blood;
+ *  · the day's writing as LEAVES laid on the sheet — the same pages, on the
+ *    journal's own paper;
+ *  · and the doors as a DESK BAR along the foot of the page: labelled drawers
+ *    (Pages, Calendar) beside a wide ink nib that starts the page — replacing the
+ *    three floating discs, which said nothing until they were pressed.
+ *
+ * The data is exactly what the screen read before (the journal store, the day's
+ * pages, the goal and streak), so nothing was lost to the redesign.
  */
 @Composable
 fun JournalHomeScreen(
@@ -83,12 +86,9 @@ fun JournalHomeScreen(
 ) {
     val context = LocalContext.current
     val locale = LocalConfiguration.current.locales[0]
-    val accent = personalAccent()
-    val accentInk = personalAccentInk()
-    val ink = MaterialTheme.colorScheme.onBackground
 
-    // Seeded from the last look, so returning to Home never flashes an empty
-    // page before Room answers (the same snapshot the app's own rows read).
+    // Seeded from the last look, so returning to Home never flashes an empty page
+    // before Room answers (the same snapshot the rest of the journal reads).
     val pages by produceState(initialValue = PersonalShelfSnapshot.journals) {
         runCatching {
             PersonalRepositoryHolder.repo.observeJournals().collect {
@@ -97,11 +97,10 @@ fun JournalHomeScreen(
             }
         }
     }
-    // The journal's list is DAYS only — a to-do list and a note about a topic
-    // live in Notes, exactly as they do in the collection screen.
+    // The journal's list is DAYS only — a to-do list and a topic note live in
+    // Notes, exactly as they do in the collection screen.
     val journals = remember(pages) { pages.filter { !it.isTodo && !it.hasTopic } }
     val today = remember { startOfToday() }
-    // A day can carry more than one page; today's are the ones this screen shows.
     val todayPages = remember(journals, today) {
         journals
             .filter { it.dateMillis == today }
@@ -113,9 +112,7 @@ fun JournalHomeScreen(
     // other pages, and coming back has to show the new answer.
     val goal = AppPreferences.getJournalGoal(context)
     val name = AppPreferences.getJournalName(context)
-    val wordsToday = remember(todayPages) {
-        todayPages.sumOf { it.doc.wordCount() }
-    }
+    val wordsToday = remember(todayPages) { todayPages.sumOf { it.doc.wordCount() } }
     val streak = remember(journals, writtenDays, today) {
         // Today counts the moment it is written; a day that has not been written
         // yet must not break yesterday's run, so the probe starts at yesterday
@@ -129,8 +126,8 @@ fun JournalHomeScreen(
         run
     }
 
-    // The floating pen: the member's own choice of where a journal door lands
-    // ("today's page" is the default, "the last one you opened" the other half).
+    // The nib's own door: today's page, or the last page opened (the member's
+    // choice in Settings), falling back to today when that page is gone.
     val doorId = if (AppPreferences.isJournalOpenToday(context)) {
         todayPages.firstOrNull()?.id
     } else {
@@ -138,11 +135,19 @@ fun JournalHomeScreen(
             journals.any { it.id == id }
         } ?: todayPages.firstOrNull()?.id
     }
+    val writeToday: () -> Unit = {
+        if (doorId != null) {
+            val page = journals.firstOrNull { it.id == doorId }
+            onOpenDay(page?.dateMillis ?: today, doorId)
+        } else {
+            onOpenDay(today, null)
+        }
+    }
 
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background)
+            .background(JournalLook.paper())
     ) {
         LazyColumn(
             // The page stays a page on a tablet or a landscape phone: one column,
@@ -152,29 +157,26 @@ fun JournalHomeScreen(
                 .fillMaxHeight()
                 .widthIn(max = 680.dp)
                 .statusBarsPadding(),
-            contentPadding = PaddingValues(top = 8.dp, bottom = 190.dp),
-            verticalArrangement = Arrangement.spacedBy(18.dp)
+            // Clears the desk bar (2 + 12 + 50 + 12) plus the navigation inset
+            // it carries, with a little air under the last leaf.
+            contentPadding = PaddingValues(bottom = 136.dp)
         ) {
-            item("greeting") {
-                GreetingHead(
+            item("masthead") {
+                JournalMasthead(
                     name = name,
-                    accentInk = accentInk,
-                    ink = ink,
-                    onOpenSettings = onOpenSettings
-                )
-            }
-
-            item("day") {
-                DayBlock(
                     today = today,
-                    writtenDays = writtenDays,
                     locale = locale,
-                    accent = accent,
-                    accentInk = accentInk,
-                    ink = ink,
                     goal = goal,
                     words = wordsToday,
                     streak = streak,
+                    onOpenSettings = onOpenSettings
+                )
+            }
+            item("week") {
+                JournalWeekTabs(
+                    today = today,
+                    writtenDays = writtenDays,
+                    locale = locale,
                     onOpenDay = { millis ->
                         onOpenDay(
                             millis,
@@ -183,326 +185,231 @@ fun JournalHomeScreen(
                     }
                 )
             }
-
-            item("written") {
-                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(start = 22.dp, end = 18.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            "Today",
-                            style = MaterialTheme.typography.labelMedium.copy(
-                                fontWeight = FontWeight.SemiBold,
-                                letterSpacing = 1.4.sp
-                            ),
-                            color = accentInk.copy(alpha = 0.75f)
-                        )
-                        Spacer(Modifier.weight(1f))
-                        // v516 — ANOTHER PAGE FOR THE SAME DAY. The day is a
-                        // container, not a single sheet: this starts a fresh page
-                        // on today's date without touching the one already
-                        // written.
-                        Text(
-                            if (todayPages.isEmpty()) "Start" else "+ New page",
-                            style = MaterialTheme.typography.labelMedium.copy(
-                                fontWeight = FontWeight.SemiBold
-                            ),
-                            color = accentInk.copy(alpha = 0.8f),
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(50))
-                                .clickable { onOpenDay(today, null) }
-                                .padding(horizontal = 10.dp, vertical = 4.dp)
-                        )
-                    }
-                    TodayWriting(
-                        pages = todayPages,
-                        onOpen = { page ->
-                            onOpenDay(today, page.id)
-                        },
-                        onStart = { onOpenDay(today, null) }
-                    )
-                }
-            }
-        }
-
-        // ── THE FLOATING DOORS ──────────────────────────────────────────
-        //
-        // The "All pages" row that used to end Home is gone (the member asked for
-        // it gone): the collection and the calendar are two quiet discs under the
-        // pen, so the page ends on the writing rather than on a list of doors.
-        Column(
-            modifier = Modifier
-                .align(Alignment.BottomEnd)
-                .navigationBarsPadding()
-                .padding(end = 22.dp, bottom = 26.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            FloatingDoor(
-                glyph = CurioIcons.MenuBook,
-                description = "All pages",
-                accentInk = accentInk,
-                onClick = onOpenCollection
-            )
-            FloatingDoor(
-                glyph = CurioIcons.CalendarToday,
-                description = "Calendar",
-                accentInk = accentInk,
-                onClick = onOpenCalendar
-            )
-            // The pen: the big one, and the page's one filled colour.
-            Surface(
-                onClick = {
-                    if (doorId != null) {
-                        val page = journals.firstOrNull { it.id == doorId }
-                        onOpenDay(page?.dateMillis ?: today, doorId)
-                    } else {
-                        onOpenDay(today, null)
-                    }
-                },
-                shape = CircleShape,
-                color = accent,
-                shadowElevation = 10.dp,
-                modifier = Modifier.size(58.dp)
-            ) {
-                Box(Modifier.size(58.dp), contentAlignment = Alignment.Center) {
-                    CurioIcon(
-                        CurioIcons.Note,
-                        "Write today's page",
-                        tint = personalOnAccent(),
-                        size = 25.dp
-                    )
-                }
-            }
-        }
-    }
-}
-
-/** One quiet door under the pen — the collection, the calendar. */
-@Composable
-private fun FloatingDoor(
-    glyph: String,
-    description: String,
-    accentInk: Color,
-    onClick: () -> Unit
-) {
-    Surface(
-        onClick = onClick,
-        shape = CircleShape,
-        color = journalPaperRaised(),
-        shadowElevation = 4.dp,
-        modifier = Modifier.size(46.dp)
-    ) {
-        Box(Modifier.size(46.dp), contentAlignment = Alignment.Center) {
-            CurioIcon(glyph, description, tint = accentInk.copy(alpha = 0.85f), size = 21.dp)
-        }
-    }
-}
-
-// ── THE GREETING ────────────────────────────────────────────────────────────
-
-/**
- * The member's name, the day's question, and the year — the only three words
- * above the date.
- *
- * The year is set large on the RIGHT because it is the long frame the day sits
- * in; the greeting is the display face at the size a name is said at, and the
- * question under it is the page asking what happened (the member's own copy,
- * *"hello name, and below that anything exciting today?"*).
- */
-@Composable
-private fun GreetingHead(
-    name: String,
-    accentInk: Color,
-    ink: Color,
-    onOpenSettings: () -> Unit
-) {
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(start = 22.dp, end = 14.dp, top = 0.dp)
-    ) {
-        // THE GEAR SITS ABOVE THE DATE, at the page's end edge (the member:
-        // "make the settings above the year"). It is the only control up here,
-        // so it gets its own line rather than crowding the greeting.
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.End
-        ) {
-            IconButton(onClick = onOpenSettings, modifier = Modifier.size(36.dp)) {
-                CurioIcon(
-                    CurioIcons.Settings,
-                    "Settings",
-                    tint = ink.copy(alpha = 0.5f),
-                    size = 19.dp
+            item("today") {
+                JournalTodaySection(
+                    today = today,
+                    pages = todayPages,
+                    onOpenDay = onOpenDay
                 )
             }
         }
-        Text(
-            if (name.isBlank()) "Hello" else "Hello, $name",
-            style = MaterialTheme.typography.displaySmall.copy(
-                fontFamily = FrauncesFontFamily,
-                fontWeight = FontWeight.SemiBold,
-                fontSize = 34.sp,
-                lineHeight = 38.sp
-            ),
-            color = ink
-        )
-        Spacer(Modifier.height(3.dp))
-        Text(
-            "Anything exciting today?",
-            style = MaterialTheme.typography.titleMedium.copy(
-                fontFamily = FrauncesFontFamily,
-                fontWeight = FontWeight.Medium,
-                fontSize = 17.sp,
-                lineHeight = 22.sp
-            ),
-            color = accentInk.copy(alpha = 0.82f)
+
+        JournalDeskBar(
+            alreadyWritten = todayPages.isNotEmpty(),
+            onOpenCollection = onOpenCollection,
+            onOpenCalendar = onOpenCalendar,
+            onWrite = writeToday,
+            modifier = Modifier.align(Alignment.BottomCenter)
         )
     }
 }
 
-// ── THE DAY ─────────────────────────────────────────────────────────────────
+// ── THE MASTHEAD ────────────────────────────────────────────────────────────
 
 /**
- * The day, as the page's subject: the numeral large, the month under it a step
- * larger than the dates, this week beneath the month, and the habit as two small
- * pills under the date — never a card, never a "N of M days" line.
+ * The book's name, its double rule, the day, and the greeting — the page's own
+ * header, in the order a journal leads with them.
+ *
+ * The day is one formatted string plus the year in brass, so the two can never
+ * drift apart on a baseline (the member's earlier note about the date and year
+ * sharing a row). The greeting is a note *under* the date, not a title above it:
+ * the day is what the page is about.
  */
 @Composable
-private fun DayBlock(
+private fun JournalMasthead(
+    name: String,
     today: Long,
-    writtenDays: Set<Long>,
     locale: Locale,
-    accent: Color,
-    accentInk: Color,
-    ink: Color,
     goal: Int,
     words: Int,
     streak: Int,
-    onOpenDay: (Long) -> Unit
+    onOpenSettings: () -> Unit
 ) {
-    val date = today.toLocalDate()
+    val ink = JournalLook.ink()
+    val accentInk = JournalLook.accentInk()
+    val brass = JournalLook.brass()
+    val date = remember(today) { today.toLocalDate() }
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 22.dp),
-        verticalArrangement = Arrangement.spacedBy(10.dp)
+            .padding(start = 26.dp, end = 18.dp, top = 6.dp)
     ) {
-        // THE DATE IS ONE LINE — day, month and year at the same size, on the
-        // same baseline. The numeral used to be a 76sp slab with the month
-        // tucked beside it, which read as two unrelated numbers and left the
-        // year stranded in the header ("the dates look small and unnoticed",
-        // "the year is too [small]", "place the year in the same row of date
-        // and month"). One formatted string cannot misalign: it is the day the
-        // member reads, in the order their own locale writes it.
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            JournalOverline("CURIO JOURNAL", accentInk.copy(alpha = 0.82f))
+            Spacer(Modifier.weight(1f))
+            // The queue's one control: the journal's own settings, above the year
+            // (the member's own placement).
+            IconButton(onClick = onOpenSettings, modifier = Modifier.size(36.dp)) {
+                CurioIcon(
+                    CurioIcons.Settings,
+                    "Journal settings",
+                    tint = ink.copy(alpha = 0.42f),
+                    size = 18.dp
+                )
+            }
+        }
+        Spacer(Modifier.height(10.dp))
+        JournalDoubleRule()
+        Spacer(Modifier.height(22.dp))
+        Row(verticalAlignment = Alignment.Bottom) {
+            Text(
+                date.format(DateTimeFormatter.ofPattern("d MMMM", locale)),
+                style = androidx.compose.ui.text.TextStyle(
+                    fontFamily = JournalLook.Display,
+                    fontWeight = FontWeight.SemiBold,
+                    fontSize = 46.sp,
+                    lineHeight = 50.sp,
+                    letterSpacing = (-0.6).sp
+                ),
+                color = ink
+            )
+            Spacer(Modifier.width(10.dp))
+            Text(
+                date.year.toString(),
+                modifier = Modifier.padding(bottom = 9.dp),
+                style = androidx.compose.ui.text.TextStyle(
+                    fontFamily = JournalLook.Display,
+                    fontWeight = FontWeight.Medium,
+                    fontSize = 16.sp,
+                    letterSpacing = 0.6.sp
+                ),
+                color = brass.copy(alpha = 0.9f)
+            )
+        }
+        Spacer(Modifier.height(12.dp))
         Text(
-            date.format(DateTimeFormatter.ofPattern("d MMMM yyyy", locale)),
-            style = MaterialTheme.typography.displaySmall.copy(
-                fontFamily = FrauncesFontFamily,
-                fontWeight = FontWeight.SemiBold,
-                fontSize = 40.sp,
-                lineHeight = 44.sp
+            if (name.isBlank()) "Hello." else "Hello, $name.",
+            style = androidx.compose.ui.text.TextStyle(
+                fontFamily = JournalLook.Display,
+                fontWeight = FontWeight.Medium,
+                fontSize = 19.sp,
+                lineHeight = 24.sp,
+                fontStyle = FontStyle.Italic
             ),
-            color = ink
+            color = ink.copy(alpha = 0.74f)
         )
-
-        WeekDates(
-            today = today,
-            writtenDays = writtenDays,
-            locale = locale,
-            accent = accent,
-            accentInk = accentInk,
-            ink = ink,
-            onOpenDay = onOpenDay
+        Spacer(Modifier.height(2.dp))
+        Text(
+            "Anything exciting today?",
+            style = androidx.compose.ui.text.TextStyle(
+                fontFamily = JournalLook.Display,
+                fontWeight = FontWeight.Medium,
+                fontSize = 16.sp,
+                lineHeight = 21.sp
+            ),
+            color = accentInk.copy(alpha = 0.82f)
         )
-
-        // NO PILLS. The counts used to wear an accent-tinted capsule with an
-        // icon, which read as two badges before the day had any words in it
-        // ("better 0 of 500 words, dont like the highlight and pill"). A line of
-        // quiet type says the same thing and gets out of the page's way.
+        // The margin's stamped line: the goal and the streak, said quietly, in
+        // brass — never a badge ahead of the words.
         val habit = buildList {
-            if (goal > 0) add("$words of $goal words")
-            if (streak > 0) add(if (streak == 1) "1-day streak" else "$streak-day streak")
+            if (goal > 0) add("$words OF $goal WORDS")
+            if (streak > 0) add(if (streak == 1) "1-DAY STREAK" else "$streak-DAY STREAK")
         }.joinToString("   ·   ")
         if (habit.isNotEmpty()) {
+            Spacer(Modifier.height(16.dp))
             Text(
                 habit,
-                style = MaterialTheme.typography.labelMedium,
-                color = ink.copy(alpha = 0.45f)
+                style = JournalLook.stampStyle(),
+                color = brass.copy(alpha = 0.72f)
             )
         }
     }
 }
 
+// ── THE WEEK, AS INDEX TABS ─────────────────────────────────────────────────
+
 /**
- * THIS WEEK, under the month — seven dates, today filled.
+ * This week as seven index tabs hanging from the page's rule, today's tab ox
+ * blood and a written day carrying an ink dot.
  *
- * A week rather than the four-week strip it used to be: the member asked for the
- * dates below the month and *"just show today"*, and the days further back are
- * the calendar's business (one tap away, on a floating door).
+ * A tab, not a chip: a journal's week is marked in its margin, so the numerals
+ * hang off a single rule and the days read as one strip rather than seven
+ * separate buttons.
  */
 @Composable
-private fun WeekDates(
+private fun JournalWeekTabs(
     today: Long,
     writtenDays: Set<Long>,
     locale: Locale,
-    accent: Color,
-    accentInk: Color,
-    ink: Color,
     onOpenDay: (Long) -> Unit
 ) {
+    val ink = JournalLook.ink()
+    val accent = JournalLook.accent()
+    val onAccent = JournalLook.onAccent()
     val todayDate = remember(today) { today.toLocalDate() }
-    val monday = remember(todayDate) { shiftDay(today, -(todayDate.dayOfWeek.value - 1).toLong()) }
+    val monday = remember(todayDate) {
+        shiftDay(today, -(todayDate.dayOfWeek.value - 1).toLong())
+    }
     val days = remember(monday) { (0L..6L).map { shiftDay(monday, it) } }
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(6.dp)
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = 24.dp)
     ) {
-        days.forEach { millis ->
-            val isToday = millis == today
-            val written = writtenDays.contains(millis)
-            Surface(
-                onClick = { onOpenDay(millis) },
-                shape = RoundedCornerShape(14.dp),
-                color = if (isToday) accent else Color.Transparent,
-                modifier = Modifier.weight(1f)
-            ) {
+        // The rule the tabs hang from — the week's own line in the margin.
+        Box(
+            Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 22.dp)
+                .height(1.dp)
+                .background(JournalLook.rule())
+        )
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp)
+        ) {
+            days.forEach { millis ->
+                val isToday = millis == today
+                val written = writtenDays.contains(millis)
                 Column(
-                    modifier = Modifier.padding(vertical = 8.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.spacedBy(3.dp)
+                    modifier = Modifier
+                        .weight(1f)
+                        .padding(horizontal = 2.dp)
+                        .clip(
+                            RoundedCornerShape(
+                                topStart = 10.dp,
+                                topEnd = 10.dp,
+                                bottomStart = 3.dp,
+                                bottomEnd = 3.dp
+                            )
+                        )
+                        .background(if (isToday) accent else Color.Transparent)
+                        .clickable { onOpenDay(millis) }
+                        .padding(top = 9.dp, bottom = if (isToday) 13.dp else 10.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
                 ) {
                     Text(
                         millis.toLocalDate()
                             .format(DateTimeFormatter.ofPattern("EEEEE", locale)),
-                        style = MaterialTheme.typography.labelSmall.copy(
-                            fontWeight = FontWeight.SemiBold
+                        style = androidx.compose.ui.text.TextStyle(
+                            fontFamily = JournalLook.Display,
+                            fontWeight = FontWeight.SemiBold,
+                            fontSize = 9.5.sp,
+                            letterSpacing = 1.2.sp
                         ),
-                        color = when {
-                            isToday -> personalOnAccent().copy(alpha = 0.72f)
-                            else -> ink.copy(alpha = 0.38f)
-                        }
+                        color = if (isToday) onAccent.copy(alpha = 0.68f)
+                        else ink.copy(alpha = 0.34f)
                     )
+                    Spacer(Modifier.height(4.dp))
                     Text(
                         millis.toLocalDate().dayOfMonth.toString(),
-                        style = MaterialTheme.typography.titleSmall.copy(
-                            fontFamily = FrauncesFontFamily,
-                            fontWeight = FontWeight.SemiBold
+                        style = androidx.compose.ui.text.TextStyle(
+                            fontFamily = JournalLook.Display,
+                            fontWeight = FontWeight.SemiBold,
+                            fontSize = 17.sp
                         ),
-                        color = if (isToday) personalOnAccent() else ink.copy(alpha = 0.8f)
+                        color = if (isToday) onAccent else ink.copy(alpha = 0.78f)
                     )
+                    Spacer(Modifier.height(5.dp))
                     Box(
                         modifier = Modifier
                             .size(4.dp)
                             .clip(CircleShape)
                             .background(
                                 when {
-                                    written && isToday -> personalOnAccent().copy(alpha = 0.9f)
-                                    written -> accentInk.copy(alpha = 0.5f)
+                                    written && isToday -> onAccent.copy(alpha = 0.85f)
+                                    written -> JournalLook.accent().copy(alpha = 0.55f)
                                     else -> Color.Transparent
                                 }
                             )
@@ -513,64 +420,239 @@ private fun WeekDates(
     }
 }
 
-// ── WHAT HAS BEEN WRITTEN ───────────────────────────────────────────────────
+// ── THE DAY'S WRITING ───────────────────────────────────────────────────────
 
 /**
- * Today's pages: one is a vertical card, more than one is a shelf of horizontal
- * rectangles (the member's own rule), and none is a piece of the page waiting to
- * be written on.
+ * Today's pages, laid as leaves on the sheet.
+ *
+ * One page is a full leaf; more than one is a shelf of short leaves (the
+ * member's own rule). A day with nothing on it gets NO card — the page is simply
+ * still blank, which is what a real journal looks like before it is written on.
  */
 @Composable
-private fun TodayWriting(
+private fun JournalTodaySection(
+    today: Long,
     pages: List<PersonalNoteEntity>,
-    onOpen: (PersonalNoteEntity) -> Unit,
-    onStart: () -> Unit
+    onOpenDay: (millis: Long, entryId: String?) -> Unit
 ) {
-    when {
-        pages.isEmpty() -> {
-            // NOTHING IS DRAWN WHERE NOTHING IS WRITTEN. The old empty state was
-            // a dashed/filled card that looked like a page already waiting, so a
-            // day with no words still read as content (the member: "there should
-            // not be any box if there is nothing").
+    val ink = JournalLook.ink()
+    val accentInk = JournalLook.accentInk()
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = 32.dp)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 22.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            JournalOverline("TODAY'S PAGE", ink.copy(alpha = 0.40f))
+            Spacer(Modifier.weight(1f))
             Text(
-                "Write today",
-                style = MaterialTheme.typography.titleMedium.copy(
-                    fontFamily = FrauncesFontFamily,
-                    fontWeight = FontWeight.Medium
-                ),
-                color = personalAccentInk(),
+                if (pages.isEmpty()) "Write" else "New page",
+                style = JournalLook.overlineStyle(),
+                color = accentInk,
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 22.dp)
-                    .clickable(onClick = onStart)
-                    .padding(vertical = 2.dp)
+                    .clip(RoundedCornerShape(50))
+                    .clickable { onOpenDay(today, null) }
+                    .padding(horizontal = 9.dp, vertical = 5.dp)
             )
         }
+        Spacer(Modifier.height(12.dp))
+        when {
+            pages.isEmpty() -> {
+                // Nothing written: the page's first rule, and the truth.
+                Box(
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 22.dp)
+                        .height(1.dp)
+                        .background(JournalLook.rule().copy(alpha = 0.6f))
+                )
+                Spacer(Modifier.height(12.dp))
+                Text(
+                    "The page is still blank.",
+                    modifier = Modifier.padding(horizontal = 22.dp),
+                    style = androidx.compose.ui.text.TextStyle(
+                        fontFamily = JournalLook.Display,
+                        fontWeight = FontWeight.Medium,
+                        fontSize = 16.sp,
+                        fontStyle = FontStyle.Italic
+                    ),
+                    color = ink.copy(alpha = 0.34f)
+                )
+            }
 
-        pages.size == 1 -> {
-            JournalPageCard(
-                page = pages.first(),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 22.dp),
-                onClick = { onOpen(pages.first()) }
-            )
-        }
+            pages.size == 1 -> {
+                JournalPageCard(
+                    page = pages.first(),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 22.dp),
+                    onClick = { onOpenDay(today, pages.first().id) }
+                )
+            }
 
-        else -> {
-            LazyRow(
-                contentPadding = PaddingValues(horizontal = 22.dp),
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                items(items = pages, key = { "today-${it.id}" }) { page ->
-                    JournalPageCard(
-                        page = page,
-                        compact = true,
-                        modifier = Modifier.width(238.dp),
-                        onClick = { onOpen(page) }
-                    )
+            else -> {
+                LazyRow(
+                    contentPadding = PaddingValues(horizontal = 22.dp),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    items(items = pages, key = { "today-${it.id}" }) { page ->
+                        JournalPageCard(
+                            page = page,
+                            compact = true,
+                            modifier = Modifier.width(240.dp),
+                            onClick = { onOpenDay(today, page.id) }
+                        )
+                    }
                 }
             }
         }
+    }
+}
+
+// ── THE DESK BAR (the journal's toolbar) ────────────────────────────────────
+
+/**
+ * THE DESK BAR — the journal's new toolbar (v535).
+ *
+ * It replaces three floating discs stacked over the page. The member asked for a
+ * whole redesign, not a reskin, so the structure changed: the foot of the sheet
+ * is now a DESK — a paper strip with a brass edge, two labelled drawers (Pages,
+ * Calendar) and a wide INKED NIB that starts the day's page. The pen is no longer
+ * a circle to find; it is the page's one filled control, named.
+ */
+@Composable
+private fun JournalDeskBar(
+    alreadyWritten: Boolean,
+    onOpenCollection: () -> Unit,
+    onOpenCalendar: () -> Unit,
+    onWrite: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val ink = JournalLook.ink()
+    val accent = JournalLook.accent()
+    val onAccent = JournalLook.onAccent()
+    Surface(
+        shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp),
+        color = JournalLook.paperRaised(),
+        shadowElevation = JournalLook.DeskLift,
+        modifier = modifier
+            .widthIn(max = 680.dp)
+            .fillMaxWidth()
+    ) {
+        Column {
+            // The desk's own edge: a brass rule, the way a writing box is edged.
+            Box(
+                Modifier
+                    .fillMaxWidth()
+                    .height(2.dp)
+                    .background(JournalLook.brass().copy(alpha = 0.32f))
+            )
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .navigationBarsPadding()
+                    .padding(horizontal = 16.dp, vertical = 12.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                DeskDrawer(
+                    glyph = CurioIcons.MenuBook,
+                    label = "Pages",
+                    ink = ink,
+                    onClick = onOpenCollection
+                )
+                Spacer(Modifier.width(6.dp))
+                Box(
+                    Modifier
+                        .width(1.dp)
+                        .height(30.dp)
+                        .background(JournalLook.rule())
+                )
+                Spacer(Modifier.width(6.dp))
+                DeskDrawer(
+                    glyph = CurioIcons.CalendarToday,
+                    label = "Calendar",
+                    ink = ink,
+                    onClick = onOpenCalendar
+                )
+                Spacer(Modifier.width(14.dp))
+                // The nib: the page's one filled control, and its name.
+                Surface(
+                    onClick = onWrite,
+                    color = accent,
+                    shape = RoundedCornerShape(14.dp),
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(50.dp)
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(horizontal = 14.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.Center
+                    ) {
+                        CurioIcon(
+                            CurioIcons.Note,
+                            null,
+                            tint = onAccent,
+                            size = 18.dp
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        Text(
+                            if (alreadyWritten) "Write a page" else "Write today",
+                            style = androidx.compose.ui.text.TextStyle(
+                                fontFamily = JournalLook.Display,
+                                fontWeight = FontWeight.SemiBold,
+                                fontSize = 14.5.sp,
+                                letterSpacing = 0.2.sp
+                            ),
+                            color = onAccent,
+                            textAlign = TextAlign.Center,
+                            maxLines = 1
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+/** One labelled drawer on the desk: a glyph, its name, and a press. */
+@Composable
+private fun DeskDrawer(
+    glyph: String,
+    label: String,
+    ink: Color,
+    onClick: () -> Unit
+) {
+    Column(
+        modifier = Modifier
+            .clip(RoundedCornerShape(14.dp))
+            .clickable(onClick = onClick)
+            .padding(horizontal = 8.dp, vertical = 5.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        CurioIcon(
+            glyph,
+            null,
+            tint = JournalLook.accentInk().copy(alpha = 0.78f),
+            size = 20.dp
+        )
+        Spacer(Modifier.height(3.dp))
+        Text(
+            label,
+            style = androidx.compose.ui.text.TextStyle(
+                fontFamily = JournalLook.Display,
+                fontWeight = FontWeight.SemiBold,
+                fontSize = 9.5.sp,
+                letterSpacing = 0.9.sp
+            ),
+            color = ink.copy(alpha = 0.52f)
+        )
     }
 }
