@@ -2921,6 +2921,17 @@ journal matches the new home."*
 **Checks:** brace/paren balance on all six journal files (0/0) and an audit that no `journalInk`/`journalPaper`/
 `personalAccent*`/`FrauncesFontFamily`/`colorScheme` reference is left in the three migrated screens; no Gradle.
 
+### Pushed
+- `9ef9410d` — **2.0.2 / `20260976`**: the journal's own theme, the paper home, the desk bar, and the calendar /
+  settings / intro on the same paper. Changelog `20260976.txt`.
+- `53ae38e8` — **2.0.3 / `20260977`**: the journal-owned collection screen. Changelog `20260977.txt`.
+- Branch `journal-redesign` was fast-forwarded into `main` before the first push, so both commits sit on `main`.
+- The member's rule "dont push when the build is running" is now in the root `AGENTS.md` CI Discipline section
+  (check `gh run list` immediately before every push).
+
+**Still not compiled anywhere but CI:** this environment has no Gradle, so the nine journal files are checked by
+brace/paren balance + an import audit only. The first real compile of `JournalCollectionScreen.kt` is CI's.
+
 ## next prompt
 
 *(The prompt that sat here — the drawer-star / book-cover batch and the desktop+iOS request — is ANSWERED for the
