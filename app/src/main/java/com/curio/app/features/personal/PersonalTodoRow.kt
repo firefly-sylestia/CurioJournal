@@ -269,6 +269,26 @@ internal class PersonalRowDragState {
      */
     private val liveTops = mutableStateMapOf<String, Float>()
 
+    /**
+     * v538 — IS THIS CARRY TARGETED BY THE FINGER, ON THE LIVE PAGE?
+     *
+     * Every carry used to be counted against the page AT THE PRESS: the row was
+     * chosen from the rest positions plus the finger's travel. A print is the one
+     * carry that RE-LAYS THE PAGE while it is in the air (the landing row opens
+     * real space), so the rest positions stop describing the page under the thumb
+     * the moment the preview appears — the preview then opened a row the finger
+     * was not over, the held print covered a different row, and the drop landed
+     * where the count said rather than where the member was looking (the report:
+     * *"the images doesnt move when i drop it somewhere, and the other images
+     * overlaps"*).
+     *
+     * A print is therefore targeted by [pointerRootY] against the rows' LIVE
+     * places and heights: what is under the finger is what opens, and the drop
+     * uses the same answer. Nothing else changes — a voice note and a to-do row
+     * still travel through the rest arithmetic.
+     */
+    private var fingerTargeted = false
+
     /** A drawn row's current top — recorded only while a block is in the air. */
     fun livePlace(id: String, top: Float) {
         if (draggedId == null) return
@@ -431,6 +451,43 @@ internal class PersonalRowDragState {
         return best
     }
 
+    /** Does [index]'s LIVE band still hold the finger? (The damping for [liveIndexAt].) */
+    private fun liveHolds(index: Int, fingerRootY: Float, ids: List<String>): Boolean {
+        val id = ids.getOrNull(index) ?: return false
+        val top = liveTops[id] ?: return false
+        val height = rowHeights[id] ?: return false
+        return fingerRootY in top..(top + height)
+    }
+
+    /**
+     * v538 — THE ROW WHOSE **LIVE** BAND HOLDS [fingerRootY].
+     *
+     * [indexAtContent] reads the page as it stood at the press; this reads it as
+     * it stands now, which is the only honest answer while the landing preview is
+     * itself changing the layout. Nearest band wins, so a finger in the gap
+     * between two rows still names one of them. -1 until the rows have reported
+     * their live places (the first frame after the press).
+     */
+    private fun liveIndexAt(fingerRootY: Float, ids: List<String>): Int {
+        if (liveTops.isEmpty()) return -1
+        var best = -1
+        var bestDistance = Float.MAX_VALUE
+        ids.forEachIndexed { index, id ->
+            val top = liveTops[id] ?: return@forEachIndexed
+            val height = rowHeights[id] ?: return@forEachIndexed
+            val distance = when {
+                fingerRootY < top -> top - fingerRootY
+                fingerRootY > top + height -> fingerRootY - (top + height)
+                else -> 0f
+            }
+            if (distance < bestDistance) {
+                bestDistance = distance
+                best = index
+            }
+        }
+        return best
+    }
+
     val isDragging: Boolean get() = draggedId != null
 
     /**
@@ -469,6 +526,7 @@ internal class PersonalRowDragState {
     fun commit() {
         fromIndex = -1
         steps = 0
+        fingerTargeted = false
         travelX.floatValue = 0f
         flipSteps = 0
         anchorTop = -1f
@@ -514,8 +572,16 @@ internal class PersonalRowDragState {
     var pointerRootY by mutableFloatStateOf(0f)
         private set
 
-    fun begin(id: String, index: Int, slotStride: Float, fingerRootY: Float) {
+    fun begin(
+        id: String,
+        index: Int,
+        slotStride: Float,
+        fingerRootY: Float,
+        /** v538 — see [fingerTargeted]: only a print asks for it. */
+        byFinger: Boolean = false
+    ) {
         draggedId = id
+        fingerTargeted = byFinger
         fromIndex = index
         steps = 0
         travel.floatValue = 0f
@@ -569,6 +635,26 @@ internal class PersonalRowDragState {
     fun advanceBy(scrolledBy: Float, ids: List<String>, lastIndex: Int) {
         travel.floatValue += scrolledBy
         val travel = travel.floatValue
+        // ── v538 — A PRINT: THE ROW UNDER THE FINGER, ON THE PAGE AS IT IS ──
+        //
+        // First, and it RETURNS: the rest arithmetic below is the right answer
+        // only for a page that is not moving itself, and a print's landing
+        // preview moves it (see [fingerTargeted]).
+        if (fingerTargeted) {
+            // IT KEEPS THE ROW IT IS IN. The preview is itself a layout change, so
+            // a target recomputed from scratch every frame would chase its own
+            // hole: the printed line opens above a row, that row moves down, the
+            // finger falls into the row above, the line closes, and the two
+            // states alternate. The current row is kept while the finger is
+            // still inside its live band; the target only moves when the finger
+            // really leaves it.
+            val current = (fromIndex + steps).coerceIn(0, lastIndex)
+            if (!liveHolds(current, pointerRootY, ids)) {
+                val live = liveIndexAt(pointerRootY, ids)
+                if (live >= 0 && live <= lastIndex) steps = live - fromIndex
+            }
+            return
+        }
         // v513 — THE FINGER'S PLACE FIRST (see [indexAtContent]): the row whose
         // own band holds the carried block's centre is the row it will land in,
         // measured, not counted.
@@ -632,6 +718,7 @@ internal class PersonalRowDragState {
         draggedId = null
         fromIndex = -1
         steps = 0
+        fingerTargeted = false
         travel.floatValue = 0f
         travelX.floatValue = 0f
         flipSteps = 0
@@ -970,7 +1057,11 @@ internal fun PersonalMovableBlock(
                             if (blockHeight > 0f) {
                                 drag.begin(
                                     id, index, blockHeight + gapPx,
-                                    blockRootTop + offset.y
+                                    blockRootTop + offset.y,
+                                    // v538 — a print is targeted by the finger
+                                    // against the live page (see
+                                    // PersonalRowDragState.fingerTargeted).
+                                    byFinger = state.block(id)?.isPhoto == true
                                 )
                             }
                         },

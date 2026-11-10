@@ -2958,7 +2958,26 @@ brace/paren balance + an import audit only. The first real compile of `JournalCo
 3. **`rowIndex`/`rowSize`** for the sideways step clamp are read from the preview row, so the clamp is not counted
    against a stale member count while the landing re-flows.
 
-**NOT fixed, and honestly not verifiable here: the "shift overlaps" half.** The rows no longer translate during a
+4. **THE DROP/OVERLAP HALF — the target is now the finger on the LIVE page (`PersonalTodoRow.kt`).** This is the
+   root cause of *"the images doesnt move when i drop it somewhere, and the other images overlaps"*. Every carry
+   was counted against the page **as it stood at the press** (`indexAtContent` over `startTops`/`startBands`, plus
+   the accumulated travel) — but a print's landing preview is itself a LAYOUT CHANGE: the moment it appears, the
+   page under the thumb is no longer the page that was measured. So the preview opened a row the finger was not
+   over, the held print covered a different row (the "overlap"), and the drop followed the count instead of the eye
+   (the "it doesn't move"). A photo carry now sets `fingerTargeted` (`begin(..., byFinger = true)`, set from
+   `PersonalMovableBlock` for a print) and `advanceBy` takes its row from `liveIndexAt(pointerRootY)` — the rows'
+   **live** places and heights, reported by the page while the drag runs — so the row that opens, the row that is
+   drawn around, and the row `dropBlock` lands in are one answer. `liveHolds` damps it: the current row is kept
+   while the finger is still inside its live band, because a target recomputed from scratch every frame would
+   chase its own hole (open a line, the row moves down, the finger falls into the row above, close, repeat).
+   Voice notes and to-do rows keep the rest arithmetic — their carries do not re-lay the page.
+
+**Also not changed, on purpose: the hole the lifted print leaves in its own stack.** The carried cell is still laid
+out by its row's arrangement (that node holds the drag gesture — moving it out would rebuild it and cancel the
+drag), so its slot stays open while it is in the air. The stack closing behind the hand would need the arrangement
+to hold a zero-width slot for the carried id, which is a change to `PersonalPrintArrangement` itself.
+
+**Note on the v532 claims below, kept for the record: the "shift overlaps" half.** The rows no longer translate during a
 photo carry (v532 sets every block's shift target to 0 when `isPhotoCarry`), so a visual overlap now has to come
 from either the landing row's own arrangement (whether `PersonalPrintArrangement` divides the measure with the
 arriving print's PAGE→HALF size change) or from the held print's own window clamp. Neither can be judged without a
@@ -2966,8 +2985,9 @@ device, and guessing at a third compensation on top of `shift` + `layoutDrift` i
 got here. **Next session needs the member's answer to: does the overlap happen (a) between the prints of the row
 being joined, (b) between the held print and the row it passes, or (c) between rows of the page?**
 
-**Checks:** brace/paren balance on `PersonalCanvas.kt` (0/0); no Gradle. **Committed locally, NOT pushed**, no
-version bump (the member: *"anow dont push this i will do it manually"*).
+**Checks:** brace/paren balance on `PersonalCanvas.kt` and `PersonalTodoRow.kt` (0/0); no Gradle. **Pushed** (the
+member: *"fix everthing … and push"*) as **2.0.4 / `20260978`**, changelog `20260978.txt`, after confirming with
+`gh run list` that no build was in progress.
 
 ## next prompt
 

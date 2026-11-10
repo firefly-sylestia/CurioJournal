@@ -1,0 +1,4 @@
+FIX:
+- Journal: **the landing shadow is always there now** — under a print arriving beside other prints, and under one arriving between paragraphs.
+- Journal: **moving a picture to the other side of its own stack shows the cell it will take**, so the neighbours move while you hold it.
+- Journal: **the landing follows your finger** — the row that opens and the row it lands in are the one under your thumb, on the page as it is while you drag.
