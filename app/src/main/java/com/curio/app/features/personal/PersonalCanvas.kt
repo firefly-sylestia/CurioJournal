@@ -4570,6 +4570,10 @@ internal fun PersonalCanvas(
                                     enabled = enabled,
                                     // v532 — the row whose layout moves this cell.
                                     rowId = id,
+                                    // v533 — and its place in that row, so a step
+                                    // past the row's edge is never drawn.
+                                    rowIndex = row.indexOf(memberId),
+                                    rowSize = row.size,
                                     // v397 — a print lifts as a photograph does:
                                     // a touch bigger, tilted, with a deeper shadow.
                                     heldScale = 1.08f,
@@ -6213,13 +6217,27 @@ private fun PrintSizeTile(
         animationSpec = spring(dampingRatio = 0.8f, stiffness = 420f),
         label = "printSizePicked"
     )
-    // The tallest size is the portrait frame, so every other height is read
-    // against it — the page's own table, scaled to the tile.
-    val tallest = personalPrintHeight(PersonalPhotoSize.PORTRAIT).value
-    val printHeight = 56.dp * (personalPrintHeight(option).value / tallest)
-    // 42, not the measure's 46: the picture keeps a hair of paper between it
-    // and the measure's line, so the PAGE print does not sit on the border.
-    val printWidth = 42.dp * option.fraction
+    // ── v533 — EVERY SIZE IS THE PAGE'S OWN SHAPE ──────────────────────
+    //
+    // The tiles used to be drawn from two different scales: the width from a
+    // 42dp measure, the height from a 56dp guess divided by the tallest print.
+    // A PAGE print therefore came out nearly square, when on the page it is
+    // two-to-one, and a portrait came out far narrower than it really stands —
+    // the member's "the image preview of sizes is still nt accurate".
+    //
+    // One scale now: the frame is the writing column (44dp of a 360dp page),
+    // and a print is its real `measure x fraction` wide and its real
+    // `personalPrintHeight` tall at that same scale, with the print's own paper
+    // border and caption band. So the size the member picks shows the shape the
+    // page will give it, not an approximation of it.
+    val pageMeasure = 360f
+    val scale = 44f / pageMeasure
+    val paper = (7f * scale).dp
+    val cardWidth = 44.dp * option.fraction
+    val imageHeight = (personalPrintHeight(option).value * scale).dp
+    // The caption band under the picture — where the print keeps its label.
+    val band = (20f * scale).dp
+    val cardHeight = paper + imageHeight + band
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
         modifier = Modifier
@@ -6233,34 +6251,61 @@ private fun PrintSizeTile(
             .semantics { contentDescription = option.label }
             .padding(3.dp)
     ) {
+        // The frame is the writing COLUMN, drawn as a hairline; the print hangs
+        // from its top-left, exactly as it does on the page — so the empty room
+        // beside a narrow print is the writing's, and reads as the size share.
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(62.dp)
+                .height(50.dp)
+                .clip(RoundedCornerShape(5.dp))
+                .background(lerp(journalPaper(), accent, 0.035f * picked))
                 .border(
                     width = 1.dp,
                     color = lerp(
-                        ink.copy(alpha = 0.14f),
-                        accent.copy(alpha = 0.90f),
+                        ink.copy(alpha = 0.11f),
+                        accent.copy(alpha = 0.88f),
                         picked
                     ),
                     shape = RoundedCornerShape(5.dp)
-                ),
-            contentAlignment = Alignment.Center
+                )
+                .padding(1.dp),
+            contentAlignment = Alignment.TopStart
         ) {
             Box(
                 modifier = Modifier
-                    .size(width = printWidth, height = printHeight)
-                    .clip(RoundedCornerShape(2.dp))
-                    .background(Color.Black.copy(alpha = 0.05f))
+                    .width(cardWidth)
+                    .height(cardHeight)
                     .graphicsLayer {
                         val g = grow.value
-                        scaleX = 0.84f + 0.16f * g
-                        scaleY = 0.84f + 0.16f * g
-                        alpha = g * (0.78f + 0.22f * picked)
+                        // Grows out of the corner the print is hung from, so the
+                        // preview arrives from the page, not from the middle.
+                        // Scale only: an alpha ramp would let the card's shadow
+                        // bleed through its paper (root AGENTS rule 11).
+                        transformOrigin = TransformOrigin(0f, 0f)
+                        scaleX = 0.86f + 0.14f * g
+                        scaleY = 0.86f + 0.14f * g
                     }
+                    // Shadow BEFORE the fill, and an OPAQUE paper fill under it
+                    // (see the root AGENTS rule on shadow order).
+                    .shadow(1.5.dp, RoundedCornerShape(2.dp))
+                    .clip(RoundedCornerShape(2.dp))
+                    .background(journalPaperRaised())
+                    .padding(start = paper, end = paper, top = paper)
             ) {
-                PersonalPagePhoto(uri = uri, height = printHeight)
+                Column {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(imageHeight)
+                            .clip(RoundedCornerShape(1.dp))
+                    ) {
+                        PersonalPagePhoto(uri = uri, height = imageHeight)
+                    }
+                    // The label's band, kept as paper — a print is a picture AND
+                    // the line under it, at every size.
+                    Spacer(Modifier.height(band))
+                }
             }
         }
         // The picked mark: a short accent line that widens as the choice lands.

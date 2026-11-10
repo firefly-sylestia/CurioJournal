@@ -2808,13 +2808,28 @@ follow-up on the size menu's preview accuracy.
 - `PersonalPhotoBlock(labelOnly = true)` draws the caption band at the field's own metrics and reserves the
   size door's width, so the faded cell is exactly the height the real one will be.
 
-**Version:** `2.0.0`, versionCode `20260974`, changelog `20260974.txt` (carried forward from `20260973`).
+**Version:** `2.0.0`, versionCode `20260974`, changelog `20260974.txt` (pushed).
+
+### v533 — the size previews, at the page's own scale (2.0.1, `20260975`)
+
+The tiles had two different scales: width from a 42dp measure, height from a 56dp guess divided by the
+tallest print — so a PAGE print came out nearly square (the page draws it two-to-one) and a portrait came
+out far too narrow. Every tile is now drawn from ONE scale (44dp of a 360dp page): the print is its real
+`measure × fraction` wide and its real `personalPrintHeight` tall, with its paper frame and caption band,
+hung from the top-left of a hairline writing column so the empty room beside it reads as the size share.
+The card grows out of its corner on a scale spring (no alpha — a translucent card lets its shadow bleed),
+and the picked tile warms the column's hairline with an accent line under it.
+
+**And the sideways landing:** the drawn step is now clamped to the cells the row actually has
+(`rowIndex`/`rowSize`), so the first print of a stack no longer slides left toward nothing and snaps back;
+the drop itself lands on the measured cell (`insertionOffset`), inside its own row as well.
 
 **Checks:** brace/paren balance only (no Gradle in this environment). CI compiles.
 
 ### Open
-- **The size menu's previews are not accurate enough yet** — the member asked for this next: real image
-  previews at each size, beautifully drawn.
+- The source row still closes its gap at the drop (the carried print's own node cannot leave its row
+  without losing the gesture); accepted for now.
+- A lone print is not a `printRows` run, so it still previews with the silhouette rather than a ghost cell.
 - The source row still closes its gap at the drop (the carried print's own node cannot leave its row
   without losing the gesture); accepted for now.
 - A lone print is not a `printRows` run, so it still previews with the silhouette rather than a ghost cell.

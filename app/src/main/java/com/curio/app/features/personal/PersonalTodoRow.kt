@@ -747,6 +747,18 @@ internal fun PersonalMovableBlock(
      * row, which uses its own id.
      */
     rowId: String? = null,
+    /**
+     * v533 — THIS BLOCK'S PLACE IN THAT ROW, and the row's size.
+     *
+     * A sideways step is drawn as one cell, but the FIRST cell of a stack has no
+     * cell to its left and the last has none to its right. The preview used to
+     * draw the step anyway, so the print slid out and came back with no landing
+     * (the member: "the 1st image in the stack isnt moving to the left i hold
+     * them and move it to the other side but it doesnt land"). Clamping the drawn
+     * step to the cells the row actually has keeps the preview honest.
+     */
+    rowIndex: Int = -1,
+    rowSize: Int = 0,
     modifier: Modifier = Modifier,
     content: @Composable () -> Unit
 ) {
@@ -804,12 +816,18 @@ internal fun PersonalMovableBlock(
     // just moved onto. It is read from [PersonalRowDragState.flipSteps] (an Int
     // that changes at cell lines only), so the glide is one animation per step
     // rather than one per frame.
+    // The steps this cell can actually take — see rowIndex/rowSize.
+    val cellSteps = if (rowIndex >= 0 && rowSize > 1) {
+        drag.flipSteps.coerceIn(-rowIndex, rowSize - 1 - rowIndex)
+    } else {
+        drag.flipSteps
+    }
     val sideShift by animateFloatAsState(
         // v514 — ONE CELL IS THE PREVIEW, the drop does the rest. Charging every
         // notch a full cell put the picture up to two cells off its row while it
         // was still in the air, which read as it sliding out of the page.
         targetValue = if (sideFollow && isDragged) {
-            drag.flipSteps.coerceIn(-1, 1) * (blockWidth + gapPx)
+            cellSteps.coerceIn(-1, 1) * (blockWidth + gapPx)
         } else 0f,
         animationSpec = spring(dampingRatio = 0.9f, stiffness = 420f),
         label = "movableBlockSideShift"
