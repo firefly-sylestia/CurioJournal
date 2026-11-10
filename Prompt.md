@@ -3014,6 +3014,18 @@ a 9,000-line file.
   colour) — a function of that name would have been shadowed, and the call would have read as invoking an
   `Int`. Found by grepping the renamed identifiers against existing parameter names, not by compiling.
 
+**CI, read properly for once.** `gh run list` in this environment resolves the default repo as
+`firefly-sylestia/Curio` (the remote is `…/CurioJournal`), so it answered from the WRONG repository and
+showed stale 2026-11-03 runs; every push looked like "no run in progress". `gh api
+repos/firefly-sylestia/CurioJournal/actions/runs` showed the truth: `156976bc` in progress, `f1a0971f`
+cancelled by its successor, and **`53ae38e8` failed** — in LINT, not build. The build job was green, so the
+journal redesign, the collection and the drag fixes all compile.
+
+**The one lint error was mine:** `NonObservableLocale` — `Locale.getDefault()` inside the collection's
+composable. It reads `LocalConfiguration.current.locales[0]` now (`9b593687`). Bumped to **2.0.6 /
+`20260980`**, changelog `20260980.txt` carried forward from `20260979.txt`. **The push was held**: a build for
+`156976bc` was still running, and this repo's rule is no push while a build runs.
+
 **Not done:** the page's TYPE. It still sets headings in the app's fonts; the journal's serif needs a
 `FontFamily` in the skin too. Named here rather than smuggled in.
 
