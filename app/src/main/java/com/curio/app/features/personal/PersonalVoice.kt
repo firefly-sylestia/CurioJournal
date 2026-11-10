@@ -384,7 +384,7 @@ internal fun PersonalVoiceButton(
         onClick = onClick,
         enabled = enabled,
         shape = CircleShape,
-        color = personalAccentInk(),
+        color = journalAccentInk(),
         shadowElevation = 8.dp,
         modifier = modifier.size(48.dp)
     ) {
@@ -413,8 +413,8 @@ internal fun PersonalVoiceRecorderCapsule(
     modifier: Modifier = Modifier
 ) {
     val ink = MaterialTheme.colorScheme.onSurface
-    val accent = personalAccent()
-    val accentInk = personalAccentInk()
+    val accent = journalAccentFill()
+    val accentInk = journalAccentInk()
     val transition = rememberInfiniteTransition(label = "voice-recording")
     val pulse by transition.animateFloat(
         initialValue = 0.35f,
@@ -495,7 +495,7 @@ internal fun PersonalVoiceRecorderCapsule(
                 modifier = Modifier.size(38.dp)
             ) {
                 Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    CurioIcon(CurioIcons.Check, "Keep the voice note", tint = personalOnAccent(), size = 19.dp)
+                    CurioIcon(CurioIcons.Check, "Keep the voice note", tint = journalOnAccent(), size = 19.dp)
                 }
             }
         }
@@ -806,7 +806,7 @@ internal fun PersonalVoiceBar(
             else -> Surface(
                 onClick = { toggle() },
                 shape = CircleShape,
-                color = personalAccentInk(),
+                color = journalAccentInk(),
                 modifier = Modifier.size(38.dp)
             ) {
                 Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -1624,7 +1624,7 @@ private fun VoicePillControl(
     Surface(
         onClick = onClick,
         shape = RoundedCornerShape(50),
-        color = personalAccentInk(),
+        color = journalAccentInk(),
         modifier = modifier
             .size(width = 52.dp, height = 32.dp)
             .semantics { contentDescription = label }
@@ -1776,7 +1776,7 @@ private fun VoiceStylePreview(
                     modifier = Modifier
                         .size(width = 26.dp, height = 16.dp)
                         .clip(RoundedCornerShape(50))
-                        .background(personalAccentInk())
+                        .background(journalAccentInk())
                 )
                 PersonalVoiceStyle.HAND, PersonalVoiceStyle.MINIMAL -> VoiceDrawnControl(
                     playing = false,
@@ -1794,7 +1794,7 @@ private fun VoiceStylePreview(
                     modifier = Modifier
                         .size(18.dp)
                         .clip(CircleShape)
-                        .background(personalAccentInk())
+                        .background(journalAccentInk())
                 )
             }
             Canvas(Modifier.weight(1f).height(18.dp)) {
@@ -2030,7 +2030,7 @@ internal fun PersonalVoiceLeaveDialog(
         confirmButton = {
             CurioGlassWindowBlur()
             TextButton(onClick = onKeepNote) {
-                Text("Keep the note", color = personalAccentInk(), fontWeight = FontWeight.SemiBold)
+                Text("Keep the note", color = journalAccentInk(), fontWeight = FontWeight.SemiBold)
             }
         },
         dismissButton = {

@@ -19,6 +19,7 @@ import com.curio.app.data.CurioDatabase
 import com.curio.app.data.CurioRepositoryHolder
 import com.curio.app.data.PersonalRepositoryHolder
 import com.curio.app.features.personal.JournalEditorScreen
+import com.curio.app.features.personal.LocalJournalPageSkin
 import com.curio.app.navigation.CurioRoutes
 import com.curio.app.ui.CurioLayout
 import com.curio.app.ui.theme.CurioTheme
@@ -80,7 +81,20 @@ class JournalActivity : ComponentActivity() {
             CompositionLocalProvider(LocalDensity provides readingDensity) {
                 CurioTheme {
                     CurioThemeTransitionHost {
-                        JournalApp()
+                        // v539 — THE PAGE'S OWN PAINT.
+                        //
+                        // The writing page is shared with the app's Personal side
+                        // (it lives in src/main, which cannot see JournalLook), so
+                        // it reads its colours by ROLE and asks the host for them
+                        // (see JournalPageSkin). Every screen in this build — the
+                        // editor included — is handed the journal's sheet, ink and
+                        // ox blood here, and the app's own build, which provides
+                        // nothing, is left exactly as it was.
+                        CompositionLocalProvider(
+                            LocalJournalPageSkin provides JournalLook.skin()
+                        ) {
+                            JournalApp()
+                        }
                     }
                 }
             }

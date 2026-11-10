@@ -115,7 +115,7 @@ fun JournalEditorScreen(
     photos: PersonalPhotoOverlayState = rememberPersonalPhotoOverlayState()
 ) {
     val ink = MaterialTheme.colorScheme.onBackground
-    val accent = personalAccent()
+    val accent = journalAccentFill()
 
     // The page's own half of the row: the day it belongs to, how it felt, its
     // title. The document and every write path belong to the core.
@@ -248,8 +248,8 @@ fun JournalEditorScreen(
                             },
                             shape = RoundedCornerShape(50),
                             colors = androidx.compose.material3.ButtonDefaults.buttonColors(
-                                containerColor = personalAccent(),
-                                contentColor = personalOnAccent()
+                                containerColor = journalAccentFill(),
+                                contentColor = journalOnAccent()
                             )
                         ) { Text("Move the entry") }
                     },
@@ -258,8 +258,8 @@ fun JournalEditorScreen(
                             onClick = { showDatePicker = false },
                             shape = RoundedCornerShape(50),
                             colors = androidx.compose.material3.ButtonDefaults.buttonColors(
-                                containerColor = personalAccent().copy(alpha = 0.24f),
-                                contentColor = personalAccentInk()
+                                containerColor = journalAccentFill().copy(alpha = 0.24f),
+                                contentColor = journalAccentInk()
                             )
                         ) { Text("Cancel") }
                     }
@@ -274,12 +274,12 @@ fun JournalEditorScreen(
                         // every accent FILL in the app uses — the airy fill,
                         // the readable ink on it.
                         colors = DatePickerDefaults.colors(
-                            selectedDayContainerColor = personalAccent(),
-                            selectedDayContentColor = personalOnAccent(),
-                            selectedYearContainerColor = personalAccent(),
-                            selectedYearContentColor = personalOnAccent(),
-                            todayDateBorderColor = personalAccent(),
-                            todayContentColor = personalAccentInk()
+                            selectedDayContainerColor = journalAccentFill(),
+                            selectedDayContentColor = journalOnAccent(),
+                            selectedYearContainerColor = journalAccentFill(),
+                            selectedYearContentColor = journalOnAccent(),
+                            todayDateBorderColor = journalAccentFill(),
+                            todayContentColor = journalAccentInk()
                         )
                     )
                 }
@@ -682,7 +682,7 @@ private fun MoodOption(
                     CurioIcon(
                         personalMoodGlyph(mood),
                         mood.label,
-                        tint = if (on) personalOnAccent() else tint,
+                        tint = if (on) journalOnAccent() else tint,
                         size = 16.dp
                     )
                 }

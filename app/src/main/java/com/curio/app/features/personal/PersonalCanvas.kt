@@ -3996,7 +3996,7 @@ internal fun PersonalCanvas(
     // theme's ink can come out unreadable; see the paint's own note in
     // [PersonalWritingPage]).
     ink: Color = journalInk(),
-    accent: Color = personalAccent(),
+    accent: Color = journalAccentFill(),
     // The tapped thumbnail's bounds ride along with its URI: the page's own
     // overlay grows the picture out of the spot it was tapped in (see
     // PersonalPhotoOverlay), which a bare URI cannot say.
@@ -5034,7 +5034,7 @@ private fun PersonalTextBlock(
         isTitle2 -> 2
         else -> 0
     }
-    val headingAccent = personalAccentInk()
+    val headingAccent = journalAccentInk()
     // v504 — the ink this line's own words wear (see [headingInk]): the page's
     // ink for prose, the accent for a heading. One value, used by the field's
     // style AND by the annotated string under it, so the pen cannot draw a
@@ -5066,7 +5066,7 @@ private fun PersonalTextBlock(
     // The tick the writer actually made is on the BLOCK now, not in this row's
     // widget state, so a reload cannot lose it.
     val checked = state.checked(id)
-    val markerFill = personalAccentInk()
+    val markerFill = journalAccentInk()
     val markerOnFill = MaterialTheme.colorScheme.surface
     val markerOutline = ink.copy(alpha = 0.42f)
     // ONE hint for the whole page: the empty-line "Write…" on every new
@@ -5303,7 +5303,7 @@ private fun PersonalTextBlock(
                 false
             },
         textStyle = bodyStyle,
-        cursorBrush = SolidColor(personalAccentInk()),
+        cursorBrush = SolidColor(journalAccentInk()),
         keyboardOptions = KeyboardOptions(
             capitalization = KeyboardCapitalization.Sentences,
             imeAction = ImeAction.Default
@@ -5847,7 +5847,7 @@ private fun PersonalPhotoBlock(
                             fontSize = labelSize,
                             color = ink.copy(alpha = 0.72f)
                         ),
-                        cursorBrush = SolidColor(personalAccentInk()),
+                        cursorBrush = SolidColor(journalAccentInk()),
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(vertical = 3.dp)
@@ -6140,7 +6140,7 @@ private fun PrintSizeMenu(
 ) {
     val density = LocalDensity.current
     val ink = journalInk()
-    val accent = personalAccent()
+    val accent = journalAccentFill()
     // The size mark lives in the print's own border, which can sit low on the
     // page while the keyboard is up — keep the panel clear of both the keyboard
     // and the navigation bar so it is never half under either.
@@ -6301,7 +6301,7 @@ private fun PrintSizeTile(
     onPick: () -> Unit
 ) {
     val ink = journalInk()
-    val accent = personalAccent()
+    val accent = journalAccentFill()
     val grow = remember(option) { Animatable(0f) }
     LaunchedEffect(option) {
         if (delayMillis > 0) delay(delayMillis.toLong())
@@ -6488,7 +6488,7 @@ internal fun PersonalDocView(
     modifier: Modifier = Modifier,
     // v433 — the reading side wears the page's own ink too (see [PersonalCanvas]).
     ink: Color = journalInk(),
-    accent: Color = personalAccent(),
+    accent: Color = journalAccentFill(),
     onOpenPhoto: (String, Rect?) -> Unit = { _, _ -> },
     /**
      * v389 — a TITLE line can carry a FOLD. The book's whole-book review uses
@@ -6679,7 +6679,7 @@ internal fun PersonalDocView(
                 rowPage -> (rowSize.value * 1.7f).sp
                 else -> 27.sp
             }
-            val markerFill = personalAccentInk()
+            val markerFill = journalAccentInk()
             val markerOnFill = MaterialTheme.colorScheme.surface
             val markerOutline = ink.copy(alpha = 0.42f)
             val alignOf = block.align.toTextAlign()
@@ -7782,7 +7782,7 @@ internal fun PersonalToolDock(
     val exporter = rememberPersonalExporter(state)
     // The dock wears the app's own accent (the same one Home's hero uses), not
     // a hard rose — a member on the azure/hero-lane theme sees THEIR accent.
-    val accent = personalAccent()
+    val accent = journalAccentFill()
     // v437 — UNLESS THE PAGE HAS A COLOUR OF ITS OWN, and then the tools light
     // in THAT. The member: *"the dock's tools don't light in it"*. Every tool,
     // every panel's lit choice and the marker pens took [personalAccentInk] —

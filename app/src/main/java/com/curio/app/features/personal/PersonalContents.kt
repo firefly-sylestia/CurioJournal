@@ -160,7 +160,7 @@ internal fun PersonalNewPagePill(
             CurioIcon(
                 CurioIcons.Add,
                 "New page",
-                tint = personalAccentInk(),
+                tint = journalAccentInk(),
                 size = 20.dp
             )
         }
@@ -182,7 +182,7 @@ internal fun PersonalContentsPill(
             CurioIcon(
                 CurioIcons.Menu,
                 "Contents",
-                tint = personalAccentInk(),
+                tint = journalAccentInk(),
                 size = 20.dp
             )
         }
@@ -263,7 +263,7 @@ internal fun PersonalContentsSheet(
                             fontWeight = FontWeight.ExtraBold,
                             letterSpacing = 1.5.sp
                         ),
-                        color = personalAccentInk()
+                        color = journalAccentInk()
                     )
                     if (headings.isEmpty()) {
                         // The honest empty state, and it teaches the tool in one
@@ -307,7 +307,7 @@ internal fun PersonalContentsSheet(
                                     style = MaterialTheme.typography.labelLarge.copy(
                                         fontWeight = FontWeight.ExtraBold
                                     ),
-                                    color = personalAccentInk()
+                                    color = journalAccentInk()
                                 )
                                 Spacer(Modifier.width(12.dp))
                                 Text(

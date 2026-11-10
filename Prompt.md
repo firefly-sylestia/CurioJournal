@@ -2989,6 +2989,37 @@ being joined, (b) between the held print and the row it passes, or (c) between r
 member: *"fix everthing … and push"*) as **2.0.4 / `20260978`**, changelog `20260978.txt`, after confirming with
 `gh run list` that no build was in progress.
 
+## §113 — THE WRITING PAGE GETS THE JOURNAL'S THEME (2.0.5 / `20260979`)
+
+> "new theme for jounal paage too"
+
+**The constraint.** The writing page is ONE composable shared by the journal editor and the app's
+Personal side (a note on a topic, a book review), and it lives in `src/main` — compiled WITHOUT
+`app/src/journal`, so it cannot reference `JournalLook`. Rewriting it in the journal folder would fork
+a 9,000-line file.
+
+**The answer: the page asks by ROLE, the host hands down the paint.**
+
+- `PersonalTheme.kt` gained `JournalPageSkin` (paper, raised paper, ink, rule, accent, accent ink, on-accent)
+  and `LocalJournalPageSkin` (default `null`). `journalPaper()`, `journalPaperRaised()`, `journalInk()`,
+  `journalRule()`, and three new accessors — `journalAccentFill()`, `journalAccentInk()`, `journalOnAccent()`
+  — return the skin's value when there is one and **exactly the old value when there is not**.
+- `JournalLook.skin()` builds that skin from the journal's own palette, and `JournalActivity` provides it
+  around its whole nav host (inside `CurioTheme`, so the dark-mode probe is the real one). The app's build
+  provides nothing, so the app's Personal pages keep the accent they had.
+- The page-family call sites moved off the app accent: `PersonalCanvas.kt` (5 + 5), `JournalEditorScreen.kt`
+  (6 + 2 + 4), `PersonalPage.kt` (4), `PersonalContents.kt` (4), `PersonalVoice.kt` (9), `PersonalTodoRow.kt` (1).
+- **A rename trap worth remembering:** the fill accessor had to be `journalAccentFill()`, because
+  `PersonalWritingPage` and `PersonalToolDock` already carry a `journalAccent: Int` parameter (the page's own
+  colour) — a function of that name would have been shadowed, and the call would have read as invoking an
+  `Int`. Found by grepping the renamed identifiers against existing parameter names, not by compiling.
+
+**Not done:** the page's TYPE. It still sets headings in the app's fonts; the journal's serif needs a
+`FontFamily` in the skin too. Named here rather than smuggled in.
+
+**Checks:** brace/paren balance on every touched file (0/0); no Gradle. Version **2.0.5 / `20260979`**,
+changelog `20260979.txt`.
+
 ## next prompt
 
 *(The prompt that sat here — the drawer-star / book-cover batch and the desktop+iOS request — is ANSWERED for the

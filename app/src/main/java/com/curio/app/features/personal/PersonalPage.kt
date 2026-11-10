@@ -1015,7 +1015,7 @@ internal fun PersonalWritingPage(
                 // v502 — the badge in the pill follows the heading it names.
                 level = pinnedSection?.level ?: 0,
                 caption = "Heading",
-                accent = personalAccent(),
+                accent = journalAccentFill(),
                 onClick = {
                     // A DOOR: the bar IS the heading it names, so tapping it puts
                     // that heading at the top edge of the writing area. The
@@ -1086,7 +1086,7 @@ internal fun PersonalWritingPage(
             ) {
                 PersonalPageEditBar(
                     state = editor,
-                    accent = personalAccentInk(),
+                    accent = journalAccentInk(),
                     ink = journalInk()
                 )
             }
@@ -1484,7 +1484,7 @@ internal fun PersonalModeSwitch(
     onToggleMode: (Boolean) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val accent = personalAccent()
+    val accent = journalAccentFill()
     val calm = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.55f)
     // v389 — THE LIT HALF TRAVELS (user report: the switch "looks clanky",
     // especially when the keyboard is coming up at the same time). A fill that
@@ -1497,7 +1497,7 @@ internal fun PersonalModeSwitch(
         animationSpec = spring(dampingRatio = 0.82f, stiffness = 900f),
         label = "personal-mode-slide"
     )
-    val onInk = personalOnAccent()
+    val onInk = journalOnAccent()
     // ── v433 — IT IS THE PAGE'S CAPSULE NOW (see [JournalCapsule]) ─────────
     //
     // The member: "make the today and eye pen pill more capsule like … use one

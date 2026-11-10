@@ -84,6 +84,37 @@ internal fun journalInkOn(fill: Color): Color =
 @Composable
 internal fun personalIconTint(accent: Color): Color = settingsAccentInk()
 
+// ── v539 — THE PAGE'S OWN SKIN, PROVIDED BY WHOEVER HOSTS IT ────────────────
+
+/**
+ * THE COLOURS THE WRITING PAGE WEARS (v539).
+ *
+ * The page itself is ONE composable used by both apps in this repo: the journal
+ * variant's editor and the app's Personal side (a note on a topic, a book
+ * review). Its paper and ink have always been the journal tokens below, but the
+ * JOURNAL VARIANT now has a theme of its own (see `JournalLook` in
+ * `app/src/journal`), and that theme cannot be read from here — `src/main` is
+ * compiled WITHOUT the journal source set, so a reference to `JournalLook` from
+ * this file would break the app's own build.
+ *
+ * So the page is painted by ROLE, and the host supplies the paint: the journal
+ * activity provides its paper, ink, ox blood and brass-stop around its whole
+ * nav host; every other host provides nothing, and every function below falls
+ * back to exactly what it returned before this existed. Same page, two books.
+ */
+internal data class JournalPageSkin(
+    val paper: Color,
+    val paperRaised: Color,
+    val ink: Color,
+    val rule: Color,
+    val accent: Color,
+    val accentInk: Color,
+    val onAccent: Color
+)
+
+/** The skin the host handed down, or null for the app's own colours. */
+internal val LocalJournalPageSkin = staticCompositionLocalOf<JournalPageSkin?> { null }
+
 // ── v411 — THE JOURNAL'S OWN COLOURS ────────────────────────────────────────
 
 /**
@@ -139,6 +170,8 @@ internal val LocalJournalPagePaint = staticCompositionLocalOf { JournalPagePaint
  */
 @Composable
 internal fun journalPaper(): Color {
+    // v539 — the host's own sheet, when it has one (see [JournalPageSkin]).
+    LocalJournalPageSkin.current?.let { return it.paper }
     val warm = if (isCurioDarkTheme()) Color(0xFF17130F) else Color(0xFFFDF9F0)
     val strength = if (isCurioDarkTheme()) 0.10f else 0.05f
     return lerp(warm, personalAccent(), strength)
@@ -181,12 +214,17 @@ internal object JournalCapsule {
  * which is why the colour looked like it never arrived.
  */
 @Composable
-internal fun journalPaperRaised(): Color =
-    lerp(
+internal fun journalPaperRaised(): Color {
+    // v539 — a host with a skin names the raised step itself, so the journal's
+    // leaves can be a real step of its own paper rather than a lerp toward the
+    // app's accent.
+    LocalJournalPageSkin.current?.let { return it.paperRaised }
+    return lerp(
         journalPaper(),
         LocalJournalPagePaint.current.own ?: personalAccentInk(),
         if (isCurioDarkTheme()) 0.10f else 0.04f
     )
+}
 
 /**
  * The ink the journal writes with — the page's own onSurface, named so a journal
@@ -201,9 +239,33 @@ internal fun journalPaperRaised(): Color =
  * [journalOn], which measures it.
  */
 @Composable
-internal fun journalInk(): Color = MaterialTheme.colorScheme.onSurface
+internal fun journalInk(): Color =
+    LocalJournalPageSkin.current?.ink ?: MaterialTheme.colorScheme.onSurface
 
 /** The notebook's hairline — the rules and dividers INSIDE a journal card.
  *  (Cards themselves draw no border: a soft shadow is the edge now.) */
 @Composable
-internal fun journalRule(): Color = MaterialTheme.colorScheme.outlineVariant
+internal fun journalRule(): Color =
+    LocalJournalPageSkin.current?.rule ?: MaterialTheme.colorScheme.outlineVariant
+
+// ── v539 — THE PAGE'S ACCENT, BY ROLE ───────────────────────────────────────
+//
+// The writing page's capsules, dock, mark and switches used the app's personal
+// accent directly. They ask these now: with a skin they wear the host's ink (the
+// journal's ox blood), without one they wear exactly the accent they always
+// did. The app's Personal side provides no skin, so it is unchanged.
+
+/** The accent as a FILL on the page (a capsule, the dock, a button). */
+@Composable
+internal fun journalAccentFill(): Color =
+    LocalJournalPageSkin.current?.accent ?: personalAccent()
+
+/** The accent as the page's TEXT and GLYPH ink. */
+@Composable
+internal fun journalAccentInk(): Color =
+    LocalJournalPageSkin.current?.accentInk ?: personalAccentInk()
+
+/** The ink that reads ON [journalAccent]. */
+@Composable
+internal fun journalOnAccent(): Color =
+    LocalJournalPageSkin.current?.onAccent ?: personalOnAccent()

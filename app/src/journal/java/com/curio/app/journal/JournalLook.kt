@@ -17,6 +17,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.curio.app.features.personal.JournalPageSkin
 import com.curio.app.ui.theme.FrauncesFontFamily
 import com.curio.app.ui.theme.isCurioDarkTheme
 
@@ -131,6 +132,28 @@ internal object JournalLook {
         fontWeight = FontWeight.Medium,
         fontSize = 10.sp,
         letterSpacing = 1.3.sp
+    )
+
+    /**
+     * THE PAGE'S PAINT, HANDED TO THE WRITING PAGE (v539).
+     *
+     * The writing page is one composable shared with the app's Personal side, and
+     * it lives in `src/main` — which is compiled without this source set, so it
+     * cannot call this object. It reads its colours by ROLE instead
+     * (`journalPaper()`, `journalAccent()` and friends in PersonalTheme.kt), and
+     * the host supplies them through `LocalJournalPageSkin`. This is the
+     * journal's answer to that role set: the same sheet, ink, ox blood and brass
+     * the home page is printed on.
+     */
+    @Composable
+    fun skin(): JournalPageSkin = JournalPageSkin(
+        paper = paper(),
+        paperRaised = paperRaised(),
+        ink = ink(),
+        rule = rule(),
+        accent = accent(),
+        accentInk = accentInk(),
+        onAccent = onAccent()
     )
 
     /** The desk bar's own lift, and the paper leaves' — one scale, two steps. */

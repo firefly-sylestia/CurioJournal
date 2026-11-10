@@ -1408,7 +1408,7 @@ internal fun PersonalUndoPill(
 ) {
     Surface(
         shape = RoundedCornerShape(50),
-        color = personalAccentInk(),
+        color = journalAccentInk(),
         shadowElevation = 8.dp,
         modifier = modifier
     ) {
