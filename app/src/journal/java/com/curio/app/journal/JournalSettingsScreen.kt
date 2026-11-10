@@ -36,20 +36,12 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.curio.app.BuildConfig
 import com.curio.app.data.AppPreferences
-import com.curio.app.features.personal.journalInk
-import com.curio.app.features.personal.journalPaper
-import com.curio.app.features.personal.journalPaperRaised
-import com.curio.app.features.personal.personalAccent
-import com.curio.app.features.personal.personalAccentInk
-import com.curio.app.features.personal.personalOnAccent
 import com.curio.app.ui.theme.CurioIcon
 import com.curio.app.ui.theme.CurioIcons
-import com.curio.app.ui.theme.FrauncesFontFamily
 
 /**
  * THE JOURNAL'S SETTINGS — only the things a journal has.
@@ -73,9 +65,11 @@ fun JournalSettingsScreen(
     onOpenCalendar: () -> Unit
 ) {
     val context = LocalContext.current
-    val accent = personalAccent()
-    val accentInk = personalAccentInk()
-    val ink = MaterialTheme.colorScheme.onBackground
+    // v535 — the journal's own theme (see JournalLook), so the page a member
+    // configures looks like the page they write on.
+    val accent = JournalLook.accent()
+    val accentInk = JournalLook.accentInk()
+    val ink = JournalLook.ink()
 
     var themeMode by remember { mutableStateOf(AppPreferences.themeModeState) }
     var goal by remember { mutableIntStateOf(AppPreferences.getJournalGoal(context)) }
@@ -89,7 +83,7 @@ fun JournalSettingsScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background)
+            .background(JournalLook.paper())
             .statusBarsPadding()
     ) {
         // ── HEAD ────────────────────────────────────────────────────────
@@ -111,15 +105,12 @@ fun JournalSettingsScreen(
             Column(Modifier.weight(1f)) {
                 Text(
                     "Settings",
-                    style = MaterialTheme.typography.headlineMedium.copy(
-                        fontFamily = FrauncesFontFamily,
-                        fontWeight = FontWeight.SemiBold
-                    ),
+                    style = JournalLook.titleStyle(30.sp),
                     color = ink
                 )
                 Text(
-                    "Curio Journal",
-                    style = MaterialTheme.typography.labelSmall.copy(letterSpacing = 1.4.sp),
+                    "CURIO JOURNAL",
+                    style = JournalLook.stampStyle(),
                     color = accentInk.copy(alpha = 0.7f)
                 )
             }
@@ -197,10 +188,8 @@ fun JournalSettingsScreen(
                     Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                         Text(
                             "Daily word goal",
-                            style = MaterialTheme.typography.titleSmall.copy(
-                                fontWeight = FontWeight.SemiBold
-                            ),
-                            color = journalInk()
+                            style = JournalLook.titleStyle(15.sp),
+                            color = ink
                         )
                         Text(
                             when (goal) {
@@ -208,7 +197,7 @@ fun JournalSettingsScreen(
                                 else -> "A target, not a fence. Steps of 250."
                             },
                             style = MaterialTheme.typography.bodySmall,
-                            color = journalInk().copy(alpha = 0.55f)
+                            color = ink.copy(alpha = 0.55f)
                         )
                     }
                     GoalStepper(
@@ -239,7 +228,7 @@ fun JournalSettingsScreen(
                         .padding(bottom = 14.dp)
                         .height(4.dp)
                         .clip(RoundedCornerShape(50))
-                        .background(journalInk().copy(alpha = 0.07f))
+                        .background(ink.copy(alpha = 0.08f))
                 ) {
                     Box(
                         modifier = Modifier
@@ -306,7 +295,7 @@ fun JournalSettingsScreen(
                             CurioIcon(
                                 CurioIcons.Note,
                                 null,
-                                tint = personalOnAccent(),
+                                tint = JournalLook.onAccent(),
                                 size = 17.dp
                             )
                         }
@@ -315,15 +304,13 @@ fun JournalSettingsScreen(
                     Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                         Text(
                             "Curio Journal",
-                            style = MaterialTheme.typography.titleSmall.copy(
-                                fontWeight = FontWeight.SemiBold
-                            ),
-                            color = journalInk()
+                            style = JournalLook.titleStyle(15.sp),
+                            color = ink
                         )
                         Text(
                             "Version ${BuildConfig.VERSION_NAME}",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = journalInk().copy(alpha = 0.5f)
+                            style = JournalLook.stampStyle(),
+                            color = ink.copy(alpha = 0.45f)
                         )
                     }
                 }
@@ -331,9 +318,9 @@ fun JournalSettingsScreen(
 
             // ── FOOT ────────────────────────────────────────────────────
             Text(
-                "The journal from Curio — one page a day, and the days before it.",
-                style = MaterialTheme.typography.labelSmall,
-                color = ink.copy(alpha = 0.35f),
+                "THE JOURNAL FROM CURIO — ONE PAGE A DAY, AND THE DAYS BEFORE IT.",
+                style = JournalLook.stampStyle(),
+                color = JournalLook.brass().copy(alpha = 0.6f),
                 modifier = Modifier.padding(start = 4.dp)
             )
         }
@@ -348,21 +335,18 @@ private fun SettingsGroup(
     title: String,
     content: @Composable () -> Unit
 ) {
-    val ink = MaterialTheme.colorScheme.onBackground
+    val ink = JournalLook.ink()
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Text(
-            title,
-            style = MaterialTheme.typography.labelMedium.copy(
-                fontWeight = FontWeight.SemiBold,
-                letterSpacing = 1.2.sp
-            ),
+            title.uppercase(),
+            style = JournalLook.overlineStyle(),
             color = ink.copy(alpha = 0.42f),
             modifier = Modifier.padding(start = 6.dp)
         )
         Surface(
-            shape = RoundedCornerShape(22.dp),
-            color = journalPaper(),
-            shadowElevation = 1.dp,
+            shape = RoundedCornerShape(16.dp),
+            color = JournalLook.paperRaised(),
+            shadowElevation = JournalLook.LeafLift,
             modifier = Modifier.fillMaxWidth()
         ) {
             Column { content() }
@@ -378,7 +362,7 @@ private fun Divider() {
             .fillMaxWidth()
             .padding(horizontal = 16.dp)
             .height(1.dp)
-            .background(MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f))
+            .background(JournalLook.rule())
     )
 }
 
@@ -387,11 +371,11 @@ private fun Divider() {
 private fun RowGlyph(glyph: String, accent: Color) {
     Surface(
         shape = CircleShape,
-        color = lerp(journalPaper(), accent, 0.18f),
+        color = lerp(JournalLook.paper(), accent, 0.14f),
         modifier = Modifier.size(34.dp)
     ) {
         Box(Modifier.size(34.dp), contentAlignment = Alignment.Center) {
-            CurioIcon(glyph, null, tint = personalAccentInk(), size = 17.dp)
+            CurioIcon(glyph, null, tint = JournalLook.accentInk(), size = 17.dp)
         }
     }
 }
@@ -416,7 +400,7 @@ private fun <T> SegmentRow(
     accent: Color,
     onSelect: (T) -> Unit
 ) {
-    val ink = journalInk()
+    val ink = JournalLook.ink()
     Column(
         modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
         verticalArrangement = Arrangement.spacedBy(11.dp)
@@ -429,9 +413,7 @@ private fun <T> SegmentRow(
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                 Text(
                     label,
-                    style = MaterialTheme.typography.titleSmall.copy(
-                        fontWeight = FontWeight.SemiBold
-                    ),
+                    style = JournalLook.titleStyle(15.sp),
                     color = ink
                 )
                 Text(
@@ -447,7 +429,7 @@ private fun <T> SegmentRow(
                 Surface(
                     onClick = { onSelect(option.value) },
                     shape = RoundedCornerShape(50),
-                    color = if (isOn) accent else journalPaperRaised(),
+                    color = if (isOn) accent else lerp(JournalLook.paper(), JournalLook.ink(), 0.05f),
                     modifier = Modifier.weight(1f)
                 ) {
                     Row(
@@ -458,16 +440,14 @@ private fun <T> SegmentRow(
                         CurioIcon(
                             option.glyph,
                             null,
-                            tint = if (isOn) personalOnAccent() else ink.copy(alpha = 0.55f),
+                            tint = if (isOn) JournalLook.onAccent() else ink.copy(alpha = 0.55f),
                             size = 14.dp
                         )
                         Spacer(Modifier.width(5.dp))
                         Text(
                             option.label,
-                            style = MaterialTheme.typography.labelMedium.copy(
-                                fontWeight = FontWeight.SemiBold
-                            ),
-                            color = if (isOn) personalOnAccent() else ink.copy(alpha = 0.7f)
+                            style = JournalLook.stampStyle().copy(letterSpacing = 0.4.sp),
+                            color = if (isOn) JournalLook.onAccent() else ink.copy(alpha = 0.7f)
                         )
                     }
                 }
@@ -487,7 +467,7 @@ private fun SwitchRow(
     accent: Color,
     onChange: (Boolean) -> Unit
 ) {
-    val ink = journalInk()
+    val ink = JournalLook.ink()
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -499,9 +479,7 @@ private fun SwitchRow(
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
             Text(
                 label,
-                style = MaterialTheme.typography.titleSmall.copy(
-                    fontWeight = FontWeight.SemiBold
-                ),
+                style = JournalLook.titleStyle(15.sp),
                 color = if (enabled) ink else ink.copy(alpha = 0.45f)
             )
             Text(
@@ -516,7 +494,7 @@ private fun SwitchRow(
             onCheckedChange = onChange,
             enabled = enabled,
             colors = SwitchDefaults.colors(
-                checkedThumbColor = personalOnAccent(),
+                checkedThumbColor = JournalLook.onAccent(),
                 checkedTrackColor = accent,
                 uncheckedThumbColor = ink.copy(alpha = 0.4f),
                 uncheckedTrackColor = ink.copy(alpha = 0.08f),
@@ -535,8 +513,8 @@ private fun DoorRow(
     accent: Color,
     onClick: () -> Unit
 ) {
-    val ink = journalInk()
-    Surface(onClick = onClick, color = Color.Transparent, shape = RoundedCornerShape(22.dp)) {
+    val ink = JournalLook.ink()
+    Surface(onClick = onClick, color = Color.Transparent, shape = RoundedCornerShape(16.dp)) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -548,9 +526,7 @@ private fun DoorRow(
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                 Text(
                     label,
-                    style = MaterialTheme.typography.titleSmall.copy(
-                        fontWeight = FontWeight.SemiBold
-                    ),
+                    style = JournalLook.titleStyle(15.sp),
                     color = ink
                 )
                 Text(
@@ -572,7 +548,7 @@ private fun DoorRow(
 /** A row that is only a fact: no door, no switch. */
 @Composable
 private fun NoteRow(label: String, detail: String) {
-    val ink = journalInk()
+    val ink = JournalLook.ink()
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -581,7 +557,7 @@ private fun NoteRow(label: String, detail: String) {
     ) {
         Text(
             label,
-            style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold),
+            style = JournalLook.titleStyle(15.sp),
             color = ink
         )
         Text(
@@ -600,7 +576,7 @@ private fun GoalStepper(
     onDecrease: () -> Unit,
     onIncrease: () -> Unit
 ) {
-    val ink = journalInk()
+    val ink = JournalLook.ink()
     Row(verticalAlignment = Alignment.CenterVertically) {
         StepperButton(
             glyph = "−",
@@ -611,10 +587,7 @@ private fun GoalStepper(
         )
         Text(
             if (goal == 0) "Off" else goal.toString(),
-            style = MaterialTheme.typography.titleMedium.copy(
-                fontFamily = FrauncesFontFamily,
-                fontWeight = FontWeight.SemiBold
-            ),
+            style = JournalLook.titleStyle(16.sp),
             color = if (goal == 0) ink.copy(alpha = 0.45f) else ink,
             modifier = Modifier
                 .width(58.dp)
@@ -649,10 +622,8 @@ private fun StepperButton(
         Box(Modifier.size(32.dp), contentAlignment = Alignment.Center) {
             Text(
                 glyph,
-                style = MaterialTheme.typography.titleMedium.copy(
-                    fontWeight = FontWeight.SemiBold
-                ),
-                color = if (enabled) personalOnAccent() else ink.copy(alpha = 0.3f)
+                style = JournalLook.titleStyle(17.sp),
+                color = if (enabled) JournalLook.onAccent() else ink.copy(alpha = 0.3f)
             )
         }
     }

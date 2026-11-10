@@ -40,16 +40,11 @@ import androidx.compose.ui.unit.sp
 import com.curio.app.data.PersonalNoteEntity
 import com.curio.app.data.PersonalRepositoryHolder
 import com.curio.app.features.personal.PersonalShelfSnapshot
-import com.curio.app.features.personal.journalPaper
-import com.curio.app.features.personal.journalPaperRaised
-import com.curio.app.features.personal.personalAccent
-import com.curio.app.features.personal.personalAccentInk
 import com.curio.app.features.personal.shiftDay
 import com.curio.app.features.personal.startOfToday
 import com.curio.app.features.personal.toLocalDate
 import com.curio.app.ui.theme.CurioIcon
 import com.curio.app.ui.theme.CurioIcons
-import com.curio.app.ui.theme.FrauncesFontFamily
 import java.time.DayOfWeek
 import java.time.LocalDate
 import java.time.YearMonth
@@ -73,9 +68,11 @@ fun JournalCalendarScreen(
     onBack: () -> Unit,
     onOpenDay: (millis: Long, entryId: String?) -> Unit
 ) {
-    val accent = personalAccent()
-    val accentInk = personalAccentInk()
-    val ink = MaterialTheme.colorScheme.onBackground
+    // v535 — the journal's own theme (see JournalLook): the calendar is a page
+    // of the same book, so it takes the same sheet, ink and ox blood.
+    val accent = JournalLook.accent()
+    val accentInk = JournalLook.accentInk()
+    val ink = JournalLook.ink()
     val locale = LocalConfiguration.current.locales[0]
 
     val pages by produceState(initialValue = PersonalShelfSnapshot.journals) {
@@ -104,7 +101,7 @@ fun JournalCalendarScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background)
+            .background(JournalLook.paper())
             .statusBarsPadding()
     ) {
         Row(
@@ -125,19 +122,16 @@ fun JournalCalendarScreen(
             Column(Modifier.weight(1f)) {
                 Text(
                     month.atDay(1).format(DateTimeFormatter.ofPattern("MMMM", locale)),
-                    style = MaterialTheme.typography.headlineMedium.copy(
-                        fontFamily = FrauncesFontFamily,
-                        fontWeight = FontWeight.SemiBold
-                    ),
+                    style = JournalLook.titleStyle(30.sp),
                     color = ink,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
                 Text(
                     month.atDay(1).format(DateTimeFormatter.ofPattern("yyyy", locale)) +
-                        " · " + monthCountLabel(byDay, month),
-                    style = MaterialTheme.typography.labelSmall.copy(letterSpacing = 1.2.sp),
-                    color = accentInk.copy(alpha = 0.7f)
+                        "  ·  " + monthCountLabel(byDay, month),
+                    style = JournalLook.stampStyle(),
+                    color = JournalLook.brass().copy(alpha = 0.85f)
                 )
             }
             if (month != YearMonth.from(todayDate)) {
@@ -177,9 +171,7 @@ fun JournalCalendarScreen(
                 for (day in DayOfWeek.entries) {
                     Text(
                         day.getDisplayName(java.time.format.TextStyle.NARROW, locale),
-                        style = MaterialTheme.typography.labelSmall.copy(
-                            fontWeight = FontWeight.SemiBold
-                        ),
+                        style = JournalLook.stampStyle(),
                         color = ink.copy(alpha = 0.38f),
                         modifier = Modifier.weight(1f),
                         textAlign = androidx.compose.ui.text.style.TextAlign.Center
@@ -234,10 +226,7 @@ fun JournalCalendarScreen(
                     selected.toLocalDate().format(
                         DateTimeFormatter.ofPattern("d MMMM", locale)
                     ),
-                    style = MaterialTheme.typography.titleMedium.copy(
-                        fontFamily = FrauncesFontFamily,
-                        fontWeight = FontWeight.SemiBold
-                    ),
+                    style = JournalLook.titleStyle(19.sp),
                     color = ink
                 )
                 Spacer(Modifier.weight(1f))
@@ -247,16 +236,17 @@ fun JournalCalendarScreen(
                         1 -> "1 page"
                         else -> "${selectedPages.size} pages"
                     },
-                    style = MaterialTheme.typography.labelSmall,
-                    color = ink.copy(alpha = 0.42f)
+                    style = JournalLook.stampStyle(),
+                    color = JournalLook.brass().copy(alpha = 0.75f)
                 )
             }
             Spacer(Modifier.height(8.dp))
 
             if (selectedPages.isEmpty()) {
                 Surface(
-                    shape = RoundedCornerShape(20.dp),
-                    color = journalPaperRaised(),
+                    shape = RoundedCornerShape(14.dp),
+                    color = JournalLook.paperRaised(),
+                    shadowElevation = JournalLook.LeafLift,
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Column(
@@ -270,7 +260,7 @@ fun JournalCalendarScreen(
                         )
                         Text(
                             "Pick another day, or write today from Home.",
-                            style = MaterialTheme.typography.labelSmall,
+                            style = JournalLook.stampStyle(),
                             color = ink.copy(alpha = 0.32f)
                         )
                     }
@@ -307,7 +297,7 @@ private fun DayCell(
     modifier: Modifier = Modifier,
     onClick: () -> Unit
 ) {
-    val paper = journalPaper()
+    val paper = JournalLook.paper()
     Box(
         modifier = modifier
             .padding(2.dp)
@@ -332,12 +322,14 @@ private fun DayCell(
                 ) {
                     Text(
                         date.dayOfMonth.toString(),
-                        style = MaterialTheme.typography.labelLarge.copy(
+                        style = androidx.compose.ui.text.TextStyle(
+                            fontFamily = JournalLook.Display,
                             fontWeight = if (count > 0 || isToday) {
                                 FontWeight.SemiBold
                             } else {
-                                FontWeight.Normal
-                            }
+                                FontWeight.Medium
+                            },
+                            fontSize = 14.sp
                         ),
                         color = when {
                             isToday -> accentInk
@@ -356,8 +348,9 @@ private fun DayCell(
                             if (count > 1) {
                                 Text(
                                     count.toString(),
-                                    style = MaterialTheme.typography.labelSmall.copy(
-                                        fontSize = 8.sp
+                                    style = JournalLook.stampStyle().copy(
+                                        fontSize = 8.sp,
+                                        letterSpacing = 0.sp
                                     ),
                                     color = paper
                                 )

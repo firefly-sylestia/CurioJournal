@@ -14,6 +14,7 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.curio.app.ui.theme.FrauncesFontFamily
@@ -106,6 +107,21 @@ internal object JournalLook {
         fontWeight = FontWeight.SemiBold,
         fontSize = 10.5.sp,
         letterSpacing = 2.4.sp
+    )
+
+    /**
+     * A screen's own heading, in the display serif — the calendar's month, the
+     * settings page's title, the intro's question. One function, so every
+     * journal surface sets its heading the same way (the home's day is the one
+     * exception: it is set at 46sp with the year beside it).
+     */
+    @Composable
+    fun titleStyle(size: TextUnit = 28.sp): TextStyle = TextStyle(
+        fontFamily = Display,
+        fontWeight = FontWeight.SemiBold,
+        fontSize = size,
+        lineHeight = size * 1.14f,
+        letterSpacing = (-0.2).sp
     )
 
     /** A stamped line of small print (words, streak, a page's time). */

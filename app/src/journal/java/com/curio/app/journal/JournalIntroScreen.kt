@@ -39,15 +39,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.runtime.LaunchedEffect
 import com.curio.app.data.AppPreferences
-import com.curio.app.features.personal.journalInk
-import com.curio.app.features.personal.journalPaper
-import com.curio.app.features.personal.journalPaperRaised
-import com.curio.app.features.personal.personalAccent
-import com.curio.app.features.personal.personalAccentInk
-import com.curio.app.features.personal.personalOnAccent
 import com.curio.app.ui.theme.CurioIcon
 import com.curio.app.ui.theme.CurioIcons
-import com.curio.app.ui.theme.FrauncesFontFamily
 
 /**
  * THE FIRST OPEN ASKS FOR A NAME.
@@ -61,9 +54,11 @@ import com.curio.app.ui.theme.FrauncesFontFamily
 @Composable
 fun JournalIntroScreen(onDone: () -> Unit) {
     val context = LocalContext.current
-    val accent = personalAccent()
-    val accentInk = personalAccentInk()
-    val ink = journalInk()
+    // v535 — the journal's own theme (see JournalLook): the first page a member
+    // sees is printed on the same paper as the ones they will write.
+    val accent = JournalLook.accent()
+    val accentInk = JournalLook.accentInk()
+    val ink = JournalLook.ink()
     var name by remember { mutableStateOf("") }
     val focus = remember { FocusRequester() }
 
@@ -77,7 +72,7 @@ fun JournalIntroScreen(onDone: () -> Unit) {
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background)
+            .background(JournalLook.paper())
             .statusBarsPadding()
             .navigationBarsPadding()
             .padding(horizontal = 26.dp)
@@ -91,29 +86,19 @@ fun JournalIntroScreen(onDone: () -> Unit) {
                         .height(34.dp),
                     contentAlignment = Alignment.Center
                 ) {
-                    CurioIcon(CurioIcons.Note, null, tint = personalOnAccent(), size = 17.dp)
+                    CurioIcon(CurioIcons.Note, null, tint = JournalLook.onAccent(), size = 17.dp)
                 }
             }
-            Spacer(Modifier.width(10.dp))
-            Text(
-                "CURIO JOURNAL",
-                style = MaterialTheme.typography.labelSmall.copy(
-                    fontWeight = FontWeight.SemiBold,
-                    letterSpacing = 2.2.sp
-                ),
-                color = accentInk
-            )
+            Spacer(Modifier.width(12.dp))
+            JournalOverline("CURIO JOURNAL", accentInk)
         }
 
-        Spacer(Modifier.height(34.dp))
+        Spacer(Modifier.height(22.dp))
+        JournalDoubleRule()
+        Spacer(Modifier.height(28.dp))
         Text(
             "What should we\ncall you?",
-            style = MaterialTheme.typography.displaySmall.copy(
-                fontFamily = FrauncesFontFamily,
-                fontWeight = FontWeight.SemiBold,
-                fontSize = 40.sp,
-                lineHeight = 45.sp
-            ),
+            style = JournalLook.titleStyle(40.sp),
             color = ink
         )
         Spacer(Modifier.height(10.dp))
@@ -131,16 +116,15 @@ fun JournalIntroScreen(onDone: () -> Unit) {
             placeholder = {
                 Text("Your name", style = MaterialTheme.typography.bodyLarge)
             },
-            textStyle = MaterialTheme.typography.titleLarge.copy(
-                fontFamily = FrauncesFontFamily,
+            textStyle = JournalLook.titleStyle(18.sp).copy(
                 fontWeight = FontWeight.Medium
             ),
-            shape = RoundedCornerShape(18.dp),
+            shape = RoundedCornerShape(14.dp),
             colors = OutlinedTextFieldDefaults.colors(
                 focusedBorderColor = accent,
                 unfocusedBorderColor = ink.copy(alpha = 0.16f),
-                focusedContainerColor = journalPaper(),
-                unfocusedContainerColor = journalPaper(),
+                focusedContainerColor = JournalLook.paperRaised(),
+                unfocusedContainerColor = JournalLook.paperRaised(),
                 cursorColor = accent,
                 focusedTextColor = ink,
                 unfocusedTextColor = ink
@@ -167,13 +151,13 @@ fun JournalIntroScreen(onDone: () -> Unit) {
                     onDone()
                 },
                 shape = CircleShape,
-                color = journalPaperRaised()
+                color = JournalLook.paperRaised()
             ) {
                 Text(
                     "Skip",
-                    style = MaterialTheme.typography.labelLarge,
+                    style = JournalLook.stampStyle().copy(letterSpacing = 0.6.sp),
                     color = accentInk.copy(alpha = 0.75f),
-                    modifier = Modifier.padding(horizontal = 18.dp, vertical = 12.dp)
+                    modifier = Modifier.padding(horizontal = 18.dp, vertical = 13.dp)
                 )
             }
             Spacer(Modifier.weight(1f))
@@ -190,15 +174,13 @@ fun JournalIntroScreen(onDone: () -> Unit) {
                 ) {
                     Text(
                         "Start writing",
-                        style = MaterialTheme.typography.labelLarge.copy(
-                            fontWeight = FontWeight.SemiBold
-                        ),
-                        color = personalOnAccent()
+                        style = JournalLook.titleStyle(14.sp),
+                        color = JournalLook.onAccent()
                     )
                     CurioIcon(
                         CurioIcons.ArrowForward,
                         null,
-                        tint = personalOnAccent(),
+                        tint = JournalLook.onAccent(),
                         size = 16.dp
                     )
                 }

@@ -2889,6 +2889,33 @@ length as brass stamps. `JournalPageCard`'s signature is unchanged, so its calle
 this environment** — CI is the only compile. Branch `journal-redesign`; **committed locally, not pushed**, and no
 version bump (a bump belongs to a push).
 
+### v536 — the rest of the journal follows (same branch, same commit series)
+
+The member: *"Bring the journal's collection, calendar, settings and intro screens onto JournalLook so the whole
+journal matches the new home."*
+
+- **`JournalLook.titleStyle(size)`** added: one display-serif heading for every journal screen (the home's 46sp day stays
+  the one bespoke setting).
+- **`JournalCalendarScreen`** — sheet background and ink from `JournalLook`; the month at 30sp in the serif with
+  `yyyy · the day count` as a brass stamp; weekday initials as stamps; the day cell's numeral in the serif, today's
+  ox blood ring, the written-day wash and dot unchanged in behaviour; the selected day's heading at 19sp; the empty
+  state on a raised leaf with `LeafLift`.
+- **`JournalSettingsScreen`** — paper background, raised-leaf groups with the new 16dp corner and `LeafLift`, group
+  headings as overline small caps, row titles in the serif, hairlines from `JournalLook.rule()`, the theme segments and
+  the goal stepper on ox blood with `onAccent` ink, the version line as a stamp, the foot line as a brass stamp.
+  Every preference, switch and store call is untouched — only the paint moved.
+- **`JournalIntroScreen`** — the journal's own paper and ink, the accent disc in `onAccent`, `CURIO JOURNAL` as a
+  `JournalOverline` over a `JournalDoubleRule`, the question at 40sp in the serif, the field on `paperRaised` with the
+  ox blood caret and border, Skip on a raised capsule and "Start writing" on the accent.
+- **Collection — NOT done, and on purpose.** `CurioRoutes.JOURNALS` opens `features/personal/JournalListScreen.kt`: a
+  `src/main` file of ~1300 lines that the app's Personal side opens too, and `JournalLook` is compiled only into the
+  journal variant (a `src/main` file cannot see it). Making the collection wear the journal's paper means either
+  moving `JournalLook` into `src/main` and repainting a shared app surface, or building a journal-owned collection
+  screen in `app/src/journal`. **Asked the member which one.**
+
+**Checks:** brace/paren balance on all six journal files (0/0) and an audit that no `journalInk`/`journalPaper`/
+`personalAccent*`/`FrauncesFontFamily`/`colorScheme` reference is left in the three migrated screens; no Gradle.
+
 ## next prompt
 
 *(The prompt that sat here — the drawer-star / book-cover batch and the desktop+iOS request — is ANSWERED for the
