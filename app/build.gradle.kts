@@ -245,7 +245,7 @@ android {
         // the build that code shipped as).
         // v513 — 20260964 / 1.5.21: the +1 / +0.0.1 bump for the push that greets
         // the member by name and rebuilds Home around the day.
-        versionCode = 20260975
+        versionCode = 20260976
         // v406 — the local/PR default matches the version now being tagged, so
         // a build from main reports the release it belongs to (a v* tag still
         // overrides it through RELEASE_VERSION).
@@ -262,7 +262,7 @@ android {
         // v498 — the passport has a page of its own (agenda §5.4),
         // and the grid of stamps it used to be inside a Quests card moved
         // there whole, with the press and every lane's spin on it.
-        versionName = envReleaseVersion ?: "2.0.1"
+        versionName = envReleaseVersion ?: "2.0.2"
 
         // v354 — optional Google Books API key baked into BuildConfig so the
         // keyless fetchers can upgrade to keyed (higher-quota) calls when the

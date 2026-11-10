@@ -1,0 +1,9 @@
+ADD:
+- Journal: **the journal has its own look now** — warm paper, brown-black ink, an ox-blood accent and brass small print, instead of the app's colours.
+- Journal: **Home is a page.** The day is set large under a double rule, the week hangs below it as index tabs (today's tab filled), and the day's writing sits on it as paper leaves.
+- Journal: **a desk bar replaces the three floating circles** — Pages and Calendar are named, and a wide "Write today" nib starts the page.
+- Journal: **the calendar, the settings page and the first-run intro wear the same paper.**
+
+FIX:
+- Journal: a day with nothing written shows a blank line instead of an empty card.
+- Journal: the calendar's month, the settings headings and the intro's question are set in the journal's own serif.
