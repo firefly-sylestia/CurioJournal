@@ -19,7 +19,6 @@ import com.curio.app.data.CurioDatabase
 import com.curio.app.data.CurioRepositoryHolder
 import com.curio.app.data.PersonalRepositoryHolder
 import com.curio.app.features.personal.JournalEditorScreen
-import com.curio.app.features.personal.JournalListScreen
 import com.curio.app.navigation.CurioRoutes
 import com.curio.app.ui.CurioLayout
 import com.curio.app.ui.theme.CurioTheme
@@ -162,7 +161,10 @@ private fun JournalApp() {
         }
 
         composable(CurioRoutes.JOURNALS) {
-            JournalListScreen(navController = navController)
+            // v536 — the journal's OWN collection (see JournalCollectionScreen):
+            // the shared `features/personal/JournalListScreen` wears the app's
+            // tokens and is not compiled against JournalLook.
+            JournalCollectionScreen(navController = navController)
         }
 
         composable(

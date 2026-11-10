@@ -1,5 +1,6 @@
 package com.curio.app.journal
 
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -51,7 +52,9 @@ fun JournalPageCard(
     page: PersonalNoteEntity,
     modifier: Modifier = Modifier,
     compact: Boolean = false,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    /** v536 — held down, for the collection's remove. Null everywhere else. */
+    onLongClick: (() -> Unit)? = null
 ) {
     // v535 — the leaf wears the JOURNAL's paper and ink (see JournalLook), not
     // the app's theme roles: a page pasted into a journal, not a card in a feed.
@@ -62,11 +65,16 @@ fun JournalPageCard(
     val mood = page.moodEnum
     val spine = if (page.hasOwnAccent) Color(page.accentArgb) else accent
     Surface(
-        onClick = onClick,
         shape = RoundedCornerShape(if (compact) 10.dp else 12.dp),
         color = JournalLook.paperRaised(),
         shadowElevation = JournalLook.LeafLift,
-        modifier = modifier
+        // `combinedClickable` is the same press/hover indication the clickable
+        // Surface used, with the hold added — so the leaf behaves identically on
+        // Home and the calendar, where there is no hold.
+        modifier = modifier.combinedClickable(
+            onClick = onClick,
+            onLongClick = onLongClick
+        )
     ) {
         Column(
             modifier = Modifier

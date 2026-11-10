@@ -2907,11 +2907,16 @@ journal matches the new home."*
 - **`JournalIntroScreen`** — the journal's own paper and ink, the accent disc in `onAccent`, `CURIO JOURNAL` as a
   `JournalOverline` over a `JournalDoubleRule`, the question at 40sp in the serif, the field on `paperRaised` with the
   ox blood caret and border, Skip on a raised capsule and "Start writing" on the accent.
-- **Collection — NOT done, and on purpose.** `CurioRoutes.JOURNALS` opens `features/personal/JournalListScreen.kt`: a
-  `src/main` file of ~1300 lines that the app's Personal side opens too, and `JournalLook` is compiled only into the
-  journal variant (a `src/main` file cannot see it). Making the collection wear the journal's paper means either
-  moving `JournalLook` into `src/main` and repainting a shared app surface, or building a journal-owned collection
-  screen in `app/src/journal`. **Asked the member which one.**
+- **Collection — the member chose a journal-owned screen** (`JournalCollectionScreen.kt`, v536), and
+  `JournalActivity`'s `JOURNALS` route now opens it. The shared `features/personal/JournalListScreen.kt` is untouched
+  for the app's Personal side. The new screen keeps every capability of the old one — search (reads the row's own
+  title/preview/topic/mood/date line, never decodes a document), felt + length filters (lengths counted once off the
+  main thread and only while filtering), newest-first order with the written-time tiebreaker, month grouping,
+  long-press remove behind the same confirm dialog and `repo.deleteNote`, the today-vs-goal rail, and the write door
+  (`rememberJournalDoor`) — on the journal's paper: month heads as overlines with a brass page count, a leaf per page,
+  hairline filter chips that fill ox blood when live, and an ox-blood nib for the door.
+- **`JournalPageCard` gained `onLongClick`** (default null): the card moved from `Surface(onClick = …)` to
+  `Modifier.combinedClickable(onClick, onLongClick)`, so Home and the calendar behave exactly as before.
 
 **Checks:** brace/paren balance on all six journal files (0/0) and an audit that no `journalInk`/`journalPaper`/
 `personalAccent*`/`FrauncesFontFamily`/`colorScheme` reference is left in the three migrated screens; no Gradle.

@@ -323,6 +323,15 @@ applies to settings-gated experiments.
 One quick `gh run list` per decision; never a wait loop. Running → keep working.
 Failed → fix, push, then answer. Answering the member never waits on CI.
 
+### 🚦 NEVER PUSH WHILE A RUN IS IN PROGRESS (user directive, 2026-11-10)
+
+**Check `gh run list` immediately BEFORE every `git push`.** If the latest run for
+`main` is `in_progress` (or `queued`), do NOT push: finish and COMMIT the work
+locally, then either wait for that run to finish or end the task saying plainly
+that the commit is local and the push is held until the build clears. Pushing a
+second commit onto a build that is still compiling replaces the state being
+judged — a red run can then never be pinned to the code that caused it.
+
 ## Prompt.md — Research & Analysis Tracking
 
 `Prompt.md` at project root is the running log of the current request. See `Prompt.md` itself for its own rules. Agents must update Prompt.md when:
