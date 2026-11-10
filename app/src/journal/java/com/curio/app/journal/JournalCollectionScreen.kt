@@ -43,6 +43,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -108,7 +109,10 @@ fun JournalCollectionScreen(navController: NavController) {
     val journals = remember(pages) { pages.filter { !it.isTodo && !it.hasTopic } }
 
     val context = LocalContext.current
-    val locale = Locale.getDefault()
+    // v540 — THE LOCALE COMES THROUGH THE COMPOSITION. `Locale.getDefault()` in a
+    // composable is a lint ERROR in this project (`NonObservableLocale`): the page
+    // would keep the language it was first composed in when the member changes it.
+    val locale = LocalConfiguration.current.locales[0]
     val scope = rememberCoroutineScope()
 
     var query by remember { mutableStateOf("") }
