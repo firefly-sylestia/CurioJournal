@@ -2784,6 +2784,41 @@ prompt stays below it.)*
   **No Android change, no SQL, no migration.** Android's own version was not bumped (a Windows-only push has
   no Play release to name); the Windows app's version went `1.0.0+1 → 1.0.1+2`.
 
+## §110 — the carried print's landing is a LAYOUT (v532)
+
+**Request (member):** the preview of where a held print will land was wrong — the rows overlapped, the
+shadow sat above the stack it was joining, the page moved again at the drop, and a fifth print on a full
+stack was swallowed by the stack below. Then, in the same pass: *"the 1st image in the stack isnt moving to
+the left i hold them and move it to the other side but it doesnt land"*, plus a 2.0.0 bump/push and a
+follow-up on the size menu's preview accuracy.
+
+**What changed (`PersonalCanvas.kt`, `PersonalTodoRow.kt`):**
+- The landing is no longer a scalar translation. The target print row lays itself out WITH the incoming
+  print as a faded real cell (`PrintLandingCell`), at the sizes the drop will set (PAGE → HALF), and a
+  fifth print is drawn under the four (`PrintLandingRow`, from `normaliseRowOverflow`). A non-print target
+  gets the print's own line drawn before it in the page Column, so `Arrangement.spacedBy(6.dp)` opens the
+  real room. The old `shiftFor` slot shift stands down for photo carries (`photoCarry` / `previewLanding`),
+  which is what removes the overlap and the double movement.
+- `PersonalRowDragState.insertionOffset` measures the carried print's centre against every cell's box
+  (`cellPlaced`) and names the place among the cells; the drop uses the same answer (`dropBlock(cellOffset)`
+  → `printRunAt` → `moveBlock`), so preview and landing are one row. A sideways move inside the print's OWN
+  row now lands too — the drop used to re-seat it at the row head and undo the step.
+- `layoutDrift` compensates the carried print for the page moving under it (a preview row above the print
+  grows), measured from the row's live top, so the print never sinks away from the finger.
+- `PersonalPhotoBlock(labelOnly = true)` draws the caption band at the field's own metrics and reserves the
+  size door's width, so the faded cell is exactly the height the real one will be.
+
+**Version:** `2.0.0`, versionCode `20260974`, changelog `20260974.txt` (carried forward from `20260973`).
+
+**Checks:** brace/paren balance only (no Gradle in this environment). CI compiles.
+
+### Open
+- **The size menu's previews are not accurate enough yet** — the member asked for this next: real image
+  previews at each size, beautifully drawn.
+- The source row still closes its gap at the drop (the carried print's own node cannot leave its row
+  without losing the gesture); accepted for now.
+- A lone print is not a `printRows` run, so it still previews with the silhouette rather than a ghost cell.
+
 ## next prompt
 
 *(The prompt that sat here — the drawer-star / book-cover batch and the desktop+iOS request — is ANSWERED for the

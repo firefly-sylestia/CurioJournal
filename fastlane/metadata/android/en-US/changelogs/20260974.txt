@@ -1,0 +1,9 @@
+ADD:
+- Journal: **the space a carried picture will fill is now drawn.** While you hold a print, the row it is heading for shows its silhouette sunk into the paper with a soft shadow under the edge — no dashed lines, no bar, just the place it will land.
+- Journal: **the print sizes are a strip of live previews.** The size menu shows the photograph itself at each size, on a paper card, instead of three abstract rectangles.
+- Journal: **a print that does not fit a full stack gets its own line** under it, instead of being swallowed by the next stack.
+
+FIX:
+- Journal: **the rows open the real space while a print is carried.** The row you are over lays itself out with the picture in it, so the cells beside it move now — and nothing shifts again when you let go.
+- Journal: **a picture moved to the other side of its stack now lands there** instead of snapping back to the first cell.
+- Journal: **the remove mark is a disc of the journal's own paper** with a quiet ink cross, not a black chip on the photograph.
