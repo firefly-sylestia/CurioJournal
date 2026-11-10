@@ -6075,6 +6075,8 @@ private fun PrintSizeMenu(
     onClose: () -> Unit
 ) {
     val density = LocalDensity.current
+    val ink = journalInk()
+    val accent = personalAccent()
     // The size mark lives in the print's own border, which can sit low on the
     // page while the keyboard is up — keep the panel clear of both the keyboard
     // and the navigation bar so it is never half under either.
@@ -6129,8 +6131,40 @@ private fun PrintSizeMenu(
                     translationY = (1f - p) * 8.dp.toPx()
                 }
         ) {
-            Column(Modifier.padding(horizontal = 10.dp, vertical = 9.dp)) {
-                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            Column(Modifier.padding(start = 12.dp, end = 12.dp, top = 10.dp, bottom = 6.dp)) {
+                // ── v534 — THE PANEL SAYS WHICH SIZE IS WORN ────────────────
+                //
+                // Five unlabelled shapes compare well and say nothing about the
+                // one already on the print. A single line — the word Size on the
+                // left, the print's own size on the right, in the accent — names
+                // the choice without putting a caption under every tile (which
+                // five 52dp tiles cannot hold anyway).
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(start = 2.dp, end = 2.dp, bottom = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        "Size",
+                        style = MaterialTheme.typography.labelSmall.copy(
+                            fontFamily = WritingFontFamily,
+                            fontSize = 11.sp,
+                            letterSpacing = 1.4.sp
+                        ),
+                        color = ink.copy(alpha = 0.38f)
+                    )
+                    Spacer(Modifier.weight(1f))
+                    Text(
+                        size.label,
+                        style = MaterialTheme.typography.labelSmall.copy(
+                            fontFamily = WritingFontFamily,
+                            fontSize = 11.sp
+                        ),
+                        color = accent.copy(alpha = 0.92f)
+                    )
+                }
+                Row(horizontalArrangement = Arrangement.spacedBy(5.dp)) {
                     PersonalPhotoSize.entries.forEachIndexed { index, option ->
                         PrintSizeTile(
                             uri = uri,
@@ -6149,34 +6183,31 @@ private fun PrintSizeMenu(
                     Box(
                         Modifier
                             .fillMaxWidth()
-                            .padding(top = 8.dp, bottom = 6.dp)
+                            .padding(top = 9.dp, bottom = 3.dp)
                             .height(1.dp)
-                            .background(journalRule().copy(alpha = 0.6f))
+                            .background(ink.copy(alpha = 0.07f))
                     )
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
                         modifier = Modifier
                             .fillMaxWidth()
                             .clip(RoundedCornerShape(9.dp))
+                            .background(
+                                if (separated) accent.copy(alpha = 0.055f)
+                                else Color.Transparent
+                            )
                             .clickable { finish(onSeparate) }
-                            .padding(horizontal = 5.dp, vertical = 6.dp)
+                            .padding(horizontal = 9.dp, vertical = 8.dp)
                     ) {
-                        CurioIcon(
-                            CurioIcons.Check,
-                            null,
-                            tint = if (separated) personalAccent()
-                            else journalInk().copy(alpha = 0.24f),
-                            size = 15.dp
-                        )
-                        Spacer(Modifier.width(8.dp))
+                        SeparateMark(on = separated, accent = accent, ink = ink)
+                        Spacer(Modifier.width(9.dp))
                         Text(
                             "On its own line",
                             style = MaterialTheme.typography.bodyMedium.copy(
                                 fontFamily = WritingFontFamily,
                                 fontSize = 13.sp
                             ),
-                            color = journalInk()
-                                .copy(alpha = if (separated) 0.92f else 0.60f)
+                            color = ink.copy(alpha = if (separated) 0.92f else 0.58f)
                         )
                     }
                 }
@@ -6317,6 +6348,36 @@ private fun PrintSizeTile(
                 .clip(CircleShape)
                 .background(accent.copy(alpha = picked))
         )
+    }
+}
+
+/**
+ * v534 — THE "ON ITS OWN LINE" MARK.
+ *
+ * It used to draw the tick in BOTH states — accent when the print stood alone,
+ * a 24%-ink tick when it did not — so the row always looked ticked and the only
+ * difference was brightness (the member: "the alone line its showing tick and
+ * the indicator is wrong"). It is a stamp now: a hollow ring while the print is
+ * still in its stack, and a filled accent disc with a paper tick when it stands
+ * alone — the same on/off language the rest of the app's toggles use.
+ */
+@Composable
+private fun SeparateMark(on: Boolean, accent: Color, ink: Color) {
+    Box(
+        modifier = Modifier
+            .size(16.dp)
+            .clip(CircleShape)
+            .background(if (on) accent else Color.Transparent)
+            .border(
+                width = 1.dp,
+                color = if (on) accent else ink.copy(alpha = 0.26f),
+                shape = CircleShape
+            ),
+        contentAlignment = Alignment.Center
+    ) {
+        if (on) {
+            CurioIcon(CurioIcons.Check, null, tint = journalPaper(), size = 9.dp)
+        }
     }
 }
 

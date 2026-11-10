@@ -2826,6 +2826,19 @@ the drop itself lands on the measured cell (`insertionOffset`), inside its own r
 
 **Checks:** brace/paren balance only (no Gradle in this environment). CI compiles.
 
+### v534 — the size panel, polished (committed, NOT pushed — member: "dnt push")
+
+- The panel gets one header line: **Size** on the left (of the writing face, letterspaced, 38% ink) and the
+  print's own size on the right in the accent — the five shapes compare well but said nothing about the one
+  already worn, and five 52dp tiles cannot carry a caption each.
+- Spacing settled: 12dp side padding, 5dp between tiles (5×52 + 4×5 + 24 = the panel's 304dp exactly),
+  10/6dp vertical, 9dp above the rule and 8dp inside the separate row.
+- **The "On its own line" mark was wrong**: the row drew the SAME tick in both states and only changed its
+  brightness, so it always read as ticked (member: "the alone line its showing tick and the indicator is
+  wrong"). `SeparateMark` is now a stamp: a hollow ring while the print is in its stack, a filled accent
+  disc with a paper tick when it stands alone, and the row itself takes a 5.5% accent wash when it is on.
+- **No version bump** (a bump belongs to a push, and this batch is not being pushed).
+
 ### Open
 - The source row still closes its gap at the drop (the carried print's own node cannot leave its row
   without losing the gesture); accepted for now.
