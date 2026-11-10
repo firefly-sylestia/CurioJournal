@@ -6,6 +6,26 @@ from the state rather than from memory.
 
 ---
 
+## §107 — ROLLED BACK TO `2c799053` (local commit, not pushed)
+
+> "revert the repo untill this commit include that commit in revert too" —
+> `6d5733c8687d4403e815e9c7b8b75fa03dc7bd3a` — then: "revert 3d too" — then:
+> "Revert 78ec76f7 as well so the repo is exactly at 2c799053".
+
+**What was done.** `git revert 78ec76f7 3d62dcec 6d5733c8^..HEAD` — eleven commits
+undone (`78ec76f7` through `b873d043`): the short hold and first-pixel follow, the
+20260973 note, the title bar and no-wash tool row, the landing hole, the drawn
+sizes and square-four, the fan/gather control, the Home date and week strip, and
+tap-to-pick-up. The journal code and store notes now match **`2c799053`** exactly
+(`git diff 2c799053 -- app fastlane` is empty); only this log differs. Committed
+locally at the member's request — **not pushed**.
+
+**State this restores:** the platform's `detectDragGesturesAfterLongPress` is back
+for every block, so the accidental carry from a slide is gone along with the
+custom 200 ms hold; there is no landing hole, no drawn size menu and no fan mark.
+
+---
+
 ## §106 — THE STACK COMES APART, AND HOME IS THE DAY (v513 / `1.5.21` / `20260964`; pushed)
 
 > "do the remaining task of the bug i reported" — then: "home screen redesign, and intro, so when user

@@ -47,8 +47,6 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.runtime.Composable
-import kotlinx.coroutines.launch
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.CompositionLocalProvider
@@ -79,9 +77,6 @@ import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
-import androidx.compose.animation.core.Animatable
-import androidx.compose.foundation.Canvas
-import kotlinx.coroutines.delay
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.SolidColor
@@ -4220,68 +4215,45 @@ internal fun PersonalCanvas(
                                 coordinates.size.height.toFloat()
                             )
                         }
-                        // ── v526 — THE HOLE IS DRAWN WHERE THE HOLE IS ─────
+                        .graphicsLayer { translationY = blockShift }
+                        // ── v522 — THE HOLE THE PRINT WILL FILL ────────────
                         //
-                        // v522 drew the landing silhouette UNDER the row's own
-                        // translation and ON TOP of its content, which is exactly
-                        // the three things the member saw: it slid with the row
-                        // instead of staying in the space ("showing wrong
-                        // place"), it covered the pictures it was meant to sit
-                        // between ("the preview shadow shows above the images"),
-                        // and its height was the carried print's rather than the
-                        // row's, so it spilled onto whatever was below it
-                        // ("wrong view").
-                        //
-                        // Fixed by where in the chain it is drawn, and in what
-                        // order:
-                        //
-                        //  · OUTSIDE `graphicsLayer`, so the row's shift does not
-                        //    carry it — the row slides away and the silhouette
-                        //    stays in the slot the row left, which IS the hole.
-                        //  · BEFORE `drawContent()`, so it is paper under the
-                        //    row rather than a wash over it.
-                        //  · No taller than the row it sits in, so it can never
-                        //    reach the next row's prints.
+                        // The rows now slide apart while a print is carried
+                        // (see `rowHoldsCarried`), which is the space; this is
+                        // what makes it read as a PLACE rather than a gap — the
+                        // carried print's own silhouette, sunk into the paper
+                        // with a soft shadow under its edge. Nothing dashed, no
+                        // bar: only the shape and its shadow, exactly the "soft
+                        // shadow sits in the space" the member asked for.
                         .then(
                             if (landingHere) Modifier.drawWithContent {
-                                // The space the row left is the row's own height
-                                // at most — never the carried print's, which may
-                                // be taller than the row that is moving out of
-                                // its way.
-                                val room = rowDrag.carriedHeight.coerceAtMost(size.height)
-                                if (room > 0f && size.height > 0f) {
-                                    val radius = CornerRadius(12.dp.toPx())
+                                drawContent()
+                                val room = rowDrag.carriedHeight
+                                if (room > 0f) {
+                                    val radius = CornerRadius(14.dp.toPx())
                                     val width = size.width
-                                    // The shadow is stacked wide-and-faint to
-                                    // narrow-and-firmer: a blur drawn by hand, so
-                                    // no layer or RenderEffect is needed. It is
-                                    // drawn INSIDE the room, not below it, so the
-                                    // soft edge belongs to the hole.
-                                    listOf(7.dp to 0.040f, 4.dp to 0.055f, 2.dp to 0.075f)
+                                    // The shadow is stacked from wide and faint to
+                                    // narrow and firmer — a blur, drawn by hand,
+                                    // so no layer or RenderEffect is needed.
+                                    listOf(10.dp to 0.045f, 6.dp to 0.065f, 3.dp to 0.09f)
                                         .forEach { (behind, alpha) ->
                                             val step = behind.toPx()
-                                                .coerceAtMost((room - 1f).coerceAtLeast(0f))
                                             drawRoundRect(
                                                 color = Color.Black.copy(alpha = alpha),
                                                 topLeft = Offset(0f, step),
-                                                size = Size(
-                                                    width,
-                                                    (room - step).coerceAtLeast(1f)
-                                                ),
+                                                size = Size(width, room),
                                                 cornerRadius = radius
                                             )
                                         }
                                     drawRoundRect(
-                                        color = accent.copy(alpha = 0.055f),
+                                        color = accent.copy(alpha = 0.075f),
                                         topLeft = Offset(0f, 0f),
                                         size = Size(width, room),
                                         cornerRadius = radius
                                     )
                                 }
-                                drawContent()
                             } else Modifier
                         )
-                        .graphicsLayer { translationY = blockShift }
                 ) {
                 if (block.isPhoto) {
                     // ── THE ROW OF PRINTS (v389d, v396) ───────────────────
@@ -4297,15 +4269,7 @@ internal fun PersonalCanvas(
                     val nextId = state.blockIds.getOrNull(nextIndex)
                     val nextBlock = nextId?.let { state.block(it) }
                     if (row != null) {
-                        // v527 — THE ROW BREATHES. Fanning a stack out changes
-                        // how many lines it takes, and a layout that changes
-                        // shape in one frame reads as a glitch; this lets the
-                        // page's own space follow the change.
-                        Column(
-                            modifier = Modifier.animateContentSize(
-                                spring(dampingRatio = 0.9f, stiffness = 320f)
-                            )
-                        ) {
+                        Column {
                         PersonalPrintArrangement(
                             ids = row,
                             sizeOf = { member -> state.photoSize(member) }
@@ -4371,61 +4335,6 @@ internal fun PersonalCanvas(
                                 }
                             }
                         }
-                        // ── v527 — FAN THE STACK OUT, AND GATHER IT BACK ──
-                        //
-                        // A row of prints is one shape on the page, and there
-                        // are times the member wants to see the pictures one
-                        // under another (to write between them, to check them)
-                        // without dragging each one out by its menu. This is
-                        // that, in one press: every member of the row goes onto
-                        // its own line, and one press gathers them back.
-                        //
-                        // The presses are STAGGERED rather than all at once, so
-                        // the stack opens like a hand of cards — first print
-                        // first — and the mark turns as it goes: straight lines
-                        // closed, spread lines open.
-                        val fannedOut = row.size > 1 && row.all { state.isPhotoSeparated(it) }
-                        val fan = remember(row.first()) { Animatable(0f) }
-                        LaunchedEffect(fannedOut) {
-                            fan.animateTo(
-                                if (fannedOut) 1f else 0f,
-                                spring(dampingRatio = 0.70f, stiffness = 300f)
-                            )
-                        }
-                        if (enabled && row.size > 1) {
-                            val fanScope = rememberCoroutineScope()
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(top = 1.dp),
-                                contentAlignment = Alignment.CenterEnd
-                            ) {
-                                Surface(
-                                    onClick = {
-                                        val open = !fannedOut
-                                        fanScope.launch {
-                                            row.forEachIndexed { at, member ->
-                                                state.setPhotoSeparated(member, open)
-                                                if (at < row.lastIndex) delay(60)
-                                            }
-                                        }
-                                    },
-                                    shape = CircleShape,
-                                    color = Color.Transparent,
-                                    modifier = Modifier.size(26.dp)
-                                ) {
-                                    Box(
-                                        Modifier.fillMaxSize(),
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        FanGlyph(
-                                            open = fan.value,
-                                            ink = ink.copy(alpha = 0.36f)
-                                        )
-                                    }
-                                }
-                            }
-                        }
                         // v519 — THE DOOR BELONGS TO THE PICTURE YOU ARE IN.
                         //
                         // It used to sit under EVERY row of prints, which read as
@@ -4433,42 +4342,16 @@ internal fun PersonalCanvas(
                         // while the member is inside that row — its caption in
                         // hand — which is the "show it below a certain image when
                         // that's selected" they asked for.
-                        // ── v526 — AND THE LINE IT MADE CAN BE TAKEN BACK ──
-                        //
-                        // The door writes a line under the row and then — because
-                        // it only showed while the print's caption had the caret —
-                        // it disappeared the instant the new line took the caret,
-                        // leaving the member with a blank line and no way to undo
-                        // it. The door now stays for that line too (an empty line
-                        // directly under the row, with the caret in it) and carries
-                        // a cross that removes it. One press writes, one press
-                        // takes it back, and neither is a guess.
-                        val rowAnchor = state.blockIds.indexOf(row.last())
-                        val lineUnder = state.blockIds.getOrNull(rowAnchor + 1)
-                            ?.takeIf { candidate ->
-                                val under = state.block(candidate) ?: return@takeIf false
-                                !under.isPhoto && !under.isAudio &&
-                            state.text(candidate).isBlank()
-                            }
-                        val doorOpen = enabled && (
-                            (state.captionFocusedId != null &&
-                                row.contains(state.captionFocusedId)) ||
-                                (lineUnder != null && state.focusedId == lineUnder)
-                            )
-                        if (doorOpen) {
+                        if (enabled && state.captionFocusedId != null &&
+                            row.contains(state.captionFocusedId)
+                        ) {
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .padding(top = 2.dp)
                                     .clip(RoundedCornerShape(8.dp))
-                                    .clickable {
-                                        // Only writes when there is nothing there
-                                        // to write into.
-                                        if (lineUnder == null) {
-                                            state.insertLineAfter(row.last())
-                                        }
-                                    }
-                                    .padding(start = 6.dp, end = 2.dp, top = 5.dp, bottom = 5.dp),
+                                    .clickable { state.insertLineAfter(row.last()) }
+                                    .padding(horizontal = 6.dp, vertical = 7.dp),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 Text(
@@ -4479,56 +4362,9 @@ internal fun PersonalCanvas(
                                 Spacer(Modifier.width(7.dp))
                                 Text(
                                     "Write here",
-                                    modifier = Modifier.weight(1f),
                                     style = MaterialTheme.typography.labelSmall,
                                     color = ink.copy(alpha = 0.42f)
                                 )
-                                if (lineUnder != null) {
-                                    val close = remember(row.last()) { CurioMenuToggle() }
-                                    Box {
-                                        Surface(
-                                            onClick = { close.buttonClick() },
-                                            shape = CircleShape,
-                                            color = Color.Transparent,
-                                            modifier = Modifier.size(26.dp)
-                                        ) {
-                                            Box(
-                                                Modifier.fillMaxSize(),
-                                                contentAlignment = Alignment.Center
-                                            ) {
-                                                CurioIcon(
-                                                    CurioIcons.Close,
-                                                    "Remove this line",
-                                                    tint = ink.copy(alpha = 0.40f),
-                                                    size = 13.dp
-                                                )
-                                            }
-                                        }
-                                        DropdownMenu(
-                                            expanded = close.open,
-                                            onDismissRequest = { close.dismissed() },
-                                            properties = MenuKeepKeyboardProperties
-                                        ) {
-                                            DropdownMenuItem(
-                                                text = {
-                                                    Text(
-                                                        "Remove this line",
-                                                        style = MaterialTheme.typography
-                                                            .bodyMedium.copy(
-                                                                fontFamily = WritingFontFamily
-                                                            ),
-                                                        color = MaterialTheme.colorScheme
-                                                            .onSurface
-                                                    )
-                                                },
-                                                onClick = {
-                                                    close.close()
-                                                    state.removeBlock(lineUnder)
-                                                }
-                                            )
-                                        }
-                                    }
-                                }
                             }
                         }
                         }
@@ -5434,15 +5270,6 @@ private fun PersonalPrintArrangement(
         // instead of the column's whole width, which is what made a Small and a
         // Half beside it come out the same size.
         val stackedShare = stacked.maxOf { weightOf(it) }
-        // v525 — THE TWO BESIDE THE FRAME ADD UP TO IT.
-        //
-        // Each stacked print kept its own height, so the pair beside a tall
-        // frame ended wherever their two heights did and the three had a
-        // ragged foot. The two share the frame's own height now (less the gap
-        // between them), so the shape closes flush: one frame, and exactly the
-        // frame's height divided beside it.
-        val stackedHeight = ((heightOf(tall) - PRINT_ROW_GAP) /
-            stacked.size.coerceAtLeast(1)).coerceAtLeast(48.dp)
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(PRINT_ROW_GAP),
@@ -5458,7 +5285,7 @@ private fun PersonalPrintArrangement(
                 stacked.forEach { id ->
                     cell(
                         id,
-                        stackedHeight,
+                        heightOf(id),
                         Modifier.fillMaxWidth(weightOf(id) / stackedShare)
                     )
                 }
@@ -5466,16 +5293,8 @@ private fun PersonalPrintArrangement(
         }
         return
     }
-    // ── v525 — FOUR IS A SQUARE ──────────────────────────────────────
-    //
-    // Two lines of two used to take each print's OWN weight and height, so four
-    // prints of four sizes made two ragged lines that happened to share a
-    // column — not the square a run of four photographs is. All four cells are
-    // the same cell now (equal weight, one height), which is the shape the
-    // member draws in their head when they add the fourth picture. The height
-    // is the SMALLEST of the four, so a page-height print can never push the
-    // square past the measure it sits in.
-    val squareHeight = ids.minOf { heightOf(it) }
+    // FOUR — two lines of two. (The row's limit is four, so nothing longer
+    // arrives; a page with more prints simply starts the next row.)
     Column(
         modifier = Modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(PRINT_ROW_GAP)
@@ -5487,8 +5306,8 @@ private fun PersonalPrintArrangement(
                 verticalAlignment = Alignment.Top
             ) {
                 line.forEach { id ->
-                    Box(Modifier.weight(1f)) {
-                        cell(id, squareHeight, Modifier.fillMaxWidth())
+                    Box(Modifier.weight(weightOf(id))) {
+                        cell(id, heightOf(id), Modifier.fillMaxWidth())
                     }
                 }
                 if (line.size == 1) Spacer(Modifier.weight(1f))
@@ -5760,31 +5579,17 @@ private fun PersonalPhotoBlock(
                         // dock's menus used to (see MenuKeepKeyboardProperties).
                         properties = MenuKeepKeyboardProperties
                     ) {
-                        // ── v525 — THE SIZES ARE SHOWN, NOT SPELLED ──────
-                        //
-                        // The member: *"instead of text small portraights etc,
-                        // use proper icons with preview of the stack"*. Five
-                        // words asked the member to imagine what "Small
-                        // portrait" does to their page. Each row is now the
-                        // print ITSELF at that size — the measure drawn as a
-                        // hairline, the print filled inside it at its own share
-                        // and its own height — so the choice is the shape, and
-                        // each preview grows into place as the menu opens (see
-                        // [PrintSizePreview]), which is the same move the page
-                        // makes when the print changes.
-                        PersonalPhotoSize.entries.forEachIndexed { order, option ->
+                        PersonalPhotoSize.entries.forEach { option ->
                             DropdownMenuItem(
-                                leadingIcon = {
-                                    PrintSizePreview(
-                                        option = option,
-                                        ink = MaterialTheme.colorScheme.onSurface,
-                                        selected = option == size,
-                                        delayMillis = order * 35
+                                text = {
+                                    Text(
+                                        option.label,
+                                        style = MaterialTheme.typography.bodyMedium.copy(
+                                            fontFamily = WritingFontFamily
+                                        ),
+                                        color = MaterialTheme.colorScheme.onSurface
                                     )
                                 },
-                                // The preview IS the label; the words stay for a
-                                // screen reader only.
-                                text = {},
                                 trailingIcon = {
                                     if (option == size) {
                                         CurioIcon(
@@ -7182,16 +6987,6 @@ internal fun PersonalToolDock(
     // was.
     val accentInk = journalDoorAccent(journalAccent)
     val ink = MaterialTheme.colorScheme.onSurfaceVariant
-    // ── v524 — A TITLE'S OWN BAR ───────────────────────────────────────
-    //
-    // The member: *"hide the tools for title, like hide the tools that we dont
-    // need"*. A heading line is set once — it is a name for what follows — and
-    // four of the tools below cannot act on it at all: a title is not a to-do,
-    // is not "small text" (its size IS the heading), is not a bulleted list, and
-    // a quote block is body text by definition. Nine working tools with four
-    // dead ones among them is a bar that has to be read rather than used, so on
-    // a heading line those four step out and the writing ones close up.
-    val onTitleLine = headingLevelOfFocused(state) > 0
     // v428 — THE TOOL ROW REMEMBERS WHERE IT WAS LEFT. A row of tools wider
     // than a phone is scrolled to reach the last of them, and the state used to
     // be `rememberScrollState()` INSIDE the row — so the moment the dock swapped
@@ -7526,7 +7321,6 @@ internal fun PersonalToolDock(
             ) {
                 HeadingBadge(level = focusedHeading)
             }
-            if (!onTitleLine) {
             PersonalToolButton(
                 label = "Todo checkbox",
                 active = active and FLAG_CHECKBOX != 0,
@@ -7583,7 +7377,6 @@ internal fun PersonalToolDock(
                 onClick = { state.toggle(FLAG_QUOTE) }
             ) {
                 CurioIcon(CurioIcons.FormatQuote, null, size = 18.dp)
-            }
             }
             // ── THE ALIGNMENT: ONE TOOL, FOUR CHOICES (v428) ────────────
             //
@@ -7670,10 +7463,7 @@ internal fun PersonalToolDock(
         // floating list somewhere else. The cross at the panel's end puts it
         // away, and so does the door (a second press closes what it opened).
         AnimatedVisibility(
-            // v524 — a panel cannot outlive its door: the bullet styles are
-            // hidden on a title line, so an open bullet panel goes with them.
-            visible = openGroup != null && !collapsed &&
-                !(onTitleLine && openGroup == PersonalDockGroup.BULLET),
+            visible = openGroup != null && !collapsed,
             enter = expandVertically(tween(170)) + fadeIn(tween(130)),
             exit = shrinkVertically(tween(130)) + fadeOut(tween(100))
         ) {
@@ -8509,96 +8299,6 @@ private fun HeadingBadge(level: Int) {
     }
 }
 
-/**
- * v525 — A SIZE, DRAWN.
- *
- * The measure the print will sit in is a hairline rounded box; the print is a
- * filled box at its own share of that measure and its own height relative to the
- * tallest size. So "Portrait" is a tall narrow print, "Small" is a short one,
- * "Page" is the whole measure — read at a glance, without a word.
- *
- * It GROWS into place: the fill starts small and springs to its size when the
- * menu opens, staggered by [delayMillis] down the list, so the five options
- * arrive as one movement rather than as five icons appearing at once.
- */
-/**
- * v527 — THE FAN MARK.
- *
- * Three prints drawn as one shape: closed, they sit on top of each other (a
- * stack); open, they spread into three lines. [open] is the animation's own
- * value, so the mark leans between the two states exactly as the page does —
- * it never cuts from one picture to the other.
- */
-@Composable
-private fun FanGlyph(open: Float, ink: Color) {
-    Canvas(Modifier.size(width = 18.dp, height = 18.dp)) {
-        val width = size.width
-        val height = size.height
-        val cardW = width * 0.56f
-        val cardH = height * 0.26f
-        // Closed, the three share the mark's middle; open, they take the top,
-        // the middle and the bottom of it.
-        val spread = (height - cardH) * 0.5f * open
-        listOf(-1f, 0f, 1f).forEach { slot ->
-            val top = (height - cardH) / 2f + slot * spread
-            val left = (width - cardW) / 2f + slot * (width * 0.07f) * open
-            drawRoundRect(
-                color = ink.copy(alpha = if (slot == 0f) 1f else 0.62f),
-                topLeft = Offset(left, top),
-                size = Size(cardW, cardH),
-                cornerRadius = CornerRadius(1.5.dp.toPx())
-            )
-        }
-    }
-}
-
-@Composable
-private fun PrintSizePreview(
-    option: PersonalPhotoSize,
-    ink: Color,
-    selected: Boolean,
-    delayMillis: Int = 0
-) {
-    val grow = remember(option) { Animatable(0.5f) }
-    LaunchedEffect(option) {
-        if (delayMillis > 0) delay(delayMillis.toLong())
-        grow.animateTo(1f, spring(dampingRatio = 0.62f, stiffness = 330f))
-    }
-    val strength = if (selected) 0.80f else 0.40f
-    // The tallest size is the Portrait frame, so every other height is read
-    // against it — the same table the page lays prints out with.
-    val tallest = personalPrintHeight(PersonalPhotoSize.PORTRAIT).value
-    Canvas(
-        Modifier
-            .size(width = 44.dp, height = 34.dp)
-            .semantics { contentDescription = option.label }
-    ) {
-        val pad = 1.dp.toPx()
-        val innerW = size.width - pad * 2
-        val innerH = size.height - pad * 2
-        // The measure — the words' own column, as a hairline.
-        drawRoundRect(
-            color = ink.copy(alpha = 0.16f),
-            topLeft = Offset(pad, pad),
-            size = Size(innerW, innerH),
-            cornerRadius = CornerRadius(2.dp.toPx()),
-            style = Stroke(width = 1.dp.toPx())
-        )
-        // The print, at its own share of that measure and its own height.
-        val printW = (innerW - 3.dp.toPx()) * option.fraction
-        val printH = ((innerH - 4.dp.toPx()) *
-            (personalPrintHeight(option).value / tallest)).coerceAtLeast(5.dp.toPx())
-        val left = pad + (innerW - printW) / 2f
-        val top = pad + (innerH - printH) / 2f
-        drawRoundRect(
-            color = ink.copy(alpha = strength * grow.value),
-            topLeft = Offset(left, top),
-            size = Size(printW * grow.value.coerceAtLeast(0.02f), printH),
-            cornerRadius = CornerRadius(1.5.dp.toPx())
-        )
-    }
-}
-
 @Composable
 private fun PersonalToolButton(
     label: String,
@@ -8630,16 +8330,8 @@ private fun PersonalToolButton(
         // on the dark one alike — and the lit tool is still the solid accent disc
         // it was (v433). The blend is OPAQUE on purpose: a translucent fill lets
         // the bar's own shadow bleed through it (root compile-safety rule 11).
-        // ── v524 — AN IDLE TOOL IS A GLYPH, NOT A DISC ─────────────────
-        //
-        // v496 gave every tool a faint disc of its own to say where one tool
-        // ended and the next began; on the journal's paper that read as a wash
-        // under all nine of them — *"remove the unnecessary highlight inside the
-        // bar, its ugly design"*. The bar is already a bar: the tools sit on it
-        // bare, and the ONLY fill in the row is the one that means something,
-        // the solid accent disc of a lit tool (v433). Air between the tools is
-        // the row's own 2dp spacing, not a second surface.
-        color = if (active) accent else Color.Transparent,
+        color = if (active) accent
+        else lerp(MaterialTheme.colorScheme.surfaceContainerHigh, ink, 0.10f),
         modifier = Modifier
             // v436 — 42dp rather than 36: the dock was called too thin, and a
             // 36dp target is under the 48dp a thumb wants on the row a member

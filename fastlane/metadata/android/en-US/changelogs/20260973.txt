@@ -1,11 +1,2 @@
 ADD:
-- Journal: **the space a carried picture will fill is drawn.** The row it is heading for opens, and the space it leaves is drawn as the picture's own silhouette sunk into the paper with a soft shadow under its edge — under the page's content, never over it, and never taller than the row that moved aside.
-- Journal: **the sizes are shown, not spelled.** Instead of "Small portrait" and the rest, each choice in a print's menu is the print itself at that size — the measure as a hairline, the picture filled inside it — each one growing into place as the menu opens.
-- Journal: **a title has its own bar.** On a heading line the four tools that cannot act on it (to-do, small text, bullet, quote) step out and the writing tools close up.
-- Journal: **the "Write here" line can be taken back.** The door now stays for the empty line it made and carries a cross that removes it.
-
-FIX:
-- Journal: **a picture comes away when you mean it.** The hold is a fifth of a second instead of the platform's half second, and every pixel your thumb moves is followed from the first one.
-- Journal: **nothing slides after a drop.** The print appears exactly where the gap and the shadow said it would, and the only thing left of the release is the print settling on the paper.
-- Journal: **a run of four is a square**, and the two prints beside a tall frame now share its height, so a stack of three closes flush.
-- Journal: **no wash under the tools.** An idle tool is a bare glyph on the bar; the only fill left in the row is the accent disc of a tool that is actually on.
+- Journal: **the space a carried picture will fill is now drawn.** While you hold a print, the row it is heading for shows its silhouette sunk into the paper with a soft shadow under the edge — no dashed lines, no bar, just the place it will land.

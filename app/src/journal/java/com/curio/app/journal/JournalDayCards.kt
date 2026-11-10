@@ -115,14 +115,14 @@ fun JournalPageCard(
             Text(
                 page.preview.ifBlank { "A page with nothing on it yet." },
                 style = MaterialTheme.typography.bodyMedium,
-                color = ink.copy(alpha = 0.76f),
-                maxLines = if (compact) 5 else 4,
+                color = ink.copy(alpha = 0.68f),
+                maxLines = if (compact) 4 else 3,
                 overflow = TextOverflow.Ellipsis
             )
             Text(
                 wordsLabel(page),
-                style = MaterialTheme.typography.labelSmall.copy(letterSpacing = 0.2.sp),
-                color = ink.copy(alpha = 0.52f)
+                style = MaterialTheme.typography.labelSmall,
+                color = ink.copy(alpha = 0.4f)
             )
         }
     }

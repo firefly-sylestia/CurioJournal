@@ -392,72 +392,23 @@ private fun DayBlock(
             .padding(horizontal = 22.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
-        // ── v528 — THE DAY, SET LIKE A DATE ──────────────────────────────
-        //
-        // One string at one size ("1 November 2026") said the date but read as
-        // a caption: every part of it weighed the same, so nothing was the
-        // subject. The member's own layout, and the better one: the NUMBER is
-        // the subject and takes the size of a headline, the month and the
-        // weekday sit in two lines beside it (what the day IS, what it is
-        // CALLED), and the year stands on the right on its own — the long frame
-        // the rest hangs from, not a third thing in the sentence.
-        val weekday = date.dayOfWeek
-            .getDisplayName(java.time.format.TextStyle.FULL, locale)
-        val monthName = date.month
-            .getDisplayName(java.time.format.TextStyle.FULL, locale)
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(top = 2.dp),
-            verticalAlignment = Alignment.Top
-        ) {
-            Text(
-                date.dayOfMonth.toString(),
-                style = MaterialTheme.typography.displayLarge.copy(
-                    fontFamily = FrauncesFontFamily,
-                    fontWeight = FontWeight.SemiBold,
-                    fontSize = 76.sp,
-                    lineHeight = 74.sp
-                ),
-                color = ink
-            )
-            Spacer(Modifier.width(12.dp))
-            Column(
-                modifier = Modifier
-                    .weight(1f)
-                    .padding(top = 6.dp),
-                verticalArrangement = Arrangement.spacedBy(1.dp)
-            ) {
-                Text(
-                    monthName,
-                    style = MaterialTheme.typography.titleLarge.copy(
-                        fontFamily = FrauncesFontFamily,
-                        fontWeight = FontWeight.SemiBold,
-                        fontSize = 23.sp,
-                        lineHeight = 26.sp
-                    ),
-                    color = ink.copy(alpha = 0.92f)
-                )
-                Text(
-                    weekday,
-                    style = MaterialTheme.typography.labelLarge.copy(
-                        letterSpacing = 0.9.sp,
-                        fontSize = 13.sp
-                    ),
-                    color = accentInk.copy(alpha = 0.68f)
-                )
-            }
-            Text(
-                date.year.toString(),
-                style = MaterialTheme.typography.titleMedium.copy(
-                    fontFamily = FrauncesFontFamily,
-                    fontWeight = FontWeight.Medium,
-                    fontSize = 18.sp,
-                    letterSpacing = 1.2.sp
-                ),
-                color = ink.copy(alpha = 0.34f)
-            )
-        }
+        // THE DATE IS ONE LINE — day, month and year at the same size, on the
+        // same baseline. The numeral used to be a 76sp slab with the month
+        // tucked beside it, which read as two unrelated numbers and left the
+        // year stranded in the header ("the dates look small and unnoticed",
+        // "the year is too [small]", "place the year in the same row of date
+        // and month"). One formatted string cannot misalign: it is the day the
+        // member reads, in the order their own locale writes it.
+        Text(
+            date.format(DateTimeFormatter.ofPattern("d MMMM yyyy", locale)),
+            style = MaterialTheme.typography.displaySmall.copy(
+                fontFamily = FrauncesFontFamily,
+                fontWeight = FontWeight.SemiBold,
+                fontSize = 40.sp,
+                lineHeight = 44.sp
+            ),
+            color = ink
+        )
 
         WeekDates(
             today = today,
@@ -480,10 +431,8 @@ private fun DayBlock(
         if (habit.isNotEmpty()) {
             Text(
                 habit,
-                style = MaterialTheme.typography.labelMedium.copy(
-                    letterSpacing = 0.2.sp
-                ),
-                color = ink.copy(alpha = 0.58f)
+                style = MaterialTheme.typography.labelMedium,
+                color = ink.copy(alpha = 0.45f)
             )
         }
     }
@@ -506,67 +455,57 @@ private fun WeekDates(
     ink: Color,
     onOpenDay: (Long) -> Unit
 ) {
-    // ── v529 — THE WEEK, READ RATHER THAN PICKED ──────────────────────
-    //
-    // Seven equal cells said "a row of buttons": a letter, a number, and
-    // nothing between them. The strip is a CALENDAR line now — the day's
-    // letter small and spaced above, the date under it big enough to be the
-    // thing the eye lands on, and a single dot under the days that already
-    // have writing, so the week tells the member where they have been before
-    // they read a word of it. Today is a filled cell; a written day is marked
-    // in the page's own ink, not a second colour.
     val todayDate = remember(today) { today.toLocalDate() }
-    val monday = remember(todayDate) {
-        shiftDay(today, -(todayDate.dayOfWeek.value - 1).toLong())
-    }
+    val monday = remember(todayDate) { shiftDay(today, -(todayDate.dayOfWeek.value - 1).toLong()) }
     val days = remember(monday) { (0L..6L).map { shiftDay(monday, it) } }
     Row(
         modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(5.dp)
+        horizontalArrangement = Arrangement.spacedBy(6.dp)
     ) {
         days.forEach { millis ->
-            val date = millis.toLocalDate()
             val isToday = millis == today
             val written = writtenDays.contains(millis)
-            val onFill = MaterialTheme.colorScheme.onPrimary
             Surface(
                 onClick = { onOpenDay(millis) },
-                shape = RoundedCornerShape(16.dp),
+                shape = RoundedCornerShape(14.dp),
                 color = if (isToday) accent else Color.Transparent,
                 modifier = Modifier.weight(1f)
             ) {
                 Column(
-                    modifier = Modifier.padding(vertical = 9.dp),
+                    modifier = Modifier.padding(vertical = 8.dp),
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.spacedBy(3.dp)
                 ) {
                     Text(
-                        date.format(DateTimeFormatter.ofPattern("EEEEE", locale)),
+                        millis.toLocalDate()
+                            .format(DateTimeFormatter.ofPattern("EEEEE", locale)),
                         style = MaterialTheme.typography.labelSmall.copy(
-                            fontSize = 10.sp,
-                            letterSpacing = 0.9.sp,
-                            fontWeight = FontWeight.Medium
+                            fontWeight = FontWeight.SemiBold
                         ),
-                        color = if (isToday) onFill.copy(alpha = 0.75f)
-                                else ink.copy(alpha = 0.42f)
+                        color = when {
+                            isToday -> personalOnAccent().copy(alpha = 0.72f)
+                            else -> ink.copy(alpha = 0.38f)
+                        }
                     )
                     Text(
-                        date.dayOfMonth.toString(),
-                        style = MaterialTheme.typography.titleMedium.copy(
+                        millis.toLocalDate().dayOfMonth.toString(),
+                        style = MaterialTheme.typography.titleSmall.copy(
                             fontFamily = FrauncesFontFamily,
-                            fontWeight = FontWeight.SemiBold,
-                            fontSize = 18.sp
+                            fontWeight = FontWeight.SemiBold
                         ),
-                        color = if (isToday) onFill else ink.copy(alpha = 0.88f)
+                        color = if (isToday) personalOnAccent() else ink.copy(alpha = 0.8f)
                     )
-                    // The mark of a day that already has words in it. An empty
-                    // string keeps every cell the same height, so the row never
-                    // sits at two depths.
-                    Text(
-                        if (written) "•" else " ",
-                        style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp),
-                        color = if (isToday) onFill.copy(alpha = 0.9f)
-                                else accentInk.copy(alpha = 0.85f)
+                    Box(
+                        modifier = Modifier
+                            .size(4.dp)
+                            .clip(CircleShape)
+                            .background(
+                                when {
+                                    written && isToday -> personalOnAccent().copy(alpha = 0.9f)
+                                    written -> accentInk.copy(alpha = 0.5f)
+                                    else -> Color.Transparent
+                                }
+                            )
                     )
                 }
             }

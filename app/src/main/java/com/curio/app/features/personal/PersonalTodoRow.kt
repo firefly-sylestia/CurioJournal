@@ -8,15 +8,6 @@ import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectDragGestures
-import androidx.compose.foundation.gestures.awaitEachGesture
-import androidx.compose.foundation.gestures.detectTapGestures
-import androidx.compose.foundation.gestures.awaitFirstDown
-import androidx.compose.foundation.gestures.drag
-import androidx.compose.foundation.gestures.waitForUpOrCancellation
-import androidx.compose.ui.input.pointer.PointerInputScope
-import androidx.compose.ui.input.pointer.PointerInputChange
-import androidx.compose.ui.input.pointer.positionChange
-import kotlinx.coroutines.withTimeoutOrNull
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.Arrangement
@@ -371,64 +362,17 @@ internal class PersonalRowDragState {
      * during the settle is never clobbered by the first one's animation.
      */
     suspend fun settle(id: String) {
-        if (draggedId != id) return
-        // ── v525 — NO SLIDE AFTER THE DROP ─────────────────────────────
-        //
-        // v397 animated whatever travel was left back to zero — but by then the
-        // page had already re-ordered, so the print sat in its NEW slot with the
-        // OLD offset still on it and slid a whole slot past the place the
-        // preview had shown. That slide is what read as "the rows moved again
-        // after I let go". The offset comes off in ONE frame now: the print
-        // appears exactly where the gap and the shadow said it would, and what
-        // is left of the release is the print settling on the paper.
-        travel.floatValue = 0f
-        travelX.floatValue = 0f
-        landingId = id
-        landing = 0.985f
-        animate(
-            initialValue = 0.985f,
-            targetValue = 1f,
-            animationSpec = spring(dampingRatio = 0.55f, stiffness = 500f)
-        ) { value, _ ->
-            if (landingId == id) landing = value
+        val from = travel.floatValue
+        if (from != 0f) {
+            animate(
+                initialValue = from,
+                targetValue = 0f,
+                animationSpec = spring(dampingRatio = 0.9f, stiffness = 420f)
+            ) { value, _ ->
+                if (draggedId == id) travel.floatValue = value
+            }
         }
-        if (landingId == id) landingId = null
-        reset()
-    }
-
-    /**
-     * v525 — THE PRINT THAT HAS JUST LANDED, and how far its settle has to go.
-     *
-     * Only the block named here wears [landing], so the ease is the dropped
-     * print's own and the rest of the page is perfectly still once the finger
-     * is up — which is the whole complaint ("no row shift visible after the
-     * drop").
-     */
-    var landingId by mutableStateOf<String?>(null)
-        private set
-    var landing by mutableFloatStateOf(1f)
-        private set
-
-    /**
-     * v530 — THE PRINT THE MEMBER HAS PICKED UP, WITHOUT A FINGER ON IT.
-     *
-     * A press-and-hold on a picture fought the page: the hold fired before the
-     * scroll had decided what the finger meant, so dragging down the page over
-     * a print picked it up instead of scrolling. Picking a print up is now a
-     * TAP — the print lifts and waits — and only then does a drag move it. A
-     * finger that lands on a picture to scroll never arms anything, and the
-     * second tap (or the drop) puts it back down.
-     */
-    var armedId by mutableStateOf<String?>(null)
-        private set
-
-    fun arm(id: String, index: Int, slotStride: Float, fingerRootY: Float) {
-        begin(id, index, slotStride, fingerRootY)
-        armedId = id
-    }
-
-    fun disarm() {
-        armedId = null
+        if (draggedId == id) reset()
     }
 
     /**
@@ -840,121 +784,50 @@ internal fun PersonalMovableBlock(
                 } else {
                     0f
                 }
-                // v525 — the settle the just-dropped print wears (see
-                // PersonalRowDragState.landing). Scale only: nothing about the
-                // layout moves after the finger is up.
-                val settle = if (drag.landingId == id) drag.landing else 1f
-                scaleX = heldSize * settle
-                scaleY = heldSize * settle
+                scaleX = heldSize
+                scaleY = heldSize
                 rotationZ = heldAngle
             }
             .then(lifted)
             .then(
                 if (!enabled) Modifier
                 else Modifier.pointerInput(id, enabled) {
-                    // v523 — A SHORT HOLD, and the first pixel counts.
-                    //
-                    // The member: "long press, but with much less travel to
-                    // start". The platform's long press waits half a second
-                    // before the print even lifts, and every pixel moved in
-                    // that half second is thrown away — so the print sat still
-                    // under a finger that was already pulling. This hold is a
-                    // fifth of a second and then the finger is followed from
-                    // where it is (see [detectHoldThenDrag]), which is the whole
-                    // difference between "it resists" and "it came with me".
-                    // ── v530 — TAP TO PICK UP, THEN DRAG ─────────────
-                    //
-                    // Not "hold to pick up": a hold is the same gesture as the
-                    // beginning of a scroll, so the page lost every drag that
-                    // started on a picture. A TAP lifts the print and leaves it
-                    // standing (armed); while it stands, the finger moves it and
-                    // nothing else; a second tap or the drop puts it down. A
-                    // finger that only means to scroll never arms anything.
-                    // Only a PICTURE is picked up this way: a tap on words is
-                    // the member putting their caret in them, and arming a line
-                    // of text would make the next scroll drag the paragraph.
-                    // The words and the voice notes keep the hold they had.
-                    if (state.block(id)?.isPhoto != true) {
-                        detectDragGesturesAfterLongPress(
-                            onDragStart = { offset ->
-                                if (blockHeight > 0f) {
-                                    drag.begin(
-                                        id, index, blockHeight + gapPx,
-                                        blockRootTop + offset.y
-                                    )
-                                }
-                            },
-                            onDrag = { change, amount ->
-                                change.consume()
-                                drag.dragBy(
-                                    amount.x, amount.y,
-                                    state.blockIds, state.blockIds.lastIndex
+                    detectDragGesturesAfterLongPress(
+                        onDragStart = { offset ->
+                            if (blockHeight > 0f) {
+                                drag.begin(
+                                    id, index, blockHeight + gapPx,
+                                    blockRootTop + offset.y
                                 )
-                            },
-                            onDragEnd = {
-                                drag.draggedId?.let { held ->
-                                    state.dropBlock(
-                                        id = held,
-                                        to = drag.targetIndex(state.blockIds.lastIndex),
-                                        takeLeft = drag.takeLeftCell,
-                                        flip = drag.flipSteps
-                                    )
-                                }
-                                drag.commit()
-                                scope.launch { drag.settle(id) }
-                            },
-                            onDragCancel = { drag.reset() }
-                        )
-                    } else if (drag.armedId == id) {
-                        detectDragGestures(
-                            onDragStart = { offset ->
-                                if (blockHeight > 0f) {
-                                    drag.begin(
-                                        id, index, blockHeight + gapPx,
-                                        blockRootTop + offset.y
-                                    )
-                                }
-                            },
-                            onDrag = { change, amount ->
-                                change.consume()
-                                drag.dragBy(
-                                    amount.x, amount.y,
-                                    state.blockIds, state.blockIds.lastIndex
+                            }
+                        },
+                        onDrag = { change, amount ->
+                            change.consume()
+                            drag.dragBy(amount.x, amount.y, state.blockIds, state.blockIds.lastIndex)
+                        },
+                        onDragEnd = {
+                            // v513 — ONE DROP, ONE EDIT.
+                            //
+                            // The block is named by id, not by the slot it started
+                            // in: a picture can trade cells inside its row on the
+                            // way down, and the finger's row is the landing (see
+                            // PersonalEditorState.dropBlock, which also applies
+                            // the sideways steps and the snap preference).
+                            drag.draggedId?.let { held ->
+                                state.dropBlock(
+                                    id = held,
+                                    to = drag.targetIndex(state.blockIds.lastIndex),
+                                    takeLeft = drag.takeLeftCell,
+                                    flip = drag.flipSteps
                                 )
-                            },
-                            onDragEnd = {
-                                // One drop, one edit (see the note this came
-                                // from): the finger's row is the landing, and
-                                // the commit is what puts the print down.
-                                drag.draggedId?.let { held ->
-                                    state.dropBlock(
-                                        id = held,
-                                        to = drag.targetIndex(state.blockIds.lastIndex),
-                                        takeLeft = drag.takeLeftCell,
-                                        flip = drag.flipSteps
-                                    )
-                                }
-                                drag.commit()
-                                drag.disarm()
-                                scope.launch { drag.settle(id) }
-                            },
-                            onDragCancel = {
-                                drag.reset()
-                                drag.disarm()
                             }
-                        )
-                    } else {
-                        detectTapGestures(
-                            onTap = { offset ->
-                                if (blockHeight > 0f) {
-                                    drag.arm(
-                                        id, index, blockHeight + gapPx,
-                                        blockRootTop + offset.y
-                                    )
-                                }
-                            }
-                        )
-                    }
+                            // v397 — commit, then slide the last few pixels home
+                            // (see PersonalRowDragState.settle).
+                            drag.commit()
+                            scope.launch { drag.settle(id) }
+                        },
+                        onDragCancel = { drag.reset() }
+                    )
                 }
             )
     ) {
@@ -1295,50 +1168,3 @@ internal fun PersonalUndoPill(
         }
     }
 }
-
-/**
- * v523 — A SHORT HOLD, THEN THE FINGER FROM ITS FIRST PIXEL.
- *
- * [detectDragGesturesAfterLongPress] is the platform's half-second hold, and
- * everything the finger moves during those 500ms is discarded: the print sits
- * perfectly still while a thumb is already pulling at it, which is exactly what
- * "it resists before it starts" is. A journal page is a page of paper — a print
- * should come away as soon as the member clearly means to carry it, not after a
- * fixed beat of nothing.
- *
- * So the hold is [holdMillis] (a fifth of a second, see [LIFT_HOLD_MS]) and the
- * drag that follows is unfiltered: [onDrag] is handed every pixel from the
- * point the finger was at when it landed, so the print is already under the
- * thumb rather than trailing behind it by the hold's own travel.
- *
- * A finger that lifts inside the hold was a TAP, not a carry: it returns before
- * [onStart], which is what keeps a short press on a picture opening it.
- */
-private suspend fun PointerInputScope.detectHoldThenDrag(
-    holdMillis: Long,
-    onStart: (Offset) -> Unit,
-    onDrag: (PointerInputChange, Offset) -> Unit,
-    onEnd: () -> Unit,
-    onCancel: () -> Unit
-) {
-    awaitEachGesture {
-        val down = awaitFirstDown(requireUnconsumed = false)
-        // Still down when the hold runs out? Then this is a carry.
-        val lifted = withTimeoutOrNull(holdMillis) { waitForUpOrCancellation() }
-        if (lifted != null) return@awaitEachGesture
-        onStart(down.position)
-        // `drag` keeps reporting until the finger lifts or the pointer is
-        // taken away (a sheet opening under the hand, a scroll claiming it),
-        // and tells us which of the two happened by returning null or the up.
-        val finish = drag(down.id) { change ->
-            // `positionChange()` is the extension; the bare name is the
-            // change's Boolean, which is why this needs its import.
-            onDrag(change, change.positionChange())
-        }
-        if (finish != null) onEnd() else onCancel()
-    }
-}
-
-/** How long a finger must stay still before it is carrying (v523). */
-internal const val LIFT_HOLD_MS = 200L
-
