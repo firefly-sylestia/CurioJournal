@@ -6,6 +6,29 @@ from the state rather than from memory.
 
 ---
 
+## §108 — THE PRINT'S SIZE PICKER IS A STRIP OF LIVE PREVIEWS (local, not pushed)
+
+> "now polishing and redoing properly, so about the, page half portraight preview, make it like
+> proper preview with animation, but in large view in a rectangular drop down in horizontal lie
+> yk, its drop down, porperly polished and make beautifully."
+
+**What changed (`PersonalCanvas.kt`).** The print's size action opened a stock Material
+`DropdownMenu` of five words; it now opens `PrintSizeMenu` (v528): a 304dp paper rectangle in a
+`Popup` placed by `PrintSizeMenuPlacement` — hanging from the size mark's trailing edge, preferring
+the space below, flipping above near the foot of the page, clamped to the window and kept clear of
+the keyboard/navigation bar. Five `PrintSizeTile`s sit in ONE horizontal line, each showing the
+**actual photograph** in the measure's hairline at that size's own width share and height (the same
+`personalPrintHeight`/`fraction` table the page lays prints out with). The five grow in staggered
+(30ms each) as the panel unfolds from the mark's corner; the picked tile's hairline warms to the
+accent and an accent line widens under it. A pick folds the panel away (110ms) BEFORE the size is
+applied, so the page never changes under a closing menu. "On its own line" is preserved below a
+hairline divider, with its check.
+
+**Checked:** the brace/paren balance checker on `PersonalCanvas.kt` (0 unmatched, 0 unclosed); no
+Gradle here, so CI is the compile. Committed locally; **not pushed** (no version bump yet).
+
+---
+
 ## §107 — ROLLED BACK TO `2c799053` (local commit, not pushed)
 
 > "revert the repo untill this commit include that commit in revert too" —

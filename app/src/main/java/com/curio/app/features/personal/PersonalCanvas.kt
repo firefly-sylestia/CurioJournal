@@ -3,6 +3,7 @@ package com.curio.app.features.personal
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
@@ -18,12 +19,16 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.ime
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -42,6 +47,8 @@ import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.ui.window.Popup
+import androidx.compose.ui.window.PopupPositionProvider
 import androidx.compose.ui.window.PopupProperties
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -56,6 +63,7 @@ import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
@@ -83,6 +91,7 @@ import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.drawscope.Stroke
@@ -112,6 +121,7 @@ import com.curio.app.ui.components.rememberTextHistoryCapture
 import androidx.compose.ui.platform.LocalTextToolbar
 import androidx.compose.ui.platform.TextToolbar
 import androidx.compose.ui.platform.TextToolbarStatus
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.AnnotatedString
@@ -128,7 +138,10 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.IntRect
 import androidx.compose.ui.unit.IntSize
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.isSpecified
@@ -150,6 +163,8 @@ import com.curio.app.ui.theme.SpaceMonoFontFamily
 import com.curio.app.ui.theme.WritingFontFamily
 import com.curio.app.data.openSearchUrl
 import com.curio.app.ui.theme.isCurioDarkTheme
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 /**
  * v387 — THE WRITING CANVAS (journals + chapter reviews share it).
@@ -5571,75 +5586,15 @@ private fun PersonalPhotoBlock(
                             PrintSizeGlyph(ink.copy(alpha = 0.42f))
                         }
                     }
-                    DropdownMenu(
-                        expanded = sizeMenu.open,
-                        onDismissRequest = { sizeMenu.dismissed() },
-                        // v389h — a print's size menu sits over a page being
-                        // written in; it must not close the keyboard the way the
-                        // dock's menus used to (see MenuKeepKeyboardProperties).
-                        properties = MenuKeepKeyboardProperties
-                    ) {
-                        PersonalPhotoSize.entries.forEach { option ->
-                            DropdownMenuItem(
-                                text = {
-                                    Text(
-                                        option.label,
-                                        style = MaterialTheme.typography.bodyMedium.copy(
-                                            fontFamily = WritingFontFamily
-                                        ),
-                                        color = MaterialTheme.colorScheme.onSurface
-                                    )
-                                },
-                                trailingIcon = {
-                                    if (option == size) {
-                                        CurioIcon(
-                                            CurioIcons.Check,
-                                            null,
-                                            tint = personalAccentInk(),
-                                            size = 17.dp
-                                        )
-                                    }
-                                },
-                                onClick = {
-                                    onSize(option)
-                                    sizeMenu.close()
-                                }
-                            )
-                        }
-                        // v513 — AND THE WAY OUT OF A STACK.
-                        //
-                        // Four sizes say how big a picture is; none of them said
-                        // whether it is in a stack at all — which is the member's
-                        // *"a stack cannot be separated"*. The row reads as a
-                        // state and writes as a toggle, so a print can be lifted
-                        // out of its row here and put back in it the same way.
-                        if (onSeparate != null) {
-                            DropdownMenuItem(
-                                text = {
-                                    Text(
-                                        "On its own line",
-                                        style = MaterialTheme.typography.bodyMedium.copy(
-                                            fontFamily = WritingFontFamily
-                                        ),
-                                        color = MaterialTheme.colorScheme.onSurface
-                                    )
-                                },
-                                trailingIcon = {
-                                    if (separated) {
-                                        CurioIcon(
-                                            CurioIcons.Check,
-                                            null,
-                                            tint = personalAccentInk(),
-                                            size = 17.dp
-                                        )
-                                    }
-                                },
-                                onClick = {
-                                    onSeparate()
-                                    sizeMenu.close()
-                                }
-                            )
-                        }
+                    if (sizeMenu.open) {
+                        PrintSizeMenu(
+                            uri = uri,
+                            size = size,
+                            separated = separated,
+                            onSize = onSize,
+                            onSeparate = onSeparate,
+                            onClose = { sizeMenu.dismissed() }
+                        )
                     }
                 }
             }
@@ -5669,6 +5624,272 @@ private fun PrintSizeGlyph(tint: Color) {
             cornerRadius = CornerRadius(1.5f.dp.toPx()),
             style = Stroke(width = stroke)
         )
+    }
+}
+
+/**
+ * THE PRINT'S SIZE, AS THE PRINT (v528).
+ *
+ * The size menu used to be five words — "Page", "Half", "Portrait" … — asking
+ * the member to imagine what each one would do to their page. The choice is a
+ * SHAPE, so the menu is the shape: every size stands in the panel as the print
+ * itself, at that size's own share of the measure and its own height, showing
+ * the actual photograph, and the five sit in ONE HORIZONTAL LINE so they can be
+ * compared at a glance instead of read down a list.
+ *
+ * The panel is a wide paper rectangle rather than the stock narrow menu — five
+ * previews need room the 280dp Material menu cannot give — and it folds out of
+ * the size mark: the card scales up from the mark's corner while the five
+ * prints grow into place one after another, staggered down the line like a hand
+ * of cards. Picking one folds the panel away FIRST and applies the size after,
+ * so the page never changes under a menu that is still closing.
+ *
+ * The stock menu's one non-size row survives underneath the strip: *On its own
+ * line* is a state as well as an action, so it keeps its check.
+ */
+@Composable
+private fun PrintSizeMenu(
+    uri: String,
+    size: PersonalPhotoSize,
+    separated: Boolean,
+    onSize: (PersonalPhotoSize) -> Unit,
+    onSeparate: (() -> Unit)?,
+    onClose: () -> Unit
+) {
+    val density = LocalDensity.current
+    // The size mark lives in the print's own border, which can sit low on the
+    // page while the keyboard is up — keep the panel clear of both the keyboard
+    // and the navigation bar so it is never half under either.
+    val lift = maxOf(
+        WindowInsets.ime.getBottom(density),
+        WindowInsets.navigationBars.getBottom(density)
+    )
+    val appear = remember { Animatable(0f) }
+    val scope = rememberCoroutineScope()
+    var closing by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) {
+        appear.animateTo(1f, spring(dampingRatio = 0.74f, stiffness = 420f))
+    }
+    // One way out, so the panel never disappears in a frame: it folds, and only
+    // then does the page take the change. A second tap while it folds is spent.
+    fun finish(action: (() -> Unit)?) {
+        if (closing) return
+        closing = true
+        scope.launch {
+            appear.animateTo(0f, tween(110))
+            action?.invoke()
+            onClose()
+        }
+    }
+    Popup(
+        popupPositionProvider = PrintSizeMenuPlacement(lift),
+        // v389h — it sits over a page being written in; it must not close the
+        // keyboard the way the dock's menus used to (see
+        // MenuKeepKeyboardProperties).
+        properties = MenuKeepKeyboardProperties,
+        onDismissRequest = { finish(null) }
+    ) {
+        Surface(
+            shape = RoundedCornerShape(18.dp),
+            // The page's own paper, so the panel reads as a card laid on the
+            // journal rather than as a system menu floating over it.
+            color = journalPaperRaised(),
+            // Shadow BEFORE the fill is a rule for a modifier chain; a Surface's
+            // own elevation draws the shadow under its opaque paper, which is
+            // what this panel is.
+            shadowElevation = 16.dp,
+            modifier = Modifier
+                .width(304.dp)
+                .graphicsLayer {
+                    val p = appear.value
+                    // Grows out of the corner nearest the size mark, which is
+                    // where the eye already is.
+                    transformOrigin = TransformOrigin(0.86f, 0f)
+                    scaleX = 0.94f + 0.06f * p
+                    scaleY = 0.94f + 0.06f * p
+                    alpha = p
+                    translationY = (1f - p) * 8.dp.toPx()
+                }
+        ) {
+            Column(Modifier.padding(horizontal = 10.dp, vertical = 9.dp)) {
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    PersonalPhotoSize.entries.forEachIndexed { index, option ->
+                        PrintSizeTile(
+                            uri = uri,
+                            option = option,
+                            selected = option == size,
+                            delayMillis = 30 * index,
+                            onPick = { finish { onSize(option) } }
+                        )
+                    }
+                }
+                // v513 — AND THE WAY OUT OF A STACK. Four sizes say how big a
+                // picture is; this says whether it is in a stack at all, so a
+                // print can be lifted out of its row here and put back the same
+                // way (member: "a stack cannot be separated").
+                if (onSeparate != null) {
+                    Box(
+                        Modifier
+                            .fillMaxWidth()
+                            .padding(top = 8.dp, bottom = 6.dp)
+                            .height(1.dp)
+                            .background(journalRule().copy(alpha = 0.6f))
+                    )
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(9.dp))
+                            .clickable { finish(onSeparate) }
+                            .padding(horizontal = 5.dp, vertical = 6.dp)
+                    ) {
+                        CurioIcon(
+                            CurioIcons.Check,
+                            null,
+                            tint = if (separated) personalAccent()
+                            else journalInk().copy(alpha = 0.24f),
+                            size = 15.dp
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        Text(
+                            "On its own line",
+                            style = MaterialTheme.typography.bodyMedium.copy(
+                                fontFamily = WritingFontFamily,
+                                fontSize = 13.sp
+                            ),
+                            color = journalInk()
+                                .copy(alpha = if (separated) 0.92f else 0.60f)
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+/**
+ * ONE SIZE, SHOWN.
+ *
+ * The box is the measure — the writing's own column, drawn as a hairline — and
+ * the print inside it is the photograph at this size's own width share and
+ * height, exactly the table the page lays prints out with. Choosing a size is
+ * choosing a shape, so the shape is what the tile is.
+ *
+ * It GROWS into place, staggered by [delayMillis], and the picked tile's
+ * hairline warms to the accent while a small accent mark widens under it — the
+ * same selection language the rest of the page uses, at tile scale.
+ */
+@Composable
+private fun PrintSizeTile(
+    uri: String,
+    option: PersonalPhotoSize,
+    selected: Boolean,
+    delayMillis: Int,
+    onPick: () -> Unit
+) {
+    val ink = journalInk()
+    val accent = personalAccent()
+    val grow = remember(option) { Animatable(0f) }
+    LaunchedEffect(option) {
+        if (delayMillis > 0) delay(delayMillis.toLong())
+        grow.animateTo(1f, spring(dampingRatio = 0.62f, stiffness = 360f))
+    }
+    val picked by animateFloatAsState(
+        targetValue = if (selected) 1f else 0f,
+        animationSpec = spring(dampingRatio = 0.8f, stiffness = 420f),
+        label = "printSizePicked"
+    )
+    // The tallest size is the portrait frame, so every other height is read
+    // against it — the page's own table, scaled to the tile.
+    val tallest = personalPrintHeight(PersonalPhotoSize.PORTRAIT).value
+    val printHeight = 56.dp * (personalPrintHeight(option).value / tallest)
+    // 42, not the measure's 46: the picture keeps a hair of paper between it
+    // and the measure's line, so the PAGE print does not sit on the border.
+    val printWidth = 42.dp * option.fraction
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        modifier = Modifier
+            .width(52.dp)
+            .clip(RoundedCornerShape(10.dp))
+            .selectable(
+                selected = selected,
+                role = Role.RadioButton,
+                onClick = onPick
+            )
+            .semantics { contentDescription = option.label }
+            .padding(3.dp)
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(62.dp)
+                .border(
+                    width = 1.dp,
+                    color = lerp(
+                        ink.copy(alpha = 0.14f),
+                        accent.copy(alpha = 0.90f),
+                        picked
+                    ),
+                    shape = RoundedCornerShape(5.dp)
+                ),
+            contentAlignment = Alignment.Center
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(width = printWidth, height = printHeight)
+                    .clip(RoundedCornerShape(2.dp))
+                    .background(Color.Black.copy(alpha = 0.05f))
+                    .graphicsLayer {
+                        val g = grow.value
+                        scaleX = 0.84f + 0.16f * g
+                        scaleY = 0.84f + 0.16f * g
+                        alpha = g * (0.78f + 0.22f * picked)
+                    }
+            ) {
+                PersonalPagePhoto(uri = uri, height = printHeight)
+            }
+        }
+        // The picked mark: a short accent line that widens as the choice lands.
+        Box(
+            modifier = Modifier
+                .padding(top = 4.dp)
+                .height(2.dp)
+                .width(14.dp * picked)
+                .clip(CircleShape)
+                .background(accent.copy(alpha = picked))
+        )
+    }
+}
+
+/**
+ * WHERE THE SIZE PANEL STANDS (v528).
+ *
+ * The panel is much wider than the little mark that opens it, so it hangs from
+ * the mark's trailing edge and grows towards the page's middle. It prefers the
+ * space UNDER the mark because that is where the page continues; when the mark
+ * is near the foot of the page (or the keyboard is up) it flips ABOVE instead,
+ * and it is clamped into the window either way — a menu that opens off-screen
+ * is a menu the member cannot use.
+ */
+private class PrintSizeMenuPlacement(private val lift: Int) : PopupPositionProvider {
+    override fun calculatePosition(
+        anchorBounds: IntRect,
+        windowSize: IntSize,
+        layoutDirection: LayoutDirection,
+        popupContentSize: IntSize
+    ): IntOffset {
+        val gap = 8
+        val foot = (windowSize.height - lift).coerceAtLeast(1)
+        val below = anchorBounds.bottom + gap
+        val above = anchorBounds.top - popupContentSize.height - gap
+        val y = when {
+            below + popupContentSize.height <= foot -> below
+            above >= 0 -> above
+            else -> (foot - popupContentSize.height).coerceAtLeast(0)
+        }
+        val maxX = (windowSize.width - popupContentSize.width).coerceAtLeast(0)
+        val x = (anchorBounds.right - popupContentSize.width).coerceIn(0, maxX)
+        return IntOffset(x, y)
     }
 }
 
