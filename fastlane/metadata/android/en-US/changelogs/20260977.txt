@@ -1,0 +1,6 @@
+ADD:
+- Journal: **All pages is the journal's own collection now** — the same paper as Home, each month a chapter head and each day a paper leaf with its time and length.
+- Journal: **the collection's search and filters wear the paper too** — hairline chips that fill ox blood when a felt or a length is on.
+
+FIX:
+- Journal: **holding a page in All pages offers to remove it**, as before, with the same confirmation.
