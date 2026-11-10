@@ -74,6 +74,7 @@ import androidx.compose.runtime.snapshots.SnapshotStateList
 import androidx.compose.runtime.snapshots.SnapshotStateMap
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.drawWithContent
@@ -3110,13 +3111,38 @@ internal class PersonalEditorState(initial: PersonalDoc) {
      *     that landed against one is marked as standing alone, which is what
      *     keeps it exactly where it was dropped.
      */
-    fun dropBlock(id: String, to: Int, takeLeft: Boolean, flip: Int = 0) {
+    fun dropBlock(
+        id: String,
+        to: Int,
+        takeLeft: Boolean,
+        flip: Int = 0,
+        cellOffset: Int? = null
+    ) {
         var at = order.indexOf(id)
         if (at < 0) return
         val held = blocks[id] ?: return
-        if (held.isPhoto && flip != 0) at = stepPrintInRow(id, flip) ?: at
-        val landing = printDropIndex(at, to, takeLeft)
-        val dest = if (at != landing) reorder(at, landing) else at
+        // The sideways STEPS and the measured CELL are two answers to the same
+        // question, so only one may be used for a drop (v532).
+        if (held.isPhoto && flip != 0 && cellOffset == null) at = stepPrintInRow(id, flip) ?: at
+        // ── v532 — THE CELL THE MEMBER SAW OPEN ────────────────────────────
+        //
+        // The row draws the arriving print in its own arrangement while it is in
+        // the air, at the place among its cells the finger is over (see
+        // PersonalRowDragState.insertionOffset) — so the drop lands at that very
+        // place instead of at the row's head. The run is built by the drawing
+        // pass's own rule ([printRunAt]), which is what makes the preview and
+        // the landing the same row.
+        val landing = if (cellOffset != null && held.isPhoto) {
+            val ahead = printRunAt(to).filter { it != id }
+            when {
+                ahead.isEmpty() -> to
+                cellOffset < ahead.size -> order.indexOf(ahead[cellOffset])
+                else -> order.indexOf(ahead.last()) + 1
+            }
+        } else {
+            printDropIndex(at, to, takeLeft)
+        }
+        val dest = if (at != landing) moveBlock(at, landing) else at
         val moved = blocks[id] ?: return
         if (moved.isPhoto) {
             if (snapPhotos) {
@@ -3163,6 +3189,52 @@ internal class PersonalEditorState(initial: PersonalDoc) {
             order[next] = id
             at = next
         }
+        return at
+    }
+
+    /**
+     * v532 — THE PRINT ROWS A DROP CAN SEE, by the drawing pass's own rule.
+     *
+     * Consecutive prints are one row, the air between them is stepped over (see
+     * [printRowGapSteppable]), a print standing on its own line ends the run, and
+     * a run is never longer than [PRINT_ROW_LIMIT]. The canvas uses this to draw
+     * a live preview of the landing, and [dropBlock] uses it to place the print —
+     * one rule, so the preview cannot promise a row the drop does not make.
+     */
+    fun printRunAt(index: Int): List<String> {
+        val ids = order
+        if (index !in ids.indices) return emptyList()
+        val head = blocks[ids[index]] ?: return emptyList()
+        if (!head.isPhoto || head.photoSeparated) return emptyList()
+        val run = ArrayList<String>()
+        var i = index
+        while (i < ids.size && run.size < PRINT_ROW_LIMIT) {
+            val block = blocks[ids[i]] ?: break
+            if (block.isPhoto) {
+                if (block.photoSeparated) break
+                run.add(ids[i])
+                i += 1
+            } else if (printRowGapSteppable(this, ids[i])) {
+                i += 1
+            } else {
+                break
+            }
+        }
+        return run
+    }
+
+    /**
+     * v532 — A MOVE THAT MAY ALSO APPEND.
+     *
+     * [reorder] is the list's own move and refuses an index past the end, but a
+     * print inserted after the last cell of a row lands exactly there. [before] is
+     * a place in the CURRENT list (the order's length means "after everything").
+     */
+    private fun moveBlock(from: Int, before: Int): Int {
+        if (from !in order.indices) return from
+        val id = order.removeAt(from)
+        val at = (if (from < before) before - 1 else before).coerceIn(0, order.size)
+        order.add(at, id)
         return at
     }
 
@@ -3293,17 +3365,35 @@ internal class PersonalEditorState(initial: PersonalDoc) {
         while (start > 0) {
             val block = blocks[ids[start - 1]] ?: break
             val member = block.isPhoto && !block.photoSeparated
-            val air = !block.isPhoto && !block.isAudio && block.text.isBlank()
+            val air = printRowGapSteppable(this, ids[start - 1])
             if (!member && !air) break
             start--
         }
         // `start` can land on the air before the first print; step onto the row.
         while (start < at && blocks[ids[start]]?.isPhoto != true) start++
-        val overflow = start + PRINT_ROW_LIMIT
-        if (overflow > ids.lastIndex) return
-        val id = ids[overflow]
+        // v532 — THE FIFTH PRINT, not the fifth SLOT.
+        //
+        // Air between two prints belongs to no print, so a raw index counted the
+        // blank line as a print and marked the wrong one. The run is collected
+        // with the drawing pass's own rule (see printRunAt) and the member past
+        // the row's limit — whichever print it is — stands on its own line.
+        val members = ArrayList<String>()
+        var i = start
+        while (i < ids.size && members.size <= PRINT_ROW_LIMIT) {
+            val block = blocks[ids[i]] ?: break
+            if (block.isPhoto) {
+                if (block.photoSeparated) break
+                members.add(ids[i])
+                i += 1
+            } else if (printRowGapSteppable(this, ids[i])) {
+                i += 1
+            } else {
+                break
+            }
+        }
+        val id = members.getOrNull(PRINT_ROW_LIMIT) ?: return
         val block = blocks[id] ?: return
-        if (!block.isPhoto || block.photoSeparated) return
+        if (block.photoSeparated) return
         blocks[id] = block.copy(photoSeparated = true)
     }
 
@@ -4201,6 +4291,25 @@ internal fun PersonalCanvas(
             val block = state.block(id)
             if (block != null && !groupSkips.contains(id)) Triple(index, id, block) else null
         }
+        // ── v532 — THE LANDING IS A LAYOUT, NOT A SHIFT ─────────────────────
+        //
+        // A print in the air used to open its place by TRANSLATING every row it
+        // passed by one scalar slot — the carried cell's own height — which is
+        // why the rows could overlap (a row of four is not one cell tall), why
+        // the row it was joining never actually re-flowed, and why the page moved
+        // again at the drop: the translation was a guess, and the layout that
+        // followed was the truth. Now the page DRAWS the landing: the row it is
+        // over lays itself out with the print already in it (a faded cell, or a
+        // line of its own between paragraphs), so the space is the real space and
+        // the drop changes nothing the member did not already see.
+        val carriedId = rowDrag.draggedId
+        val carriedIsPhoto = carriedId != null && state.block(carriedId)?.isPhoto == true
+        // A pulled-out print is asking for its own line at the finger, not a cell
+        // — nothing to preview, and the old shift carries it.
+        val previewLanding = rowDrag.isDragging && carriedIsPhoto && !rowDrag.pulledOut
+        val landingIndex = if (rowDrag.isDragging) {
+            rowDrag.targetIndex(state.blockIds.lastIndex)
+        } else -1
         rows.forEach { (index, id, block) ->
             // v389 — the blocks are KEYED by their own id. The to-do page can
             // now reorder them, and without the key Compose would hand each
@@ -4242,18 +4351,42 @@ internal fun PersonalCanvas(
                 // v522 — IS THIS THE ROW THE PRINT WILL LAND ON? Then its hole
                 // is drawn (see the modifier chain below).
                 val landingHere = rowDrag.isDragging && !rowHoldsCarried && !isDragged &&
-                    index == rowDrag.targetIndex(state.blockIds.lastIndex)
+                    index == landingIndex
+                // v532 — WHAT THIS ROW IS DRAWING FOR THE LANDING.
+                //
+                // A print row lays itself out with the incoming print in it (see
+                // the row below); any other row gets the print's own line drawn
+                // before it. Either way the page opens the real space, so the
+                // old slot shift stands down for the whole carry (previewLanding)
+                // and the silhouette is only the fallback for a voice note.
+                val row = printRows[id]
+                // With snapping OFF a print that arrives beside another STANDS ON
+                // ITS OWN LINE (see markStandingAlone), so the preview is that
+                // line, not a cell of the row.
+                val landingRowPreview = previewLanding && landingHere &&
+                    block.isPhoto && row != null && state.snapPhotos
+                val ghostRowHere = previewLanding && landingHere &&
+                    (!block.isPhoto || !state.snapPhotos)
                 val blockShift by animateFloatAsState(
                     targetValue = if (
-                        isDragged || ownCarry || state.keepsChecklistRows
+                        isDragged || ownCarry || state.keepsChecklistRows || previewLanding
                     ) 0f else rowDrag.shiftFor(index, state.blockIds.lastIndex),
                     animationSpec = if (
                         !rowDrag.isDragging || isDragged ||
-                            ownCarry || state.keepsChecklistRows
+                            ownCarry || state.keepsChecklistRows || previewLanding
                     ) snap()
                     else spring(dampingRatio = 1.0f, stiffness = 420f),
                     label = "canvasBlockShift-$index"
                 )
+                // ── v532 — THE LINE (OR CELL) THE PRINT WILL TAKE ───────────
+                if (ghostRowHere && carriedId != null) {
+                    PrintLandingRow(
+                        id = carriedId,
+                        state = state,
+                        ink = ink,
+                        accent = accent
+                    )
+                }
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -4264,11 +4397,12 @@ internal fun PersonalCanvas(
                             rowDrag.measure(id, measured.height.toFloat())
                         }
                         .onGloballyPositioned { coordinates ->
-                            rowDrag.place(
-                                id,
-                                coordinates.positionInRoot().y,
-                                coordinates.size.height.toFloat()
-                            )
+                            val top = coordinates.positionInRoot().y
+                            rowDrag.place(id, top, coordinates.size.height.toFloat())
+                            // v532 — and the row's place WHILE it is being pushed
+                            // by a landing preview, which is what keeps the print
+                            // in hand under the finger (see layoutDrift).
+                            rowDrag.livePlace(id, top)
                         }
                         .graphicsLayer { translationY = blockShift }
                         // ── v522 — THE HOLE THE PRINT WILL FILL ────────────
@@ -4281,7 +4415,8 @@ internal fun PersonalCanvas(
                         // bar: only the shape and its shadow, exactly the "soft
                         // shadow sits in the space" the member asked for.
                         .then(
-                            if (landingHere) Modifier.drawWithContent {
+                            if (landingHere && !landingRowPreview && !ghostRowHere)
+                                Modifier.drawWithContent {
                                 drawContent()
                                 val carried = rowDrag.draggedId
                                 val carriedBlock = carried?.let { state.block(it) }
@@ -4382,24 +4517,59 @@ internal fun PersonalCanvas(
                     // CELL is still its own movable block, so one print can be
                     // picked up out of a row of four and dropped somewhere else
                     // — the row's other members simply re-flow when it leaves.
-                    val row = printRows[id]
                     val nextIndex = index + 1
                     val nextId = state.blockIds.getOrNull(nextIndex)
                     val nextBlock = nextId?.let { state.block(it) }
                     if (row != null) {
+                        // ── v532 — THE ROW, AS IT WILL BE ────────────────────
+                        //
+                        // The arriving print is LAID OUT IN THE ROW while it is
+                        // in the air, as a faded cell, so the cells around it
+                        // move now and not at the drop. The row is laid out with
+                        // the sizes the drop will set (a PAGE print joining a row
+                        // wears HALF — see normaliseRowSizesAt), so its height is
+                        // the height it will have; and a fifth print is drawn
+                        // standing UNDER the four (see normaliseRowOverflow)
+                        // instead of being forced into a row that cannot hold it.
+                        val arriving = if (landingRowPreview && carriedId != null &&
+                            !row.contains(carriedId)
+                        ) {
+                            val grown = row.toMutableList()
+                            grown.add(rowDrag.insertionOffset(row), carriedId)
+                            grown
+                        } else null
+                        val previewRow = arriving?.take(PRINT_ROW_LIMIT) ?: row
+                        val overflowId = arriving?.getOrNull(PRINT_ROW_LIMIT)
+                        val rowSizeOf: (String) -> PersonalPhotoSize = { member ->
+                            val own = state.photoSize(member)
+                            if (arriving != null && state.snapPhotos &&
+                                own == PersonalPhotoSize.PAGE
+                            ) PersonalPhotoSize.HALF else own
+                        }
                         Column {
                         PersonalPrintArrangement(
-                            ids = row,
-                            sizeOf = { member -> state.photoSize(member) }
+                            ids = previewRow,
+                            sizeOf = rowSizeOf
                         ) { memberId, slotHeight, cellModifier ->
                             val member = state.block(memberId)
-                            if (member != null) {
+                            if (arriving != null && memberId == carriedId) {
+                                PrintLandingCell(
+                                    id = memberId,
+                                    slotHeight = slotHeight,
+                                    ink = ink,
+                                    accent = accent,
+                                    state = state,
+                                    modifier = cellModifier
+                                )
+                            } else if (member != null) {
                                 PersonalMovableBlock(
                                     id = memberId,
                                     index = state.blockIds.indexOf(memberId),
                                     state = state,
                                     drag = rowDrag,
                                     enabled = enabled,
+                                    // v532 — the row whose layout moves this cell.
+                                    rowId = id,
                                     // v397 — a print lifts as a photograph does:
                                     // a touch bigger, tilted, with a deeper shadow.
                                     heldScale = 1.08f,
@@ -4452,6 +4622,22 @@ internal fun PersonalCanvas(
                                     )
                                 }
                             }
+                        }
+                        // v532 — THE PRINT THAT NO LONGER FITS, SHOWN WHERE IT GOES.
+                        //
+                        // The fifth print does not go into the row at all (see
+                        // normaliseRowOverflow): it stands directly under the
+                        // stack, on its own line. Drawing it here — in the row's
+                        // own column, at the page's own gap — means the space it
+                        // needs is already open before the finger lifts.
+                        if (overflowId != null) {
+                            PrintLandingRow(
+                                id = overflowId,
+                                state = state,
+                                ink = ink,
+                                accent = accent,
+                                modifier = Modifier.padding(top = 6.dp)
+                            )
                         }
                         // v519 — THE DOOR BELONGS TO THE PICTURE YOU ARE IN.
                         //
@@ -5499,6 +5685,18 @@ private fun PersonalPhotoBlock(
     captionFace: String = "",
     captionSizeKey: String = "",
     captionOrder: String = "",
+    /**
+     * v532 — THE SAME PRINT, DRAWN ONLY: no field, no door, no gesture.
+     *
+     * The landing preview needs a print that is EXACTLY the height of the real
+     * one, and the height lives in the caption band — a field with its own
+     * padding, and the size door beside it. Rendering the band as plain text
+     * without either would make the preview cell a couple of pixels short, and
+     * the row would settle on the drop (the very movement the preview exists to
+     * remove). So the label is drawn at the field's own metrics and the door's
+     * width is reserved, and nothing is interactive.
+     */
+    labelOnly: Boolean = false,
     /** The field is being written in (or has just been left) — the page uses
      *  this to swap the dock to the caption's own tools. */
     onCaptionFocus: (Boolean) -> Unit = {},
@@ -5650,6 +5848,23 @@ private fun PersonalPhotoBlock(
                             }
                         }
                     )
+                } else if (labelOnly) {
+                    // The field's own metrics, without the field: same style, same
+                    // vertical padding, so the band is the band.
+                    Text(
+                        caption.ifBlank { "Add a caption" },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 3.dp),
+                        style = TextStyle(
+                            fontFamily = labelFace.family,
+                            fontSize = labelSize,
+                            color = ink.copy(alpha = 0.72f)
+                        ),
+                        textAlign = TextAlign.Center,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
                 } else if (caption.isNotBlank()) {
                     Text(
                         caption,
@@ -5709,9 +5924,96 @@ private fun PersonalPhotoBlock(
                         )
                     }
                 }
+            } else if (labelOnly) {
+                // The door's width, reserved: the real print has it, so the
+                // preview's band must be the same height as the real one's.
+                Spacer(Modifier.size(26.dp))
             }
         }
     }
+}
+
+/**
+ * v532 — THE CELL THE PRINT WILL TAKE, DRAWN IN THE ROW ITSELF.
+ *
+ * A faded copy of the print, laid out by [PersonalPrintArrangement] exactly as
+ * the real cell will be: same slot height, same share of the measure, same
+ * caption band. The row therefore takes its true shape while the print is still
+ * in the air — the cells beside it move now, and nothing moves at the drop.
+ */
+@Composable
+private fun PrintLandingCell(
+    id: String,
+    slotHeight: Dp,
+    ink: Color,
+    accent: Color,
+    state: PersonalEditorState,
+    modifier: Modifier = Modifier
+) {
+    Box(modifier.alpha(0.42f)) {
+        PrintLandingPrint(
+            id = id,
+            state = state,
+            ink = ink,
+            accent = accent,
+            paired = true,
+            slotHeight = slotHeight
+        )
+    }
+}
+
+/**
+ * v532 — THE LINE THE PRINT WILL TAKE, BETWEEN THE PAGE'S OWN BLOCKS.
+ *
+ * A print dropped between paragraphs becomes a line of its own at its own size;
+ * this is that line, faded, drawn where it will stand so the page opens the
+ * room before the finger lifts.
+ */
+@Composable
+private fun PrintLandingRow(
+    id: String,
+    state: PersonalEditorState,
+    ink: Color,
+    accent: Color,
+    modifier: Modifier = Modifier
+) {
+    Box(modifier.fillMaxWidth().alpha(0.42f)) {
+        PrintLandingPrint(
+            id = id,
+            state = state,
+            ink = ink,
+            accent = accent,
+            paired = false,
+            slotHeight = null
+        )
+    }
+}
+
+/** The print itself, drawn without a field, a door or a gesture. */
+@Composable
+private fun PrintLandingPrint(
+    id: String,
+    state: PersonalEditorState,
+    ink: Color,
+    accent: Color,
+    paired: Boolean,
+    slotHeight: Dp?
+) {
+    PersonalPhotoBlock(
+        uri = state.block(id)?.photo.orEmpty(),
+        caption = state.caption(id),
+        size = state.photoSize(id),
+        paired = paired,
+        slotHeight = slotHeight,
+        ink = ink,
+        accent = accent,
+        enabled = false,
+        labelOnly = true,
+        onCaption = {},
+        onSize = {},
+        onRemove = {},
+        onOpen = {}
+    )
 }
 
 /** Two prints, one big and one small — the size tool's own mark. Drawn rather

@@ -28,6 +28,7 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -40,6 +41,7 @@ import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
@@ -254,6 +256,49 @@ internal class PersonalRowDragState {
     private val rowTops = mutableMapOf<String, Float>()
     private val rowBands = mutableMapOf<String, Float>()
     private val anchorTops = mutableMapOf<String, Float>()
+
+    /**
+     * v532 — WHERE THE DRAWN ROWS ARE **NOW**, while something is carried.
+     *
+     * The landing preview is a LAYOUT (see the canvas): the row a print is over
+     * grows to hold it, and if that row is ABOVE the print in hand the print's own
+     * layout moves too — the page would slide out from under the finger. The
+     * carried block is therefore compensated by how far its row has moved since
+     * the press ([layoutDrift]), which is measured from the row's live place, not
+     * from the finger.
+     */
+    private val liveTops = mutableStateMapOf<String, Float>()
+
+    /** A drawn row's current top — recorded only while a block is in the air. */
+    fun livePlace(id: String, top: Float) {
+        if (draggedId == null) return
+        if (liveTops[id] != top) liveTops[id] = top
+    }
+
+    /**
+     * HOW FAR [rowId] HAS MOVED UNDER THE CARRIED BLOCK, in pixels.
+     *
+     * Zero until the page has both the resting and the live answer, and zero for
+     * every gesture that is not opening a layout preview.
+     */
+    fun layoutDrift(rowId: String): Float {
+        val start = startTops[rowId] ?: return 0f
+        val live = liveTops[rowId] ?: return 0f
+        return live - start
+    }
+
+    /**
+     * v532 — EVERY CELL'S OWN BOX ON THE PAGE, by id.
+     *
+     * A print row is drawn as ONE block, so the row's own measured height says
+     * nothing about where its cells are: which cell the finger is over, and
+     * whether it is before or after that cell, is a question only the cells
+     * themselves can answer. Each cell reports its box while the page is at
+     * rest (see [cellPlaced]), and the carry reads it together with the
+     * finger's travel to find the place the print will take *among the cells* —
+     * not merely which row it is over.
+     */
+    private val cellPlaces = mutableMapOf<String, Rect>()
     private var startTops: Map<String, Float> = emptyMap()
     private var startBands: Map<String, Float> = emptyMap()
     private var anchorTop = -1f
@@ -283,6 +328,82 @@ internal class PersonalRowDragState {
     fun anchor(id: String, top: Float) {
         if (draggedId == null) anchorTops[id] = top
     }
+
+    /**
+     * WHERE A CELL SITS — reported by every [PersonalMovableBlock] at rest.
+     *
+     * Only while nothing is carried: the moment a print lifts, the rows it
+     * passes re-flow (the landing row makes room for it, see the canvas), and a
+     * place measured mid-flight would move the target around under the finger.
+     * The rest positions are what the insertion is counted against, exactly as
+     * the row bands are ([place]).
+     */
+    fun cellPlaced(id: String, bounds: Rect) {
+        if (draggedId != null || bounds.width <= 0f || bounds.height <= 0f) return
+        cellPlaces[id] = bounds
+    }
+
+    /** The carried print's own centre, in the page's rest coordinates. */
+    private val carriedCentreX: Float
+        get() = draggedId?.let { id ->
+            cellPlaces[id]?.let { it.center.x + travelX.floatValue }
+        } ?: 0f
+
+    /** The carried print's centre down the page — travel included. */
+    private val carriedCentreY: Float
+        get() = draggedId?.let { id ->
+            cellPlaces[id]?.let { it.center.y + travel.floatValue }
+        } ?: 0f
+
+    /**
+     * v532 — WHERE AMONG THIS ROW'S CELLS THE PRINT IN HAND WILL GO.
+     *
+     * Returns the place in [rowIds] the print is inserted at (0 = before the
+     * first cell, size = after the last). The NEAREST cell decides, and the side
+     * of that cell says before or after it: sideways when the cells stand beside
+     * one another, downwards when they are stacked (a three's right-hand column).
+     *
+     * This one answer feeds BOTH the row's live preview and the drop (see
+     * PersonalEditorState.dropBlock), so the cell the member sees open is the
+     * cell the print takes.
+     */
+    fun insertionOffset(rowIds: List<String>): Int {
+        val carried = draggedId ?: return 0
+        val ids = rowIds.filter { it != carried }
+        if (ids.isEmpty()) return 0
+        val centreX = carriedCentreX
+        val centreY = carriedCentreY
+        var nearest = 0
+        var nearestDistance = Float.MAX_VALUE
+        var after = false
+        ids.forEachIndexed { index, id ->
+            val box = cellPlaces[id] ?: return@forEachIndexed
+            val dx = centreX - box.center.x
+            val dy = centreY - box.center.y
+            val distance = dx * dx + dy * dy
+            if (distance < nearestDistance) {
+                nearestDistance = distance
+                nearest = index
+                // STACKED OR BESIDE: a cell's own height says which question the
+                // finger is answering. A few pixels of wobble must not flip it.
+                after = if (abs(dy) > box.height * 0.3f) dy > 0f else dx > 0f
+            }
+        }
+        return (nearest + if (after) 1 else 0).coerceIn(0, ids.size)
+    }
+
+    /**
+     * v532 — IS THE THING IN HAND A PHOTO?
+     *
+     * A photo's landing is a LAYOUT: the row it is over draws the print in its
+     * own arrangement (see the canvas), so the rows move because the page is
+     * laid out that way — not because a slot count says they should. The old
+     * slot shift ([shiftFor]) must therefore stand down for a photo, or the rows
+     * would be moved twice and overlap. A pulled-out print is not asking for a
+     * cell at all, so the old shift stays out of that too.
+     */
+    fun isPhotoCarry(state: PersonalEditorState): Boolean =
+        draggedId?.let { state.block(it)?.isPhoto == true } == true
 
     /**
      * The row the carried block's centre is over, in the page's rest
@@ -407,6 +528,7 @@ internal class PersonalRowDragState {
         startBands = rowBands.toMap()
         anchorTop = anchorTops[id] ?: rowTops[id] ?: -1f
         flipSteps = 0
+        liveTops.clear()
     }
 
     /**
@@ -616,6 +738,15 @@ internal fun PersonalMovableBlock(
      * and a note carried sideways stays exactly where it was.
      */
     sideFollow: Boolean = false,
+    /**
+     * v532 — THE DRAWN ROW THIS BLOCK STANDS IN, when it is a CELL of a row.
+     *
+     * The row's live top is what the landing compensation is measured against
+     * (see PersonalRowDragState.layoutDrift): a cell's own place moves with its
+     * row, and the row is what the layout moves. Null for a block that is its own
+     * row, which uses its own id.
+     */
+    rowId: String? = null,
     modifier: Modifier = Modifier,
     content: @Composable () -> Unit
 ) {
@@ -643,9 +774,14 @@ internal fun PersonalMovableBlock(
     // makes that shift permanent. v397 — the shift SPRINGS home on the commit
     // instead of snapping (see PersonalRowDragState.commit): the rows closing
     // behind a landed block is the last half of the animation.
+    // v532 — A PHOTO'S ROOM IS MADE BY THE LAYOUT, so a cell of a print row is
+    // never also shifted by the slot arithmetic (see isPhotoCarry) — two answers
+    // for one movement is what made a row's cells travel twice and overlap.
+    val photoCarry = drag.isPhotoCarry(state)
+    val layoutCarry = photoCarry && !drag.pulledOut
     val shift by animateFloatAsState(
-        targetValue = if (isDragged) 0f else drag.shiftFor(index, lastIndex),
-        animationSpec = if (isDragged) snap()
+        targetValue = if (isDragged || photoCarry) 0f else drag.shiftFor(index, lastIndex),
+        animationSpec = if (isDragged || photoCarry) snap()
         else spring(dampingRatio = 1.0f, stiffness = 420f),
         label = "movableBlockShift"
     )
@@ -735,11 +871,23 @@ internal fun PersonalMovableBlock(
             // read only as the press lands (see `onDragStart`).
             .onGloballyPositioned { coordinates ->
                 if (drag.draggedId != id) {
-                    val top = coordinates.positionInRoot().y
+                    val place = coordinates.positionInRoot()
+                    val top = place.y
                     blockRootTop = top
                     // v513 — and the gesture's own anchor, so a cell of a row is
                     // measured from its own place (see anchor).
                     drag.anchor(id, top)
+                    // v532 — and the whole box, so a print knows which CELL of a
+                    // row the finger is over (see insertionOffset).
+                    drag.cellPlaced(
+                        id,
+                        Rect(
+                            left = place.x,
+                            top = top,
+                            right = place.x + coordinates.size.width,
+                            bottom = top + coordinates.size.height
+                        )
+                    )
                 }
             }
             // v517 — THE HELD BLOCK IS THE TOP LAYER. At 1f it shared a plane
@@ -760,7 +908,14 @@ internal fun PersonalMovableBlock(
                 } else {
                     0f
                 }
-                translationY = shift + heldTravel
+                // v532 — AND THE PAGE'S OWN MOVE UNDER THE HAND.
+                // The preview opens real space, so a row above the carried print
+                // can push its layout down; without this the print would sink
+                // away from the finger by exactly the room it just made.
+                val drift = if (drag.draggedId == id && layoutCarry) {
+                    drag.layoutDrift(rowId ?: id)
+                } else 0f
+                translationY = shift + heldTravel - drift
                 // v513 — a pulled-out picture follows the finger; a stepping one
                 // glides a cell at a time. Both are read HERE (the pull straight
                 // from the gesture's own state), so neither recomposes a row.
@@ -813,18 +968,49 @@ internal fun PersonalMovableBlock(
                             // way down, and the finger's row is the landing (see
                             // PersonalEditorState.dropBlock, which also applies
                             // the sideways steps and the snap preference).
-                            drag.draggedId?.let { held ->
+                            val held = drag.draggedId
+                            if (held != null) {
+                                val print = state.block(held)?.isPhoto == true
+                                val to = drag.targetIndex(state.blockIds.lastIndex)
+                                // v532 — THE PRINT LANDS AT THE CELL IT PREVIEWED.
+                                //
+                                // A print carried onto a row that can still take
+                                // it names its place AMONG the cells, so the drop
+                                // reproduces exactly the row the member watched
+                                // open (see insertionOffset). A pulled-out print
+                                // is asking for its own line, not a cell.
+                                val run = state.printRunAt(to)
+                                // The cell answer covers its OWN row too: a print
+                                // held and moved to the other side of its stack
+                                // used to be re-seated at the row's head on
+                                // release, which undid the step it had just been
+                                // shown ("i hold them and move it to the other
+                                // side but it doesnt land").
+                                val offset = if (
+                                    print && !drag.pulledOut && run.isNotEmpty()
+                                ) drag.insertionOffset(run) else null
                                 state.dropBlock(
                                     id = held,
-                                    to = drag.targetIndex(state.blockIds.lastIndex),
+                                    to = to,
                                     takeLeft = drag.takeLeftCell,
-                                    flip = drag.flipSteps
+                                    // One answer only: the measured cell replaces
+                                    // the sideways notches when it is available.
+                                    flip = if (offset != null) 0 else drag.flipSteps,
+                                    cellOffset = offset
                                 )
+                                // v532 — A PREVIEWED PRINT IS ALREADY WHERE IT
+                                // LANDS, so it must not slide there a second time.
+                                // The layout has just moved it onto the cell the
+                                // member watched open; zeroing the gesture now is
+                                // what keeps the drop still. Everything else keeps
+                                // the old slide home (see settle).
+                                if (print && !drag.pulledOut) {
+                                    drag.reset()
+                                } else {
+                                    drag.commit()
+                                    scope.launch { drag.settle(held) }
+                                }
                             }
-                            // v397 — commit, then slide the last few pixels home
-                            // (see PersonalRowDragState.settle).
-                            drag.commit()
-                            scope.launch { drag.settle(id) }
                         },
                         onDragCancel = { drag.reset() }
                     )
