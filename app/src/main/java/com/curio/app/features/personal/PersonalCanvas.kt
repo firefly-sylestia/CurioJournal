@@ -4350,7 +4350,14 @@ internal fun PersonalCanvas(
                 val ownCarry = block.isAudio || (block.isPhoto && rowHoldsCarried)
                 // v522 — IS THIS THE ROW THE PRINT WILL LAND ON? Then its hole
                 // is drawn (see the modifier chain below).
-                val landingHere = rowDrag.isDragging && !rowHoldsCarried && !isDragged &&
+                // v537 — AND A PRINT CAN LAND IN ITS OWN ROW, WHICH NOW
+                // PREVIEWS. Landing on the row the print came from used to draw
+                // NOTHING (`!rowHoldsCarried` was part of this test), so moving a
+                // picture to the other side of its own stack showed the finger
+                // nothing and the drop looked like it had taken no effect — the
+                // member's *"the images doesnt move when i drop it somewhere"*.
+                // The row re-flows around the cell it is about to take instead.
+                val landingHere = rowDrag.isDragging && !isDragged &&
                     index == landingIndex
                 // v532 — WHAT THIS ROW IS DRAWING FOR THE LANDING.
                 //
@@ -4531,11 +4538,18 @@ internal fun PersonalCanvas(
                         // the height it will have; and a fifth print is drawn
                         // standing UNDER the four (see normaliseRowOverflow)
                         // instead of being forced into a row that cannot hold it.
-                        val arriving = if (landingRowPreview && carriedId != null &&
-                            !row.contains(carriedId)
-                        ) {
-                            val grown = row.toMutableList()
-                            grown.add(rowDrag.insertionOffset(row), carriedId)
+                        // v537 — THE RUN AS IT WILL BE, whether the print came
+                        // from another row or from THIS one. The run without the
+                        // print in hand, with it put back at the place its own
+                        // measured cell names — the same answer the drop uses
+                        // (see dropBlock's `cellOffset`), so the row that opens
+                        // is the row that is written.
+                        val arriving = if (landingRowPreview && carriedId != null) {
+                            val grown = row.filter { it != carriedId }.toMutableList()
+                            grown.add(
+                                rowDrag.insertionOffset(row).coerceIn(0, grown.size),
+                                carriedId
+                            )
                             grown
                         } else null
                         val previewRow = arriving?.take(PRINT_ROW_LIMIT) ?: row
@@ -4552,7 +4566,12 @@ internal fun PersonalCanvas(
                             sizeOf = rowSizeOf
                         ) { memberId, slotHeight, cellModifier ->
                             val member = state.block(memberId)
-                            if (arriving != null && memberId == carriedId) {
+                            // The print in hand is drawn FADED only when it is
+                            // joining some other row; in its own row it stays the
+                            // lifted block under the finger (PersonalMovableBlock
+                            // below), and the re-flowed row around it is what
+                            // shows the new seat.
+                            if (arriving != null && memberId == carriedId && !rowHoldsCarried) {
                                 PrintLandingCell(
                                     id = memberId,
                                     slotHeight = slotHeight,
@@ -4571,9 +4590,11 @@ internal fun PersonalCanvas(
                                     // v532 — the row whose layout moves this cell.
                                     rowId = id,
                                     // v533 — and its place in that row, so a step
-                                    // past the row's edge is never drawn.
-                                    rowIndex = row.indexOf(memberId),
-                                    rowSize = row.size,
+                                    // past the row's edge is never drawn. Read from
+                                    // the PREVIEW row (v537): while the landing is
+                                    // being drawn, the row has already re-flowed.
+                                    rowIndex = previewRow.indexOf(memberId),
+                                    rowSize = previewRow.size,
                                     // v397 — a print lifts as a photograph does:
                                     // a touch bigger, tilted, with a deeper shadow.
                                     heldScale = 1.08f,
@@ -5954,15 +5975,28 @@ private fun PrintLandingCell(
     state: PersonalEditorState,
     modifier: Modifier = Modifier
 ) {
-    Box(modifier.alpha(0.42f)) {
-        PrintLandingPrint(
-            id = id,
-            state = state,
-            ink = ink,
-            accent = accent,
-            paired = true,
-            slotHeight = slotHeight
-        )
+    // v537 — THE SHADOW IS ALWAYS THERE.
+    //
+    // The landing shadow used to be drawn ONLY by the fallback silhouette (the
+    // branch that runs when the print lands between the page's own blocks), so a
+    // print arriving beside other prints — the case a member is in most of the
+    // time — previewed as a faded cell with NO shadow under it. The member: *"the
+    // preview shadows isnt appearing always"*. The shadow is drawn here, behind
+    // the faded print, at full strength: it is the first thing that says a place
+    // is being held, and it must not fade with the photograph.
+    Box(
+        modifier.drawBehind { landingShadow(size) }
+    ) {
+        Box(Modifier.alpha(0.48f)) {
+            PrintLandingPrint(
+                id = id,
+                state = state,
+                ink = ink,
+                accent = accent,
+                paired = true,
+                slotHeight = slotHeight
+            )
+        }
     }
 }
 
@@ -5981,14 +6015,44 @@ private fun PrintLandingRow(
     accent: Color,
     modifier: Modifier = Modifier
 ) {
-    Box(modifier.fillMaxWidth().alpha(0.42f)) {
-        PrintLandingPrint(
-            id = id,
-            state = state,
-            ink = ink,
-            accent = accent,
-            paired = false,
-            slotHeight = null
+    // v537 — and the same shadow under the line this print will take (see
+    // PrintLandingCell): whichever of the two previews a landing uses, the place
+    // is said the same way.
+    Box(
+        modifier
+            .fillMaxWidth()
+            .drawBehind { landingShadow(size) }
+    ) {
+        Box(Modifier.alpha(0.48f)) {
+            PrintLandingPrint(
+                id = id,
+                state = state,
+                ink = ink,
+                accent = accent,
+                paired = false,
+                slotHeight = null
+            )
+        }
+    }
+}
+
+/**
+ * v537 — THE SOFT SHADOW UNDER A LANDING, drawn by hand.
+ *
+ * Three stacked rectangles, wide and faint to narrow and firmer, which is a blur
+ * without a layer or a RenderEffect. Used by BOTH landing previews so a print
+ * arriving beside other prints and a print arriving between paragraphs say the
+ * same thing: something is about to stand here.
+ */
+private fun androidx.compose.ui.graphics.drawscope.DrawScope.landingShadow(size: Size) {
+    val radius = CornerRadius(12.dp.toPx())
+    listOf(11.dp to 0.05f, 6.dp to 0.07f, 3.dp to 0.10f).forEach { (behind, alpha) ->
+        val step = behind.toPx()
+        drawRoundRect(
+            color = Color.Black.copy(alpha = alpha),
+            topLeft = Offset(0f, step),
+            size = Size(size.width, (size.height - step).coerceAtLeast(1f)),
+            cornerRadius = radius
         )
     }
 }

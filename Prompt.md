@@ -2932,6 +2932,43 @@ journal matches the new home."*
 **Still not compiled anywhere but CI:** this environment has no Gradle, so the nine journal files are checked by
 brace/paren balance + an import audit only. The first real compile of `JournalCollectionScreen.kt` is CI's.
 
+## §112 — THE PRINT PREVIEW: THE SHADOW AND THE OWN-ROW LANDING (local; member: "anow dont push this i will do it manually")
+
+> "the preview shadow and arranging images is still buggy and kinda not good, the preview shadows isnt appearing
+> always, and the images doesnt move when i drop it somewhere, and also still the shift overlaps when im oving
+> things, like thw other images overlaps"
+
+**What was found and fixed (`PersonalCanvas.kt`).**
+
+1. **The shadow existed in only one of the three preview paths.** It was drawn inside the fallback silhouette —
+   the branch used when a print lands between the page's own blocks. A print arriving beside other prints (the
+   common case) previews as a faded `PrintLandingCell`, which drew no shadow; a print landing with snapping off
+   previews as `PrintLandingRow`, which drew none either. A `landingShadow(size)` draw pass (the same three-step
+   hand blur) is now called behind BOTH faded previews, and the print is faded with an inner `alpha` so the shadow
+   keeps its strength. → answers *"the preview shadows isnt appearing always"*.
+
+2. **A print landing in its own row previewed nothing.** `landingHere` required `!rowHoldsCarried`, so moving a
+   picture to the other side of its own stack drew no space at all — and because the drop then correctly re-seated
+   it (`insertionOffset`), the page looked unchanged: *"the images doesnt move when i drop it somewhere"*. The row
+   now re-flows for its own member too: the run is rebuilt without the print in hand and the print is put back at
+   `insertionOffset(row)` — the SAME measured answer `dropBlock` uses — so the cells beside it move while the finger
+   is down. The print in hand still draws as the lifted block (its faded copy is skipped in its own row), so nothing
+   is drawn twice.
+
+3. **`rowIndex`/`rowSize`** for the sideways step clamp are read from the preview row, so the clamp is not counted
+   against a stale member count while the landing re-flows.
+
+**NOT fixed, and honestly not verifiable here: the "shift overlaps" half.** The rows no longer translate during a
+photo carry (v532 sets every block's shift target to 0 when `isPhotoCarry`), so a visual overlap now has to come
+from either the landing row's own arrangement (whether `PersonalPrintArrangement` divides the measure with the
+arriving print's PAGE→HALF size change) or from the held print's own window clamp. Neither can be judged without a
+device, and guessing at a third compensation on top of `shift` + `layoutDrift` is exactly how the last two passes
+got here. **Next session needs the member's answer to: does the overlap happen (a) between the prints of the row
+being joined, (b) between the held print and the row it passes, or (c) between rows of the page?**
+
+**Checks:** brace/paren balance on `PersonalCanvas.kt` (0/0); no Gradle. **Committed locally, NOT pushed**, no
+version bump (the member: *"anow dont push this i will do it manually"*).
+
 ## next prompt
 
 *(The prompt that sat here — the drawer-star / book-cover batch and the desktop+iOS request — is ANSWERED for the
