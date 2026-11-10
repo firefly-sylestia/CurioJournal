@@ -6,6 +6,41 @@ from the state rather than from memory.
 
 ---
 
+## §109 — PRINT REMOVE MARK, STACK OVERFLOW, AND THE LANDING SHAPE (local, not pushed)
+
+> "the cross for deleting pic is kinda look bad … do something else. and add proper size preview …
+> when i hold and the other images shifts properly preview the shadow … also make it so when the image
+> shifts the stacked images they dont overlap … if a stack have 4 image and i bring an image from the
+> other stack the last image gets to the 2nd stack below and proper behaviour got it?"
+
+**Two answers were taken first.** Delete mark: **a paper disc with an ink cross**. A fifth print in a
+full stack: **the overflow print gets its own separated line** — never swallowed by the stack below.
+
+**What was done (`PersonalCanvas.kt`).**
+
+- The remove mark is no longer a black scrim with a white cross: it is a 26dp **journal-paper disc**
+  with a 3dp shadow and a quiet ink cross, so it belongs to the print's frame.
+- `normaliseRowOverflow` runs with the other post-drop normalisation: when a run exceeds
+  `PRINT_ROW_LIMIT` (4), the first print past the line is marked `photoSeparated`, so it stands
+  directly under its own stack instead of joining the next one.
+- The landing silhouette is no longer the row's full width: it is the carried print's **own share of
+  the row** (its fraction against the members already there, or its whole fraction when it lands on
+  its own line) at its **own height**, hung on the side `takeLeftCell` chose. Voice notes and the
+  other blocks keep their strip.
+
+**STILL OPEN — THE CARRY GEOMETRY (the member's main ask).** The live shift is still the v397
+scalar (`shiftFor` moves rows by the carried block's own `stride`), not the drop's real layout
+delta, so: rows can overlap when a cell is carried out of a tall stack, the target row does not
+re-flow around the incoming cell, and the shadow still renders at the target row's top rather than
+in the opened gap. Fixing it properly means measuring a **preview layout** (the post-drop order,
+composed or laid out by the same `PersonalPrintArrangement` rules) and driving both the shift and
+the hole from it, so the drop produces exactly the previewed layout. Not attempted blind here.
+
+**Checked:** brace/paren balance on `PersonalCanvas.kt` (0/0); no Gradle. Committed locally; **not
+pushed**.
+
+---
+
 ## §108 — THE PRINT'S SIZE PICKER IS A STRIP OF LIVE PREVIEWS (local, not pushed)
 
 > "now polishing and redoing properly, so about the, page half portraight preview, make it like

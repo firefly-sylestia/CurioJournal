@@ -3124,6 +3124,8 @@ internal class PersonalEditorState(initial: PersonalDoc) {
                 // v403 — a print that has just joined a row wears a cell's size,
                 // so the row the member built is a row they can see at once.
                 normaliseRowSizesAt(dest)
+                // v531 — AND A PRINT THAT NO LONGER FITS STANDS ON ITS OWN.
+                normaliseRowOverflow(dest)
             } else {
                 markStandingAlone(dest)
             }
@@ -3265,6 +3267,44 @@ internal class PersonalEditorState(initial: PersonalDoc) {
             if (PersonalPhotoSize.fromKey(block.photoSize) != PersonalPhotoSize.PAGE) continue
             blocks[id] = block.copy(photoSize = PersonalPhotoSize.HALF.key)
         }
+    }
+
+    /**
+     * v531 — THE PRINT THAT NO LONGER FITS A FULL ROW GETS ITS OWN LINE.
+     *
+     * A run is drawn as up to [PRINT_ROW_LIMIT] prints, so a fifth print placed
+     * against a stack of four used to start the NEXT run — and if another stack
+     * followed, the print was swallowed by it: the member's *"if a stack have 4
+     * image and i bring an image from the other stack the last image gets to the
+     * 2nd stack below"*. A print past the limit is marked as standing on its own
+     * line instead, so it always reads as its own print directly under the stack
+     * that could not hold it — and never as a member of the stack below.
+     *
+     * The run is found by the drawing pass's own rule (consecutive prints, the
+     * member's air between them allowed — see `printRowGapSteppable`), and only
+     * the first print past the line is marked: the ones after it already start
+     * runs of their own, and a mark on each would make a long run stand entirely
+     * alone instead of two rows.
+     */
+    private fun normaliseRowOverflow(at: Int) {
+        val ids = order
+        if (blocks[ids.getOrNull(at) ?: return]?.isPhoto != true) return
+        var start = at
+        while (start > 0) {
+            val block = blocks[ids[start - 1]] ?: break
+            val member = block.isPhoto && !block.photoSeparated
+            val air = !block.isPhoto && !block.isAudio && block.text.isBlank()
+            if (!member && !air) break
+            start--
+        }
+        // `start` can land on the air before the first print; step onto the row.
+        while (start < at && blocks[ids[start]]?.isPhoto != true) start++
+        val overflow = start + PRINT_ROW_LIMIT
+        if (overflow > ids.lastIndex) return
+        val id = ids[overflow]
+        val block = blocks[id] ?: return
+        if (!block.isPhoto || block.photoSeparated) return
+        blocks[id] = block.copy(photoSeparated = true)
     }
 
     /**
@@ -4243,29 +4283,92 @@ internal fun PersonalCanvas(
                         .then(
                             if (landingHere) Modifier.drawWithContent {
                                 drawContent()
-                                val room = rowDrag.carriedHeight
-                                if (room > 0f) {
-                                    val radius = CornerRadius(14.dp.toPx())
-                                    val width = size.width
-                                    // The shadow is stacked from wide and faint to
-                                    // narrow and firmer — a blur, drawn by hand,
-                                    // so no layer or RenderEffect is needed.
-                                    listOf(10.dp to 0.045f, 6.dp to 0.065f, 3.dp to 0.09f)
-                                        .forEach { (behind, alpha) ->
-                                            val step = behind.toPx()
-                                            drawRoundRect(
-                                                color = Color.Black.copy(alpha = alpha),
-                                                topLeft = Offset(0f, step),
-                                                size = Size(width, room),
-                                                cornerRadius = radius
-                                            )
-                                        }
-                                    drawRoundRect(
-                                        color = accent.copy(alpha = 0.075f),
-                                        topLeft = Offset(0f, 0f),
-                                        size = Size(width, room),
-                                        cornerRadius = radius
-                                    )
+                                val carried = rowDrag.draggedId
+                                val carriedBlock = carried?.let { state.block(it) }
+                                val carriedSize = carried?.let { state.photoSize(it) }
+                                if (carriedBlock?.isPhoto == true && carriedSize != null) {
+                                    // v531 — THE PRINT'S OWN SHAPE, NOT THE ROW'S.
+                                    //
+                                    // The hole was the row's FULL WIDTH at the
+                                    // carried cell's height, which read as a bar
+                                    // rather than a place a photograph can fill.
+                                    // It is the print's own share of the row it is
+                                    // joining now — its width fraction against the
+                                    // members already there — at its own height, on
+                                    // the side the finger asked for. A small
+                                    // portrait previews as a small portrait and a
+                                    // page as a page.
+                                    val siblings = printRows[id]
+                                        ?.filter { it != carried }
+                                        .orEmpty()
+                                    val existing = siblings.sumOf {
+                                        state.photoSize(it).fraction.toDouble()
+                                    }
+                                    val total = (existing + carriedSize.fraction)
+                                        .toFloat()
+                                    val share = if (siblings.isEmpty()) {
+                                        carriedSize.fraction
+                                    } else {
+                                        carriedSize.fraction / total
+                                    }
+                                    val width = (size.width * share)
+                                        .coerceIn(24.dp.toPx(), size.width)
+                                    val room = personalPrintHeight(carriedSize).toPx()
+                                    if (room > 0f) {
+                                        val left = if (rowDrag.takeLeftCell) 0f
+                                        else size.width - width
+                                        val radius = CornerRadius(12.dp.toPx())
+                                        // The shadow is stacked from wide and
+                                        // faint to narrow and firmer — a blur,
+                                        // drawn by hand, so no layer or
+                                        // RenderEffect is needed.
+                                        listOf(10.dp to 0.045f, 6.dp to 0.065f, 3.dp to 0.09f)
+                                            .forEach { (behind, alpha) ->
+                                                val step = behind.toPx()
+                                                drawRoundRect(
+                                                    color = Color.Black.copy(alpha = alpha),
+                                                    topLeft = Offset(left, step),
+                                                    size = Size(
+                                                        width,
+                                                        (room - step).coerceAtLeast(1f)
+                                                    ),
+                                                    cornerRadius = radius
+                                                )
+                                            }
+                                        drawRoundRect(
+                                            color = accent.copy(alpha = 0.075f),
+                                            topLeft = Offset(left, 0f),
+                                            size = Size(width, room),
+                                            cornerRadius = radius
+                                        )
+                                    }
+                                } else {
+                                    // A voice note and the other blocks keep the
+                                    // strip they always had: what is coming, at
+                                    // the width of the line it will take.
+                                    val room = rowDrag.carriedHeight
+                                    if (room > 0f) {
+                                        val radius = CornerRadius(14.dp.toPx())
+                                        listOf(10.dp to 0.045f, 6.dp to 0.065f, 3.dp to 0.09f)
+                                            .forEach { (behind, alpha) ->
+                                                val step = behind.toPx()
+                                                drawRoundRect(
+                                                    color = Color.Black.copy(alpha = alpha),
+                                                    topLeft = Offset(0f, step),
+                                                    size = Size(
+                                                        size.width,
+                                                        (room - step).coerceAtLeast(1f)
+                                                    ),
+                                                    cornerRadius = radius
+                                                )
+                                            }
+                                        drawRoundRect(
+                                            color = accent.copy(alpha = 0.075f),
+                                            topLeft = Offset(0f, 0f),
+                                            size = Size(size.width, room),
+                                            cornerRadius = radius
+                                        )
+                                    }
                                 }
                             } else Modifier
                         )
@@ -5460,21 +5563,30 @@ private fun PersonalPhotoBlock(
         ) {
             PersonalPagePhoto(uri = uri, height = imageHeight)
             if (actionable) {
+                // v531 — THE REMOVE MARK IS THE PRINT'S OWN PAPER.
+                //
+                // It used to be a black 42% scrim carrying a white cross, which
+                // read as a system chip pasted onto the photograph rather than a
+                // mark belonging to the print. It is a small disc of the
+                // journal's own paper now — opaque, with its own soft shadow —
+                // and the cross is quiet ink on it, so the mark is part of the
+                // frame the picture sits in.
                 Surface(
                     onClick = onRemove,
                     shape = CircleShape,
-                    color = Color.Black.copy(alpha = 0.42f),
+                    color = journalPaper(),
+                    shadowElevation = 3.dp,
                     modifier = Modifier
                         .align(Alignment.TopEnd)
-                        .padding(8.dp)
-                        .size(28.dp)
+                        .padding(6.dp)
+                        .size(26.dp)
                 ) {
-                    Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+                    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                         CurioIcon(
                             CurioIcons.Close,
                             "Remove photo",
-                            tint = Color.White,
-                            size = 15.dp
+                            tint = journalInk().copy(alpha = 0.52f),
+                            size = 13.dp
                         )
                     }
                 }
